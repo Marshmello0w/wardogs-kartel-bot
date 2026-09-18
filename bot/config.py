@@ -37,7 +37,6 @@ ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
-    "Ozeti": {"Map": "Kavkazi", "Experience": "Ozeti_KOTH_01", "Lighting": "DayClear"},
-    "Zestafona": {"Map": "Kavkazi", "Experience": "Zestafona_KOTH_01", "Lighting": "DayClear"}
+    "Ozeti": {"Map": "Kavkazi", "Experience": "Ozeti_KOTH_01", "Lighting": "DayClear"}
 }
 
