@@ -29,3 +29,17 @@ SERVER1_RCON_PASS = os.getenv("SERVER1_RCON_PASS", "")
 SERVER2_RCON_URL = os.getenv("SERVER2_RCON_URL", "http://84.32.176.40:20001")
 SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "jWxyom4CXuFjCPsN")
 
+# Map Voting
+SERVER1_VOTE_CHANNEL_ID = os.getenv("SERVER1_VOTE_CHANNEL_ID", "")
+SERVER2_VOTE_CHANNEL_ID = os.getenv("SERVER2_VOTE_CHANNEL_ID", "")
+ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(",") if x.strip().isdigit()]
+
+# Format: Name im Discord -> (Map, Experience, Lighting)
+MAP_VOTE_OPTIONS = {
+    "Bakurani Tag": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
+    "Bakurani Nacht": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "NightClear"},
+    "Madrid Tag": {"Map": "Europe", "Experience": "Madrid_KOTH_01", "Lighting": "DayClear"},
+    "Madrid Nacht": {"Map": "Europe", "Experience": "Madrid_KOTH_01", "Lighting": "NightClear"},
+    "Bakurani (Infantry Only)": {"Map": "Kavkazi", "Experience": "KOTH_InfantryOnly", "Lighting": "DayClear"}
+}
+

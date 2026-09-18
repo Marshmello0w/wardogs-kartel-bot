@@ -13,6 +13,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     logging.info(f"Logged in as {bot.user.name} ({bot.user.id})")
+    try:
+        synced = await bot.tree.sync()
+        logging.info(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        logging.error(f"Failed to sync commands: {e}")
 
 async def main():
     # Lade alle Erweiterungen (Cogs)
@@ -21,6 +26,7 @@ async def main():
     await bot.load_extension("cogs.match_events")
     await bot.load_extension("cogs.ban_tracker")
     await bot.load_extension("cogs.discord_logger")
+    await bot.load_extension("cogs.map_vote")
     
     # Starte den Bot
     if not config.DISCORD_BOT_TOKEN:
