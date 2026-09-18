@@ -266,9 +266,13 @@ class MapVoteCog(commands.Cog):
                             
                         self.save_state()
 
-    @app_commands.command(name="voting", description="Schaltet das Map-Voting für einen Server an oder aus.")
-    @app_commands.describe(server="Der Server (z.B. server2)", status="on oder off")
-    async def toggle_voting(self, interaction: discord.Interaction, server: str, status: str):
+    @app_commands.command(name="voting", description="Schaltet das Map-Voting an oder aus.")
+    @app_commands.describe(status="Soll das Voting an oder aus sein?")
+    @app_commands.choices(status=[
+        app_commands.Choice(name="On", value="on"),
+        app_commands.Choice(name="Off", value="off")
+    ])
+    async def toggle_voting(self, interaction: discord.Interaction, status: app_commands.Choice[str]):
         if config.ADMIN_ROLE_IDS:
             user_roles = [r.id for r in interaction.user.roles] if hasattr(interaction.user, 'roles') else []
             is_admin = getattr(interaction.user.guild_permissions, 'administrator', False)
@@ -276,16 +280,8 @@ class MapVoteCog(commands.Cog):
                 await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
                 return
                 
-        server = server.lower()
-        if server not in ["server2"]:
-            await interaction.response.send_message("Aktuell wird das Map-Voting nur für `server2` unterstützt.", ephemeral=True)
-            return
-            
-        if status.lower() not in ["on", "off"]:
-            await interaction.response.send_message("Bitte `on` oder `off` angeben.", ephemeral=True)
-            return
-            
-        enable = status.lower() == "on"
+        server = "server2"
+        enable = status.value == "on"
         
         if server not in self.state:
             self.state[server] = {}
@@ -294,7 +290,7 @@ class MapVoteCog(commands.Cog):
         self.save_state()
         
         status_text = "aktiviert" if enable else "deaktiviert"
-        await interaction.response.send_message(f"✅ Map-Voting für **{server}** wurde **{status_text}**.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Map-Voting wurde **{status_text}**.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(MapVoteCog(bot))
