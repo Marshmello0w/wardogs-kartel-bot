@@ -2,10 +2,13 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 import aiohttp
+import aiomysql
 import logging
 import config
 import json
 import os
+import database
+from datetime import datetime, timedelta
 
 PENDING_ACTIONS_FILE = "pending_admin_actions.json"
 
@@ -40,9 +43,11 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
         required=True
     )
 
-    def __init__(self, bot):
+    def __init__(self, bot, duration_value, duration_label):
         super().__init__()
         self.bot = bot
+        self.duration_value = duration_value
+        self.duration_label = duration_label
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -77,10 +82,31 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
                     self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
                     logging.warning(f"Server {srv['title']} offline, queued ban.")
                     
+        # Calculate expiration
+        expires_at = None
+        if self.duration_value > 0:
+            expires_at = datetime.utcnow() + timedelta(hours=self.duration_value)
+            
+        # Record into database
+        try:
+            pool = await database.get_db_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Mark any existing active bans for this player as revoked since we're overwriting
+                    await cur.execute("UPDATE global_bans SET status = 'revoked' WHERE steam_id = %s AND status = 'active'", (self.steam_id.value.strip(),))
+                    
+                    await cur.execute(
+                        "INSERT INTO global_bans (steam_id, reason, admin_mention, duration_str, expires_at) VALUES (%s, %s, %s, %s, %s)",
+                        (self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention, self.duration_label, expires_at)
+                    )
+                await conn.commit()
+        except Exception as e:
+            logging.error(f"Failed to record ban to database: {e}")
+
         # Log via event dispatcher
-        log_desc = f"**Admin:** {interaction.user.mention}\n**Aktion:** Globaler Ban\n**SteamID:** `{self.steam_id.value}`\n**Grund:** {self.reason.value}\n\n"
+        log_desc = f"**Admin:** {interaction.user.mention}\\n**Aktion:** Globaler Ban\\n**SteamID:** `{self.steam_id.value}`\\n**Dauer:** {self.duration_label}\\n**Grund:** {self.reason.value}\\n\\n"
         if success_list:
-            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\n"
+            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\\n"
         if error_list:
             log_desc += f"❌ **Fehler auf:** {', '.join(error_list)}"
             
@@ -88,6 +114,31 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
         self.bot.dispatch("bot_log", "🔨 Globaler Ban Ausgeführt", log_desc, color)
         
         await interaction.followup.send(f"Bann-Vorgang abgeschlossen! Erfolgreich: {len(success_list)}, Fehler: {len(error_list)}.", ephemeral=True)
+
+
+class BanDurationSelect(discord.ui.Select):
+    def __init__(self, bot):
+        self.bot = bot
+        options = [
+            discord.SelectOption(label="24 Stunden", value="24", description="Bannt den Spieler für 1 Tag"),
+            discord.SelectOption(label="3 Tage", value="72", description="Bannt den Spieler für 3 Tage"),
+            discord.SelectOption(label="7 Tage", value="168", description="Bannt den Spieler für 1 Woche"),
+            discord.SelectOption(label="2 Wochen", value="336", description="Bannt den Spieler für 2 Wochen"),
+            discord.SelectOption(label="1 Monat", value="720", description="Bannt den Spieler für 30 Tage"),
+            discord.SelectOption(label="Permanent", value="0", description="Bannt den Spieler für immer")
+        ]
+        super().__init__(placeholder="Wähle die Bann-Dauer aus...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        value = int(self.values[0])
+        label = [opt.label for opt in self.options if opt.value == self.values[0]][0]
+        await interaction.response.send_modal(BanModal(self.bot, value, label))
+
+
+class BanDurationView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=300)
+        self.add_item(BanDurationSelect(bot))
 
 
 class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
@@ -137,10 +188,20 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
                     self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
                     logging.warning(f"Server {srv['title']} offline, queued unban.")
                     
+        # Update database
+        try:
+            pool = await database.get_db_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("UPDATE global_bans SET status = 'revoked' WHERE steam_id = %s AND status = 'active'", (self.steam_id.value.strip(),))
+                await conn.commit()
+        except Exception as e:
+            logging.error(f"Failed to update db on unban: {e}")
+
         # Log via event dispatcher
-        log_desc = f"**Admin:** {interaction.user.mention}\n**Aktion:** Globaler Unban\n**SteamID:** `{self.steam_id.value}`\n\n"
+        log_desc = f"**Admin:** {interaction.user.mention}\\n**Aktion:** Globaler Unban\\n**SteamID:** `{self.steam_id.value}`\\n\\n"
         if success_list:
-            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\n"
+            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\\n"
         if error_list:
             log_desc += f"❌ **Fehler auf:** {', '.join(error_list)}"
             
@@ -167,12 +228,15 @@ class AdminPanelView(discord.ui.View):
     async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self._is_admin(interaction.user):
             return await interaction.response.send_message("❌ Du hast keine Berechtigung für diese Aktion.", ephemeral=True)
-        await interaction.response.send_modal(BanModal(self.bot))
+            
+        view = BanDurationView(self.bot)
+        await interaction.response.send_message("Wie lange soll der Spieler gebannt werden?", view=view, ephemeral=True)
 
     @discord.ui.button(label="Spieler Entbannen", style=discord.ButtonStyle.success, custom_id="admin_panel_unban", emoji="🕊️")
     async def unban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self._is_admin(interaction.user):
             return await interaction.response.send_message("❌ Du hast keine Berechtigung für diese Aktion.", ephemeral=True)
+            
         await interaction.response.send_modal(UnbanModal(self.bot))
 
 
@@ -182,6 +246,12 @@ class AdminPanelCog(commands.Cog):
         self.pending_actions = load_pending_actions()
         self.process_pending_actions.start()
         self.ensure_panel.start()
+        self.auto_unban_task.start()
+
+    def cog_unload(self):
+        self.process_pending_actions.cancel()
+        self.ensure_panel.cancel()
+        self.auto_unban_task.cancel()
 
     def get_saved_message_id(self):
         if os.path.exists(config.ADMIN_PANEL_MSG_ID_FILE):
@@ -209,9 +279,9 @@ class AdminPanelCog(commands.Cog):
             embed = discord.Embed(
                 title="🛡️ Kartell Global Admin Panel",
                 description=(
-                    "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\n\n"
-                    "**Hinweis:**\n"
-                    "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\n"
+                    "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\\n\\n"
+                    "**Hinweis:**\\n"
+                    "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\\n"
                     "• Alle Aktionen werden zentral in den Logs aufgezeichnet."
                 ),
                 color=discord.Color.dark_theme()
@@ -241,11 +311,7 @@ class AdminPanelCog(commands.Cog):
     async def before_ensure_panel(self):
         await self.bot.wait_until_ready()
 
-    def cog_unload(self):
-        self.process_pending_actions.cancel()
-
     def add_pending_action(self, action_type, server_id, steam_id, reason, admin_mention):
-        # Prevent duplicates
         for action in self.pending_actions:
             if action["action"] == action_type and action["server_id"] == server_id and action["steam_id"] == steam_id:
                 return
@@ -278,7 +344,7 @@ class AdminPanelCog(commands.Cog):
                 srv_id = action["server_id"]
                 srv = servers.get(srv_id)
                 if not srv or not srv["url"]:
-                    continue # Drop invalid actions
+                    continue
                     
                 headers = {"Authorization": f"Bearer {srv['pass']}"}
                 success = False
@@ -301,13 +367,11 @@ class AdminPanelCog(commands.Cog):
                     except: pass
                 
                 if success:
-                    # Notify that it finally worked
                     title_str = "🔨 Verzögerter Ban Erfolgreich" if action["action"] == "ban" else "🕊️ Verzögerter Unban Erfolgreich"
                     color = discord.Color.green()
-                    desc = f"**Admin:** {action['admin_mention']}\n**Aktion:** {action['action'].capitalize()}\n**SteamID:** `{action['steam_id']}`\n**Server:** {srv['title']}\n\nDie zuvor fehlgeschlagene Aktion konnte nun erfolgreich auf dem Server ausgeführt werden!"
+                    desc = f"**Admin:** {action['admin_mention']}\\n**Aktion:** {action['action'].capitalize()}\\n**SteamID:** `{action['steam_id']}`\\n**Server:** {srv['title']}\\n\\nDie zuvor fehlgeschlagene Aktion konnte nun erfolgreich auf dem Server ausgeführt werden!"
                     self.bot.dispatch("bot_log", title_str, desc, color)
                 else:
-                    # Keep it in the queue to try again in 5 minutes
                     remaining_actions.append(action)
                     
         if len(remaining_actions) != len(self.pending_actions):
@@ -318,16 +382,74 @@ class AdminPanelCog(commands.Cog):
     async def before_process(self):
         await self.bot.wait_until_ready()
 
+    @tasks.loop(minutes=10)
+    async def auto_unban_task(self):
+        try:
+            pool = await database.get_db_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cur:
+                    await cur.execute("SELECT steam_id FROM global_bans WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP()")
+                    expired_bans = await cur.fetchall()
+                    
+                    if not expired_bans:
+                        return
+                        
+                    servers = [
+                        {"id": "server1", "title": "Server 1", "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS},
+                        {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS},
+                        {"id": "server3", "title": "Server 3", "rcon_url": config.SERVER3_RCON_URL, "rcon_pass": config.SERVER3_RCON_PASS}
+                    ]
+                    
+                    async with aiohttp.ClientSession() as session:
+                        for row in expired_bans:
+                            steam_id = row['steam_id']
+                            success_list = []
+                            error_list = []
+                            
+                            for srv in servers:
+                                if not srv["rcon_url"] or not srv["rcon_pass"]: continue
+                                url = f"{srv['rcon_url'].rstrip('/')}/v1/bans/{steam_id}"
+                                headers = {"Authorization": f"Bearer {srv['rcon_pass']}"}
+                                try:
+                                    async with session.delete(url, headers=headers, timeout=5) as response:
+                                        if response.status in [200, 204, 404]:
+                                            success_list.append(srv["title"])
+                                        else:
+                                            error_list.append(srv["title"])
+                                            self.add_pending_action("unban", srv["id"], steam_id, "", "System (Auto-Unban)")
+                                except:
+                                    error_list.append(srv["title"])
+                                    self.add_pending_action("unban", srv["id"], steam_id, "", "System (Auto-Unban)")
+                                    
+                            await cur.execute("UPDATE global_bans SET status = 'expired' WHERE steam_id = %s AND status = 'active'", (steam_id,))
+                            
+                            log_desc = f"**Aktion:** Automatischer Unban (Zeit abgelaufen)\\n**SteamID:** `{steam_id}`\\n\\n"
+                            if success_list: log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\\n"
+                            if error_list: log_desc += f"❌ **Fehler auf:** {', '.join(error_list)}"
+                            
+                            self.bot.dispatch("bot_log", "⏳ Auto-Unban Ausgeführt", log_desc, discord.Color.blue())
+                            
+                await conn.commit()
+        except Exception as e:
+            logging.error(f"Error in auto_unban_task: {e}")
+
+    @auto_unban_task.before_loop
+    async def before_auto_unban(self):
+        await self.bot.wait_until_ready()
+
+    def _is_admin(self, member: discord.Member):
+        if member.guild_permissions.administrator:
+            return True
+        for role in member.roles:
+            if role.id in config.ADMIN_ROLE_IDS:
+                return True
+        return False
+
     @app_commands.command(name="adminpanel", description="Sendet das globale Admin-Panel zum Bannen/Entbannen von Spielern.")
     async def admin_panel(self, interaction: discord.Interaction):
-        is_admin = interaction.user.guild_permissions.administrator
-        if not is_admin:
-            for role in interaction.user.roles:
-                if role.id in config.ADMIN_ROLE_IDS:
-                    is_admin = True
-                    break
-        if not is_admin:
+        if not self._is_admin(interaction.user):
             return await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
+            
         embed = discord.Embed(
             title="🛡️ Kartell Global Admin Panel",
             description=(
@@ -343,6 +465,41 @@ class AdminPanelCog(commands.Cog):
         view = AdminPanelView(self.bot)
         await interaction.response.send_message(embed=embed, view=view)
 
+    @app_commands.command(name="ban_lookup", description="Sucht nach der Ban-Historie eines Spielers.")
+    @app_commands.describe(steam_id="Die Steam64 ID des Spielers")
+    async def ban_lookup(self, interaction: discord.Interaction, steam_id: str):
+        if not self._is_admin(interaction.user):
+            return await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
+            
+        await interaction.response.defer(ephemeral=True)
+        try:
+            pool = await database.get_db_pool()
+            async with pool.acquire() as conn:
+                import aiomysql
+                async with conn.cursor(aiomysql.DictCursor) as cur:
+                    await cur.execute("SELECT * FROM global_bans WHERE steam_id = %s ORDER BY issued_at DESC", (steam_id,))
+                    rows = await cur.fetchall()
+                    
+            if not rows:
+                return await interaction.followup.send(f"Für die SteamID `{steam_id}` gibt es keine Ban-Einträge in der Datenbank.", ephemeral=True)
+                
+            embed = discord.Embed(title=f"🔍 Ban-Historie: {steam_id}", color=discord.Color.blue())
+            for row in rows:
+                status_emoji = "🔴" if row['status'] == 'active' else "🟢"
+                expires = row['expires_at'].strftime('%d.%m.%Y %H:%M') if row['expires_at'] else "Nie"
+                
+                desc = (
+                    f"**Admin:** {row['admin_mention']}\\n"
+                    f"**Dauer:** {row['duration_str']} (Bis: {expires})\\n"
+                    f"**Grund:** {row['reason']}\\n"
+                    f"**Status:** {row['status'].capitalize()}"
+                )
+                embed.add_field(name=f"{status_emoji} Ban am {row['issued_at'].strftime('%d.%m.%Y %H:%M')}", value=desc, inline=False)
+                
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except Exception as e:
+            logging.error(f"Error in ban_lookup: {e}")
+            await interaction.followup.send("Fehler beim Abrufen der Datenbank.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(AdminPanelCog(bot))

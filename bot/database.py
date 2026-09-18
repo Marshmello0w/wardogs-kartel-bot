@@ -89,6 +89,21 @@ async def init_db(pool):
                 )
             ''')
             await cur.execute('''
+                CREATE TABLE IF NOT EXISTS global_bans (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    steam_id VARCHAR(50) NOT NULL,
+                    reason TEXT NOT NULL,
+                    admin_mention VARCHAR(100) NOT NULL,
+                    duration_str VARCHAR(50) NOT NULL,
+                    issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    expires_at DATETIME NULL,
+                    status VARCHAR(50) DEFAULT 'active',
+                    INDEX(steam_id),
+                    INDEX(status)
+                )
+            ''')
+            
+            await cur.execute('''
                 CREATE TABLE IF NOT EXISTS banned_players (
                     server_id VARCHAR(50),
                     steam_id VARCHAR(50),
