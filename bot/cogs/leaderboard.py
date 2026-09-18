@@ -140,7 +140,13 @@ class Leaderboard(commands.Cog):
 
     @tasks.loop(seconds=15)
     async def update_leaderboard(self):
-        # Wir nutzen nun LEADERBOARD_CHANNEL_ID als Hauptkanal für beide Server
+        self.db_pool = await database.check_and_reconnect(self.db_pool)
+        if not self.db_pool:
+            logging.warning("Database unavailable, skipping leaderboard update this round.")
+            return
+
+        # Wir nutzen nun LEADERBOARD_CHANNEL_ID
+ als Hauptkanal für beide Server
         channel_id_str = config.LEADERBOARD_CHANNEL_ID_1 or config.LEADERBOARD_CHANNEL_ID_2
         if not channel_id_str:
             return
@@ -186,7 +192,8 @@ class Leaderboard(commands.Cog):
                         cash = p.get("cash", 0)
                         
                         if steam_id:
-                            await database.update_player_stats(
+                            try:
+                                await database.update_player_stats(
                                 self.db_pool, 
                                 srv["id"], 
                                 steam_id, 
@@ -195,6 +202,8 @@ class Leaderboard(commands.Cog):
                                 deaths, 
                                 cash
                             )
+                            except Exception as e:
+                                logging.error(f"DB Error updating player: {e}")
 
                 srv_state = saved.get(srv["id"], {})
                 tf = srv_state.get("tf", "7d")

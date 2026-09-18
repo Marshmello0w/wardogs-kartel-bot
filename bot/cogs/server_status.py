@@ -46,7 +46,13 @@ class ServerStatus(commands.Cog):
 
     @tasks.loop(seconds=60)
     async def update_status_embed(self):
+        self.db_pool = await database.check_and_reconnect(self.db_pool)
+        if not self.db_pool:
+            logging.warning("Database unavailable, skipping status update this round.")
+            return
+
         if not config.SERVER_STATUS_CHANNEL_ID:
+
             logging.error("SERVER_STATUS_CHANNEL_ID is not set in .env")
             return
 
@@ -70,10 +76,12 @@ class ServerStatus(commands.Cog):
                 is_online = bool(data and "server" in data)
                 
                 # Log uptime in database
-                await database.log_uptime(self.db_pool, s_id, is_online)
-                
-                # Fetch uptime statistics
-                stats = await database.get_uptime_stats(self.db_pool, s_id)
+                try:
+                    await database.log_uptime(self.db_pool, s_id, is_online)
+                    stats = await database.get_uptime_stats(self.db_pool, s_id)
+                except Exception as e:
+                    logging.error(f"DB Error during uptime check: {e}")
+                    continue
                 uptime_str = f"24h: {stats['24h']} | 7d: {stats['7d']} | 30d: {stats['30d']}"
                 
                 if is_online:

@@ -90,6 +90,23 @@ async def init_db(pool):
             ''')
     logging.info("Database initialized.")
 
+async def check_and_reconnect(pool):
+    if pool is None:
+        return await get_db_pool()
+    try:
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("SELECT 1")
+        return pool
+    except Exception as e:
+        logging.error(f"DB Connection lost: {e}. Trying to reconnect...")
+        try:
+            pool.close()
+            await pool.wait_closed()
+        except:
+            pass
+        return await get_db_pool()
+
 async def log_uptime(pool, server_id, is_online):
     if not pool:
         return
