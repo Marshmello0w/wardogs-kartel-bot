@@ -17,8 +17,8 @@ class MapVoteButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         view: MapVoteView = self.view
         
-        if view.locked:
-            await interaction.response.send_message("Das Voting ist bereits geschlossen!", ephemeral=True)
+        if view.locked or not view.cog.state.get(view.server_id, {}).get("enabled", True):
+            await interaction.response.send_message("Das Voting ist derzeit deaktiviert oder geschlossen!", ephemeral=True)
             return
 
         user_id = str(interaction.user.id)
@@ -291,6 +291,21 @@ class MapVoteCog(commands.Cog):
         
         status_text = "aktiviert" if enable else "deaktiviert"
         await interaction.response.send_message(f"✅ Map-Voting wurde **{status_text}**.", ephemeral=True)
+        
+        # Update current message if exists
+        msg_id = self.state[server].get("msg_id")
+        channel_id = self.state[server].get("channel_id")
+        if msg_id and channel_id and not enable:
+            try:
+                channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))
+                msg = await channel.fetch_message(int(msg_id))
+                view = MapVoteView(server, "Server 2", self, votes=self.state[server].get("votes", {}), locked=True)
+                embed = view.generate_embed()
+                embed.description = "⚠️ **Map-Voting wurde vom Admin vorzeitig DEAKTIVIERT.**"
+                embed.color = discord.Color.orange()
+                await msg.edit(embed=embed, view=view)
+            except Exception as e:
+                pass
 
     @app_commands.command(name="forcemap", description="[Admin] Erzwingt eine Map-Änderung in der Server-Rotation zum Testen.")
     @app_commands.describe(map_name="Die Map, die erzwungen werden soll")
