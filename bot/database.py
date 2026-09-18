@@ -213,7 +213,7 @@ async def get_top_players(pool, server_id, timeframe="all", limit=10):
                     SELECT name, lifetime_kills as kills, lifetime_deaths as deaths, lifetime_cash as cash
                     FROM leaderboard
                     WHERE server_id = %s
-                    ORDER BY lifetime_kills DESC, lifetime_deaths ASC
+                    ORDER BY (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) DESC, lifetime_kills DESC
                     LIMIT %s
                 ''', (server_id, limit))
             else:
@@ -224,7 +224,7 @@ async def get_top_players(pool, server_id, timeframe="all", limit=10):
                     JOIN leaderboard l ON d.server_id = l.server_id AND d.steam_id = l.steam_id
                     WHERE d.server_id = %s AND d.date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
                     GROUP BY d.steam_id, l.name
-                    ORDER BY kills DESC, deaths ASC
+                    ORDER BY (SUM(d.kills) / IF(SUM(d.deaths)=0, 1, SUM(d.deaths))) DESC, SUM(d.kills) DESC
                     LIMIT %s
                 ''', (server_id, limit))
             return await cur.fetchall()
