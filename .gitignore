@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+message_id.json
+openapi.json
+server1.json
