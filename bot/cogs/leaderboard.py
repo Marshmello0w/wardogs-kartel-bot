@@ -125,8 +125,12 @@ class Leaderboard(commands.Cog):
         return []
 
     async def fetch_bans_for_server(self, server_id):
-        rcon_url = config.SERVER1_RCON_URL if server_id == "server1" else config.SERVER2_RCON_URL
-        rcon_pass = config.SERVER1_RCON_PASS if server_id == "server1" else config.SERVER2_RCON_PASS
+        if server_id == "server1":
+            rcon_url, rcon_pass = config.SERVER1_RCON_URL, config.SERVER1_RCON_PASS
+        elif server_id == "server2":
+            rcon_url, rcon_pass = config.SERVER2_RCON_URL, config.SERVER2_RCON_PASS
+        else:
+            rcon_url, rcon_pass = config.SERVER3_RCON_URL, config.SERVER3_RCON_PASS
         try:
             async with aiohttp.ClientSession() as session:
                 return await self.fetch_bans(session, rcon_url, rcon_pass)
@@ -240,6 +244,12 @@ class Leaderboard(commands.Cog):
                 "title": "Server 2",
                 "rcon_url": config.SERVER2_RCON_URL,
                 "rcon_pass": config.SERVER2_RCON_PASS,
+            },
+            {
+                "id": "server3",
+                "title": "Server 3",
+                "rcon_url": config.SERVER3_RCON_URL,
+                "rcon_pass": config.SERVER3_RCON_PASS,
             }
         ]
         
@@ -305,7 +315,8 @@ class Leaderboard(commands.Cog):
 
         servers = [
             {"id": "server1", "title": "Server 1", "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS},
-            {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS}
+            {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS},
+            {"id": "server3", "title": "Server 3", "rcon_url": config.SERVER3_RCON_URL, "rcon_pass": config.SERVER3_RCON_PASS}
         ]
         
         channel = self.bot.get_channel(int(config.LEADERBOARD_CHANNEL_ID))

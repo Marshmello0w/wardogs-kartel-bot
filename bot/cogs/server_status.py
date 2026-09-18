@@ -81,7 +81,8 @@ class ServerStatus(commands.Cog):
 
         servers = [
             {"id": "server1", "uuid": config.SERVER_IDS[0], "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS},
-            {"id": "server2", "uuid": config.SERVER_IDS[1], "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS}
+            {"id": "server2", "uuid": config.SERVER_IDS[1], "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS},
+            {"id": "server3", "title": "Server 3", "rcon_url": config.SERVER3_RCON_URL, "rcon_pass": config.SERVER3_RCON_PASS}
         ]
 
         async with aiohttp.ClientSession() as session:

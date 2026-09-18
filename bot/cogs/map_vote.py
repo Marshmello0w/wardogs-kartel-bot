@@ -85,7 +85,8 @@ class MapVoteCog(commands.Cog):
             except:
                 pass
         return {
-            "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID}
+            "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID},
+            "server3": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER3_VOTE_CHANNEL_ID}
         }
 
     def save_state(self):
@@ -182,7 +183,8 @@ class MapVoteCog(commands.Cog):
         await self.bot.wait_until_ready()
         
         servers = [
-            {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS, "channel": config.SERVER2_VOTE_CHANNEL_ID}
+            {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS, "channel": config.SERVER2_VOTE_CHANNEL_ID},
+            {"id": "server3", "title": "Server 3", "rcon_url": config.SERVER3_RCON_URL, "rcon_pass": config.SERVER3_RCON_PASS, "channel": config.SERVER3_VOTE_CHANNEL_ID}
         ]
 
         async with aiohttp.ClientSession() as session:
@@ -269,12 +271,18 @@ class MapVoteCog(commands.Cog):
                 self.save_state()
 
     @app_commands.command(name="voting", description="Schaltet das Map-Voting an oder aus.")
-    @app_commands.describe(status="Soll das Voting an oder aus sein?")
-    @app_commands.choices(status=[
-        app_commands.Choice(name="On", value="on"),
-        app_commands.Choice(name="Off", value="off")
-    ])
-    async def toggle_voting(self, interaction: discord.Interaction, status: app_commands.Choice[str]):
+    @app_commands.describe(server="Der Server", status="Soll das Voting an oder aus sein?")
+    @app_commands.choices(
+        server=[
+            app_commands.Choice(name="Server 2", value="server2"),
+            app_commands.Choice(name="Server 3", value="server3")
+        ],
+        status=[
+            app_commands.Choice(name="On", value="on"),
+            app_commands.Choice(name="Off", value="off")
+        ]
+    )
+    async def toggle_voting(self, interaction: discord.Interaction, server: app_commands.Choice[str], status: app_commands.Choice[str]):
         if config.ADMIN_ROLE_IDS:
             user_roles = [r.id for r in interaction.user.roles] if hasattr(interaction.user, 'roles') else []
             is_admin = getattr(interaction.user.guild_permissions, 'administrator', False)
@@ -282,7 +290,7 @@ class MapVoteCog(commands.Cog):
                 await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
                 return
                 
-        server = "server2"
+        server = server.value
         enable = status.value == "on"
         
         if server not in self.state:
@@ -310,11 +318,17 @@ class MapVoteCog(commands.Cog):
                 pass
 
     @app_commands.command(name="forcemap", description="[Admin] Erzwingt eine Map-Änderung in der Server-Rotation zum Testen.")
-    @app_commands.describe(map_name="Die Map, die erzwungen werden soll")
-    @app_commands.choices(map_name=[
-        app_commands.Choice(name=opt, value=opt) for opt in config.MAP_VOTE_OPTIONS.keys()
-    ])
-    async def force_map(self, interaction: discord.Interaction, map_name: app_commands.Choice[str]):
+    @app_commands.describe(server="Der Server", map_name="Die Map, die erzwungen werden soll")
+    @app_commands.choices(
+        server=[
+            app_commands.Choice(name="Server 2", value="server2"),
+            app_commands.Choice(name="Server 3", value="server3")
+        ],
+        map_name=[
+            app_commands.Choice(name=opt, value=opt) for opt in config.MAP_VOTE_OPTIONS.keys()
+        ]
+    )
+    async def force_map(self, interaction: discord.Interaction, server: app_commands.Choice[str], map_name: app_commands.Choice[str]):
         if config.ADMIN_ROLE_IDS:
             user_roles = [r.id for r in interaction.user.roles] if hasattr(interaction.user, 'roles') else []
             is_admin = getattr(interaction.user.guild_permissions, 'administrator', False)
@@ -324,11 +338,14 @@ class MapVoteCog(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
         
-        server = "server2"
+        srv_id = server.value
+        rcon_url = config.SERVER2_RCON_URL if srv_id == "server2" else config.SERVER3_RCON_URL
+        rcon_pass = config.SERVER2_RCON_PASS if srv_id == "server2" else config.SERVER3_RCON_PASS
+        
         async with aiohttp.ClientSession() as session:
-            success = await self.modify_rotation(session, config.SERVER2_RCON_URL, config.SERVER2_RCON_PASS, map_name.value)
+            success = await self.modify_rotation(session, rcon_url, rcon_pass, map_name.value)
             if success:
-                await interaction.followup.send(f"✅ Die Map **{map_name.value}** wurde erfolgreich auf Platz 1 der Rotation für {server} gesetzt!")
+                await interaction.followup.send(f"✅ Die Map **{map_name.value}** wurde erfolgreich auf Platz 1 der Rotation für {srv_id} gesetzt!")
                 self.bot.dispatch("bot_log", "🛠️ Admin Force Map", f"Ein Admin hat manuell die Map **{map_name.value}** auf Platz 1 gesetzt.", discord.Color.green())
             else:
                 await interaction.followup.send(f"❌ Fehler beim Setzen der Map **{map_name.value}**.")
