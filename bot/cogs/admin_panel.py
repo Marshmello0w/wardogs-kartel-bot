@@ -74,6 +74,28 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
                     async with session.post(url, headers=headers, json=payload, timeout=5) as response:
                         if response.status in [200, 201, 204]:
                             success_list.append(srv["title"])
+                        elif response.status == 404:
+                            # Player is offline, we must edit the config file directly
+                            config_url = f"{srv['rcon_url'].rstrip('/')}/v1/config"
+                            async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
+                                if conf_resp.status == 200:
+                                    conf_data = await conf_resp.json()
+                                    text = conf_data.get("text", "")
+                                    
+                                    if "[/Script/WDGame.WDGameSession]" in text:
+                                        text = text.replace("[/Script/WDGame.WDGameSession]\r\n", f"[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}\r\n")
+                                    else:
+                                        text += f"\r\n[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}\r\n"
+                                        
+                                    async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
+                                        if put_resp.status in [200, 202, 204]:
+                                            success_list.append(srv["title"])
+                                        else:
+                                            error_list.append(f"{srv['title']} (Config PUT {put_resp.status})")
+                                            self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
+                                else:
+                                    error_list.append(f"{srv['title']} (Config GET {conf_resp.status})")
+                                    self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
                         else:
                             error_list.append(f"{srv['title']} (HTTP {response.status})")
                             self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
@@ -104,9 +126,9 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
             logging.error(f"Failed to record ban to database: {e}")
 
         # Log via event dispatcher
-        log_desc = f"**Admin:** {interaction.user.mention}\\n**Aktion:** Globaler Ban\\n**SteamID:** `{self.steam_id.value}`\\n**Dauer:** {self.duration_label}\\n**Grund:** {self.reason.value}\\n\\n"
+        log_desc = f"**Admin:** {interaction.user.mention}\n**Aktion:** Globaler Ban\n**SteamID:** `{self.steam_id.value}`\n**Dauer:** {self.duration_label}\n**Grund:** {self.reason.value}\n\n"
         if success_list:
-            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\\n"
+            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\n"
         if error_list:
             log_desc += f"❌ **Fehler auf:** {', '.join(error_list)}"
             
@@ -199,9 +221,9 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
             logging.error(f"Failed to update db on unban: {e}")
 
         # Log via event dispatcher
-        log_desc = f"**Admin:** {interaction.user.mention}\\n**Aktion:** Globaler Unban\\n**SteamID:** `{self.steam_id.value}`\\n\\n"
+        log_desc = f"**Admin:** {interaction.user.mention}\n**Aktion:** Globaler Unban\n**SteamID:** `{self.steam_id.value}`\n\n"
         if success_list:
-            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\\n"
+            log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\n"
         if error_list:
             log_desc += f"❌ **Fehler auf:** {', '.join(error_list)}"
             
@@ -409,6 +431,19 @@ class AdminPanelCog(commands.Cog):
                         async with session.post(url, headers=headers, json=payload, timeout=5) as response:
                             if response.status in [200, 201, 204]:
                                 success = True
+                            elif response.status == 404:
+                                config_url = f"{srv['url'].rstrip('/')}/v1/config"
+                                async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
+                                    if conf_resp.status == 200:
+                                        conf_data = await conf_resp.json()
+                                        text = conf_data.get("text", "")
+                                        if "[/Script/WDGame.WDGameSession]" in text:
+                                            text = text.replace("[/Script/WDGame.WDGameSession]\r\n", f"[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={action['steam_id']}\r\n")
+                                        else:
+                                            text += f"\r\n[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={action['steam_id']}\r\n"
+                                        async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
+                                            if put_resp.status in [200, 202, 204]:
+                                                success = True
                     except: pass
                 
                 elif action["action"] == "unban":
@@ -422,7 +457,7 @@ class AdminPanelCog(commands.Cog):
                 if success:
                     title_str = "🔨 Verzögerter Ban Erfolgreich" if action["action"] == "ban" else "🕊️ Verzögerter Unban Erfolgreich"
                     color = discord.Color.green()
-                    desc = f"**Admin:** {action['admin_mention']}\\n**Aktion:** {action['action'].capitalize()}\\n**SteamID:** `{action['steam_id']}`\\n**Server:** {srv['title']}\\n\\nDie zuvor fehlgeschlagene Aktion konnte nun erfolgreich auf dem Server ausgeführt werden!"
+                    desc = f"**Admin:** {action['admin_mention']}\n**Aktion:** {action['action'].capitalize()}\n**SteamID:** `{action['steam_id']}`\n**Server:** {srv['title']}\n\nDie zuvor fehlgeschlagene Aktion konnte nun erfolgreich auf dem Server ausgeführt werden!"
                     self.bot.dispatch("bot_log", title_str, desc, color)
                 else:
                     remaining_actions.append(action)
@@ -476,8 +511,8 @@ class AdminPanelCog(commands.Cog):
                                     
                             await cur.execute("UPDATE global_bans SET status = 'expired' WHERE steam_id = %s AND status = 'active'", (steam_id,))
                             
-                            log_desc = f"**Aktion:** Automatischer Unban (Zeit abgelaufen)\\n**SteamID:** `{steam_id}`\\n\\n"
-                            if success_list: log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\\n"
+                            log_desc = f"**Aktion:** Automatischer Unban (Zeit abgelaufen)\n**SteamID:** `{steam_id}`\n\n"
+                            if success_list: log_desc += f"✅ **Erfolgreich auf:** {', '.join(success_list)}\n"
                             if error_list: log_desc += f"❌ **Fehler auf:** {', '.join(error_list)}"
                             
                             self.bot.dispatch("bot_log", "⏳ Auto-Unban Ausgeführt", log_desc, discord.Color.blue())
@@ -542,9 +577,9 @@ class AdminPanelCog(commands.Cog):
                 expires = row['expires_at'].strftime('%d.%m.%Y %H:%M') if row['expires_at'] else "Nie"
                 
                 desc = (
-                    f"**Admin:** {row['admin_mention']}\\n"
-                    f"**Dauer:** {row['duration_str']} (Bis: {expires})\\n"
-                    f"**Grund:** {row['reason']}\\n"
+                    f"**Admin:** {row['admin_mention']}\n"
+                    f"**Dauer:** {row['duration_str']} (Bis: {expires})\n"
+                    f"**Grund:** {row['reason']}\n"
                     f"**Status:** {row['status'].capitalize()}"
                 )
                 embed.add_field(name=f"{status_emoji} Ban am {row['issued_at'].strftime('%d.%m.%Y %H:%M')}", value=desc, inline=False)
