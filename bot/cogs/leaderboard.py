@@ -9,56 +9,84 @@ import time
 import config
 import database
 
+class EphemeralTimeframeDropdown(discord.ui.Select):
+    def __init__(self, current_tf):
+        options = [
+            discord.SelectOption(label="Letzte 7 Tage", value="7d", emoji="📅", default=(current_tf == "7d")),
+            discord.SelectOption(label="Letzte 30 Tage", value="30d", emoji="📆", default=(current_tf == "30d")),
+            discord.SelectOption(label="All-Time", value="all", emoji="🏆", default=(current_tf == "all"))
+        ]
+        super().__init__(placeholder="Zeitraum wählen...", min_values=1, max_values=1, options=options)
 
-class LeaderboardDropdown(discord.ui.Select):
-    def __init__(self, cog, server_id, current_tf):
+    async def callback(self, interaction: discord.Interaction):
+        self.view.current_tf = self.values[0]
+        await self.view.update_message(interaction)
+
+class EphemeralSortDropdown(discord.ui.Select):
+    def __init__(self, current_sort):
+        options = [
+            discord.SelectOption(label="Nach K/D sortieren", value="kd", emoji="⚔️", default=(current_sort == "kd")),
+            discord.SelectOption(label="Nach Cash sortieren", value="cash", emoji="💵", default=(current_sort == "cash"))
+        ]
+        super().__init__(placeholder="Sortierung wählen...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.current_sort = self.values[0]
+        await self.view.update_message(interaction)
+
+class EphemeralLeaderboardView(discord.ui.View):
+    def __init__(self, cog, server_id, current_tf, current_sort):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.server_id = server_id
+        self.current_tf = current_tf
+        self.current_sort = current_sort
+        
+        self.add_item(EphemeralTimeframeDropdown(current_tf))
+        self.add_item(EphemeralSortDropdown(current_sort))
+
+    async def update_message(self, interaction: discord.Interaction):
+        title = "Server 1" if self.server_id == "server1" else "Server 2"
+        banned_ids = await self.cog.fetch_bans_for_server(self.server_id)
+        embed = await self.cog.generate_embed(self.server_id, title, self.current_tf, self.current_sort, banned_ids)
+        new_view = EphemeralLeaderboardView(self.cog, self.server_id, self.current_tf, self.current_sort)
+        await interaction.response.edit_message(embed=embed, view=new_view)
+
+class PublicLeaderboardDropdown(discord.ui.Select):
+    def __init__(self, cog, server_id):
         self.cog = cog
         self.server_id = server_id
         options = [
-            discord.SelectOption(label="Letzte 7 Tage", value="7d", description="Top 10 der letzten 7 Tage", default=(
-                current_tf == "7d"), emoji="📅"),
-            discord.SelectOption(label="Letzte 30 Tage", value="30d", description="Top 10 der letzten 30 Tage", default=(
-                current_tf == "30d"), emoji="📆"),
-            discord.SelectOption(label="All-Time", value="all",
-                                 description="All-Time Top 10", default=(current_tf == "all"), emoji="🏆")
+            discord.SelectOption(label="Letzte 7 Tage", value="7d", emoji="📅"),
+            discord.SelectOption(label="Letzte 30 Tage", value="30d", emoji="📆"),
+            discord.SelectOption(label="All-Time", value="all", emoji="🏆")
         ]
-        super().__init__(placeholder="Wähle einen Zeitraum...", min_values=1,
-              max_values=1, options=options, custom_id=f"lb_select_{server_id}")
+        super().__init__(placeholder="Auswahl / Menü öffnen...", min_values=1, max_values=1, options=options, custom_id=f"pub_lb_{server_id}")
 
     async def callback(self, interaction: discord.Interaction):
-        new_tf = self.values[0]
+        tf = self.values[0]
+        title = "Server 1" if self.server_id == "server1" else "Server 2"
+        
+        banned_ids = await self.cog.fetch_bans_for_server(self.server_id)
+        embed = await self.cog.generate_embed(self.server_id, title, tf, sort_by="kd", banned_ids=banned_ids)
+        view = EphemeralLeaderboardView(self.cog, self.server_id, tf, "kd")
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-        # Lade State und speichere neuen TF
-        saved = self.cog.get_saved_state()
-        if self.server_id not in saved:
-            saved[self.server_id] = {}
-        saved[self.server_id]["tf"] = new_tf
-        self.cog.save_state(saved)
-
-        await interaction.response.defer()
-
-        # Das Update wird direkt geforced
-        await self.cog.force_update_message(self.server_id, interaction.message)
-
-
-class LeaderboardView(discord.ui.View):
-    def __init__(self, cog, server_id, current_tf):
+class PublicLeaderboardView(discord.ui.View):
+    def __init__(self, cog, server_id):
         super().__init__(timeout=None)
-        self.add_item(LeaderboardDropdown(cog, server_id, current_tf))
-
+        self.add_item(PublicLeaderboardDropdown(cog, server_id))
 
 class Leaderboard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db_pool = None
         self.state_file = "leaderboard_state.json"
-
-        # Load views persistently
-        saved = self.get_saved_state()
-        for server_id, data in saved.items():
-            tf = data.get("tf", "7d")
-            self.bot.add_view(LeaderboardView(self, server_id, tf))
-
+        
+        self.bot.add_view(PublicLeaderboardView(self, "server1"))
+        self.bot.add_view(PublicLeaderboardView(self, "server2"))
+            
         self.update_leaderboard.start()
 
     def cog_unload(self):
@@ -89,8 +117,16 @@ class Leaderboard(commands.Cog):
             logging.error(f"Error fetching bans: {e}")
         return []
 
-    async def fetch_players(self, session, rcon_url, rcon_pass):
+    async def fetch_bans_for_server(self, server_id):
+        rcon_url = config.SERVER1_RCON_URL if server_id == "server1" else config.SERVER2_RCON_URL
+        rcon_pass = config.SERVER1_RCON_PASS if server_id == "server1" else config.SERVER2_RCON_PASS
+        try:
+            async with aiohttp.ClientSession() as session:
+                return await self.fetch_bans(session, rcon_url, rcon_pass)
+        except:
+            return []
 
+    async def fetch_players(self, session, rcon_url, rcon_pass):
         headers = {"Authorization": f"Bearer {rcon_pass}"}
         url = f"{rcon_url.rstrip('/')}/v1/players"
         try:
@@ -99,27 +135,29 @@ class Leaderboard(commands.Cog):
                     data = await response.json()
                     return data.get("players", [])
                 else:
-                    logging.warning(
-                        f"Failed to fetch leaderboard: HTTP {response.status}")
+                    logging.warning(f"Failed to fetch leaderboard: HTTP {response.status}")
                     return None
         except Exception as e:
             logging.error(f"Error fetching leaderboard: {e}")
             return None
 
-    async def generate_embed(self, server_id, server_title, tf_key, banned_ids=None):
-        top_players = await database.get_top_players(self.db_pool, server_id, timeframe=tf_key, limit=10, banned_steam_ids=banned_ids)
+    async def generate_embed(self, server_id, server_title, tf_key, sort_by="kd", banned_ids=None):
+        try:
+            top_players = await database.get_top_players(self.db_pool, server_id, timeframe=tf_key, limit=10, banned_steam_ids=banned_ids, sort_by=sort_by)
+        except Exception as e:
+            logging.error(f"DB Error getting top players: {e}")
+            top_players = []
 
-        titles = {"7d": "Letzte 7 Tage",
-            "30d": "Letzte 30 Tage", "all": "All-Time"}
-
+        titles = {"7d": "Letzte 7 Tage", "30d": "Letzte 30 Tage", "all": "All-Time"}
+        sort_text = "Nach Cash" if sort_by == "cash" else "Nach K/D"
+        
         embed = discord.Embed(
-            title=f"🏆 {server_title} - {titles[tf_key]}",
+            title=f"🏆 {server_title} - {titles[tf_key]} ({sort_text})", 
             color=discord.Color.gold()
         )
 
         if not top_players:
-            embed.add_field(
-                name="No Data", value="Noch keine Spielerdaten vorhanden.", inline=False)
+            embed.add_field(name="No Data", value="Noch keine Spielerdaten vorhanden.", inline=False)
         else:
             rank = 1
             for p in top_players:
@@ -127,51 +165,25 @@ class Leaderboard(commands.Cog):
                 deaths = p['deaths']
                 cash = p.get('cash', 0)
                 kd = round(kills / deaths, 2) if deaths > 0 else kills
-
+                
                 val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd} | **Cash:** ${cash}"
-
+                
                 prefix = ""
                 if rank == 1: prefix = "🥇 "
                 elif rank == 2: prefix = "🥈 "
                 elif rank == 3: prefix = "🥉 "
                 else: prefix = f"**{rank}.** "
-
-                embed.add_field(
-                    name=f"{prefix}{p['name']}", value=val, inline=False)
+                
+                embed.add_field(name=f"{prefix}{p['name']}", value=val, inline=False)
                 rank += 1
 
         current_time = int(time.time())
         embed.add_field(
             name="\u200b",
-            value=f"Letzte Aktualisierung: <t:{current_time}:t>",
+            value=f"Letzte Aktualisierung: <t:{current_time}:t>", 
             inline=False
         )
         return embed
-
-
-    async def force_update_message(self, server_id, message):
-        saved = self.get_saved_state()
-        tf = saved.get(server_id, {}).get("tf", "7d")
-
-        title = "Server 1" if server_id == "server1" else "Server 2"
-
-        rcon_url = config.SERVER1_RCON_URL if server_id == "server1" else config.SERVER2_RCON_URL
-        rcon_pass = config.SERVER1_RCON_PASS if server_id == "server1" else config.SERVER2_RCON_PASS
-
-        banned_ids = []
-        try:
-            async with aiohttp.ClientSession() as session:
-                banned_ids = await self.fetch_bans(session, rcon_url, rcon_pass)
-        except:
-            pass
-
-        embed = await self.generate_embed(server_id, title, tf, banned_ids)
-        view = LeaderboardView(self, server_id, tf)
-
-        try:
-            await message.edit(embed=embed, view=view)
-        except Exception as e:
-            logging.error(f"Error forced updating message: {e}")
 
     @tasks.loop(seconds=15)
     async def update_leaderboard(self):
@@ -180,7 +192,6 @@ class Leaderboard(commands.Cog):
             logging.warning("Database unavailable, skipping leaderboard update this round.")
             return
 
-        # Wir nutzen nun LEADERBOARD_CHANNEL_ID
         channel_id_str = config.LEADERBOARD_CHANNEL_ID
         if not channel_id_str:
             return
@@ -228,25 +239,25 @@ class Leaderboard(commands.Cog):
                         if steam_id:
                             try:
                                 await database.update_player_stats(
-                                self.db_pool, 
-                                srv["id"], 
-                                steam_id, 
-                                name, 
-                                kills, 
-                                deaths, 
-                                cash
-                            )
+                                    self.db_pool, 
+                                    srv["id"], 
+                                    steam_id, 
+                                    name, 
+                                    kills, 
+                                    deaths, 
+                                    cash
+                                )
                             except Exception as e:
                                 logging.error(f"DB Error updating player: {e}")
 
                 banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
 
-                srv_state = saved.get(srv["id"], {})
-                tf = srv_state.get("tf", "7d")
-                msg_id = srv_state.get("msg_id")
+                # The public message is always fixed to 7d / kd
+                embed = await self.generate_embed(srv["id"], srv["title"], tf_key="7d", sort_by="kd", banned_ids=banned_ids)
+                view = PublicLeaderboardView(self, srv["id"])
 
-                embed = await self.generate_embed(srv["id"], srv["title"], tf, banned_ids)
-                view = LeaderboardView(self, srv["id"], tf)
+                srv_state = saved.get(srv["id"], {})
+                msg_id = srv_state.get("msg_id")
 
                 message = None
                 if msg_id:
@@ -266,7 +277,6 @@ class Leaderboard(commands.Cog):
                         if srv["id"] not in saved:
                             saved[srv["id"]] = {}
                         saved[srv["id"]]["msg_id"] = new_message.id
-                        saved[srv["id"]]["tf"] = tf
                         self.save_state(saved)
                     except Exception as e:
                         logging.error(f"Error sending message for {srv['id']}: {e}")

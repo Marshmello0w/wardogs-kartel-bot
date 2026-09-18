@@ -205,7 +205,7 @@ async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, ca
 
         await conn.commit()
 
-async def get_top_players(pool, server_id, timeframe="all", limit=10, banned_steam_ids=None):
+async def get_top_players(pool, server_id, timeframe="all", limit=10, banned_steam_ids=None, sort_by="kd"):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             if timeframe == "all":
@@ -219,10 +219,12 @@ async def get_top_players(pool, server_id, timeframe="all", limit=10, banned_ste
                     query += f" AND steam_id NOT IN ({','.join(['%s']*len(banned_steam_ids))})"
                     params.extend(banned_steam_ids)
                 
-                query += '''
-                    ORDER BY (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) DESC, lifetime_kills DESC
-                    LIMIT %s
-                '''
+                if sort_by == "cash":
+                    query += " ORDER BY lifetime_cash DESC, lifetime_kills DESC"
+                else:
+                    query += " ORDER BY (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) DESC, lifetime_kills DESC"
+                    
+                query += " LIMIT %s"
                 params.append(limit)
                 
                 await cur.execute(query, params)
@@ -239,11 +241,14 @@ async def get_top_players(pool, server_id, timeframe="all", limit=10, banned_ste
                     query += f" AND d.steam_id NOT IN ({','.join(['%s']*len(banned_steam_ids))})"
                     params.extend(banned_steam_ids)
                 
-                query += '''
-                    GROUP BY d.steam_id, l.name
-                    ORDER BY (SUM(d.kills) / IF(SUM(d.deaths)=0, 1, SUM(d.deaths))) DESC, SUM(d.kills) DESC
-                    LIMIT %s
-                '''
+                query += " GROUP BY d.steam_id, l.name"
+                
+                if sort_by == "cash":
+                    query += " ORDER BY SUM(d.cash) DESC, SUM(d.kills) DESC"
+                else:
+                    query += " ORDER BY (SUM(d.kills) / IF(SUM(d.deaths)=0, 1, SUM(d.deaths))) DESC, SUM(d.kills) DESC"
+                    
+                query += " LIMIT %s"
                 params.append(limit)
                 
                 await cur.execute(query, params)
