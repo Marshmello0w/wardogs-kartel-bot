@@ -315,6 +315,7 @@ class Leaderboard(commands.Cog):
             except:
                 return
 
+        saved = self.get_saved_state()
         async with aiohttp.ClientSession() as session:
             for srv in servers:
                 if not srv["rcon_url"] or not srv["rcon_pass"]:
