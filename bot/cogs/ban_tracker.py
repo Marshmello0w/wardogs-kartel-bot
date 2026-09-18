@@ -14,7 +14,7 @@ class BanTracker(commands.Cog):
     def cog_unload(self):
         self.check_new_bans.cancel()
 
-    async def fetch_bans(self, session, rcon_url, rcon_pass):
+    async def fetch_bans(self, session, rcon_url, rcon_pass, server_title="Unbekannter Server"):
         headers = {"Authorization": f"Bearer {rcon_pass}"}
         url = f"{rcon_url.rstrip('/')}/v1/bans"
         try:
@@ -23,7 +23,7 @@ class BanTracker(commands.Cog):
                     data = await response.json()
                     return [b["steamId"] for b in data.get("bans", []) if "steamId" in b]
         except Exception as e:
-            logging.error(f"Error fetching bans for tracker: {e}")
+            logging.error(f"Error fetching bans for tracker on {server_title}: {e}")
         return []
 
     async def send_broadcast(self, session, rcon_url, rcon_pass, text):
@@ -56,7 +56,7 @@ class BanTracker(commands.Cog):
                     continue
 
                 # Holt die aktuelle Bannliste vom Server
-                current_bans = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
+                current_bans = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"], srv.get("title", srv["id"]))
                 if not current_bans:
                     continue
 

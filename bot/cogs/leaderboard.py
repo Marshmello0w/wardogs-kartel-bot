@@ -112,7 +112,7 @@ class Leaderboard(commands.Cog):
         with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(data, f)
 
-    async def fetch_bans(self, session, rcon_url, rcon_pass):
+    async def fetch_bans(self, session, rcon_url, rcon_pass, server_title="Unbekannter Server"):
         headers = {"Authorization": f"Bearer {rcon_pass}"}
         url = f"{rcon_url.rstrip('/')}/v1/bans"
         try:
@@ -121,7 +121,7 @@ class Leaderboard(commands.Cog):
                     data = await response.json()
                     return [b["steamId"] for b in data.get("bans", []) if "steamId" in b]
         except Exception as e:
-            logging.error(f"Error fetching bans: {e}")
+            logging.error(f"Error fetching bans on {server_title}: {e}")
         return []
 
     async def fetch_bans_for_server(self, server_id):
@@ -133,7 +133,7 @@ class Leaderboard(commands.Cog):
             rcon_url, rcon_pass = config.SERVER3_RCON_URL, config.SERVER3_RCON_PASS
         try:
             async with aiohttp.ClientSession() as session:
-                return await self.fetch_bans(session, rcon_url, rcon_pass)
+                return await self.fetch_bans(session, rcon_url, rcon_pass, server_id)
         except:
             return []
 
@@ -159,10 +159,10 @@ class Leaderboard(commands.Cog):
                     data = await response.json()
                     return data.get("players", [])
                 else:
-                    logging.warning(f"Failed to fetch leaderboard: HTTP {response.status}")
+                    logging.warning(f"Failed to fetch leaderboard on {server_title}: HTTP {response.status}")
                     return None
         except Exception as e:
-            logging.error(f"Error fetching leaderboard: {e}")
+            logging.error(f"Error fetching leaderboard on {server_title}: {e}")
             return None
 
     async def generate_embed(self, server_id, server_title, tf_key, sort_by="kd", banned_ids=None, show_sort_text=True):
