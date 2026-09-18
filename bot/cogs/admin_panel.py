@@ -75,27 +75,9 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
                         if response.status in [200, 201, 204]:
                             success_list.append(srv["title"])
                         elif response.status == 404:
-                            # Player is offline, we must edit the config file directly
-                            config_url = f"{srv['rcon_url'].rstrip('/')}/v1/config"
-                            async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
-                                if conf_resp.status == 200:
-                                    conf_data = await conf_resp.json()
-                                    text = conf_data.get("text", "")
-                                    
-                                    if "[/Script/WDGame.WDGameSession]" in text:
-                                        text = text.replace("[/Script/WDGame.WDGameSession]\r\n", f"[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}\r\n")
-                                    else:
-                                        text += f"\r\n[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}\r\n"
-                                        
-                                    async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
-                                        if put_resp.status in [200, 202, 204]:
-                                            success_list.append(srv["title"])
-                                        else:
-                                            error_list.append(f"{srv['title']} (Config PUT {put_resp.status})")
-                                            self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
-                                else:
-                                    error_list.append(f"{srv['title']} (Config GET {conf_resp.status})")
-                                    self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
+                            # Wardogs API blocks banning offline players. We queue it until they join!
+                            error_list.append(f"{srv['title']} (Offline - Wird gebannt sobald online)")
+                            self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
                         else:
                             error_list.append(f"{srv['title']} (HTTP {response.status})")
                             self.bot.get_cog("AdminPanelCog").add_pending_action("ban", srv["id"], self.steam_id.value.strip(), self.reason.value.strip(), interaction.user.mention)
@@ -201,27 +183,7 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
                         if response.status in [200, 204]:
                             success_list.append(srv["title"])
                         elif response.status == 404:
-                            config_url = f"{srv['rcon_url'].rstrip('/')}/v1/config"
-                            async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
-                                if conf_resp.status == 200:
-                                    conf_data = await conf_resp.json()
-                                    text = conf_data.get("text", "")
-                                    target_line1 = f"\r\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}"
-                                    target_line2 = f"\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}"
-                                    
-                                    if target_line1 in text or target_line2 in text:
-                                        text = text.replace(target_line1, "").replace(target_line2, "")
-                                        async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
-                                            if put_resp.status in [200, 202, 204]:
-                                                success_list.append(srv["title"])
-                                            else:
-                                                error_list.append(f"{srv['title']} (Config PUT {put_resp.status})")
-                                                self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
-                                    else:
-                                        success_list.append(f"{srv['title']} (War nicht gebannt)")
-                                else:
-                                    error_list.append(f"{srv['title']} (Config GET {conf_resp.status})")
-                                    self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
+                            success_list.append(f"{srv['title']} (War nicht gebannt)")
                         else:
                             error_list.append(f"{srv['title']} (HTTP {response.status})")
                             self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
@@ -230,6 +192,12 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
                     self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
                     logging.warning(f"Server {srv['title']} offline, queued unban.")
                     
+
+        # Remove any pending bans for this player so the bot stops trying to ban them
+        cog = self.bot.get_cog("AdminPanelCog")
+        cog.pending_actions = [a for a in cog.pending_actions if not (a["action"] == "ban" and a["steam_id"] == self.steam_id.value.strip())]
+        save_pending_actions(cog.pending_actions)
+        
         # Update database
         try:
             pool = await database.get_db_pool()
@@ -451,42 +419,15 @@ class AdminPanelCog(commands.Cog):
                         async with session.post(url, headers=headers, json=payload, timeout=5) as response:
                             if response.status in [200, 201, 204]:
                                 success = True
-                            elif response.status == 404:
-                                config_url = f"{srv['url'].rstrip('/')}/v1/config"
-                                async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
-                                    if conf_resp.status == 200:
-                                        conf_data = await conf_resp.json()
-                                        text = conf_data.get("text", "")
-                                        if "[/Script/WDGame.WDGameSession]" in text:
-                                            text = text.replace("[/Script/WDGame.WDGameSession]\r\n", f"[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={action['steam_id']}\r\n")
-                                        else:
-                                            text += f"\r\n[/Script/WDGame.WDGameSession]\r\n.DefaultBannedPlayerIds={action['steam_id']}\r\n"
-                                        async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
-                                            if put_resp.status in [200, 202, 204]:
-                                                success = True
+                            # If 404, they are still offline. Keep in queue.
                     except: pass
                 
                 elif action["action"] == "unban":
                     url = f"{srv['url'].rstrip('/')}/v1/bans/{action['steam_id']}"
                     try:
                         async with session.delete(url, headers=headers, timeout=5) as response:
-                            if response.status in [200, 204]:
+                            if response.status in [200, 204, 404]:
                                 success = True
-                            elif response.status == 404:
-                                config_url = f"{srv['url'].rstrip('/')}/v1/config"
-                                async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
-                                    if conf_resp.status == 200:
-                                        conf_data = await conf_resp.json()
-                                        text = conf_data.get("text", "")
-                                        target_line1 = f"\r\n.DefaultBannedPlayerIds={action['steam_id']}"
-                                        target_line2 = f"\n.DefaultBannedPlayerIds={action['steam_id']}"
-                                        if target_line1 in text or target_line2 in text:
-                                            text = text.replace(target_line1, "").replace(target_line2, "")
-                                            async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
-                                                if put_resp.status in [200, 202, 204]:
-                                                    success = True
-                                        else:
-                                            success = True # War nicht in config gebannt
                     except: pass
                 
                 if success:
