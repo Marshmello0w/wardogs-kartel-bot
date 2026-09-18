@@ -85,8 +85,8 @@ class MapVoteCog(commands.Cog):
             except:
                 pass
         return {
-            "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID},
-            "server3": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER3_VOTE_CHANNEL_ID}
+            "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID, "injected_map": None},
+            "server3": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER3_VOTE_CHANNEL_ID, "injected_map": None}
         }
 
     def save_state(self):
@@ -130,6 +130,41 @@ class MapVoteCog(commands.Cog):
         except Exception as e:
             logging.error(f"Error pushing config: {e}")
         return False
+
+    async def remove_injected_map(self, session, rcon_url, rcon_pass, injected_entry):
+        conf = await self.fetch_config(session, rcon_url, rcon_pass)
+        if not conf: return False
+        
+        text = conf.get("text", "")
+        revision = conf.get("revision", "")
+        
+        import re
+        section_pattern = r'(\[/Script/WDGame\.WDServerMapRotationSettings\].*?)(?=\n\[|$)'
+        match = re.search(section_pattern, text, re.DOTALL)
+        if not match: return False
+        
+        section_text = match.group(1)
+        lines = section_text.split("\n")
+        other_lines = []
+        old_entries = []
+        for line in lines:
+            if line.startswith(".RotationEntries"):
+                old_entries.append(line)
+            elif not line.startswith("!RotationEntries"):
+                other_lines.append(line)
+                
+        # Only remove if the top entry is exactly the one we injected
+        if old_entries and old_entries[0] == injected_entry:
+            old_entries.pop(0)
+            
+            other_lines.append("!RotationEntries=ClearArray")
+            for old in old_entries:
+                other_lines.append(old)
+                
+            new_section_text = "\n".join(other_lines)
+            new_text = text.replace(section_text, new_section_text)
+            return await self.push_config(session, rcon_url, rcon_pass, new_text, revision)
+        return True
 
     async def modify_rotation(self, session, rcon_url, rcon_pass, winning_option):
         # Fetch current config
@@ -176,7 +211,8 @@ class MapVoteCog(commands.Cog):
         new_section_text = "\n".join(other_lines)
         new_text = text.replace(section_text, new_section_text)
         
-        return await self.push_config(session, rcon_url, rcon_pass, new_text, revision)
+        success = await self.push_config(session, rcon_url, rcon_pass, new_text, revision)
+        return entry if success else None
 
     @tasks.loop(seconds=15)
     async def check_match_scores(self):
@@ -201,7 +237,7 @@ class MapVoteCog(commands.Cog):
                         continue
                         
                 if s_id not in self.state:
-                    self.state[s_id] = {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": srv["channel"], "last_highest_score": -1}
+                    self.state[s_id] = {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": srv["channel"], "last_highest_score": -1, "injected_map": None}
                 state = self.state[s_id]
                 
                 if not state.get("enabled", True):
@@ -219,6 +255,16 @@ class MapVoteCog(commands.Cog):
                     
                     # Detect if a new match started (score reset) OR if it's the very first time
                     if (highest_score < last_score) or (state.get("msg_id") is None and highest_score < 95):
+                        # Cleanup the injected map from the previous round so it doesn't stay permanently
+                        injected = state.get("injected_map")
+                        if injected:
+                            try:
+                                await self.remove_injected_map(session, srv["rcon_url"], srv["rcon_pass"], injected)
+                                logging.info(f"Removed injected map for {s_id}")
+                            except Exception as e:
+                                logging.error(f"Failed to remove injected map: {e}")
+                            state["injected_map"] = None
+                            
                         # Unlock and clear votes
                         state["locked"] = False
                         state["votes"] = {}
@@ -346,8 +392,11 @@ class MapVoteCog(commands.Cog):
         rcon_pass = config.SERVER2_RCON_PASS if srv_id == "server2" else config.SERVER3_RCON_PASS
         
         async with aiohttp.ClientSession() as session:
-            success = await self.modify_rotation(session, rcon_url, rcon_pass, map_name.value)
-            if success:
+            injected_entry = await self.modify_rotation(session, rcon_url, rcon_pass, map_name.value)
+            if injected_entry:
+                if srv_id in self.state:
+                    self.state[srv_id]["injected_map"] = injected_entry
+                    self.save_state()
                 await interaction.followup.send(f"✅ Die Map **{map_name.value}** wurde erfolgreich auf Platz 1 der Rotation für {srv_id} gesetzt!")
                 self.bot.dispatch("bot_log", "🛠️ Admin Force Map", f"Ein Admin hat manuell die Map **{map_name.value}** auf Platz 1 gesetzt.", discord.Color.green())
             else:
