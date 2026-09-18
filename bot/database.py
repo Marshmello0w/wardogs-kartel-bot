@@ -75,6 +75,19 @@ async def init_db(pool):
                     PRIMARY KEY (server_id, steam_id)
                 )
             """)
+    
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS player_daily_stats (
+                    server_id VARCHAR(255) NOT NULL,
+                    steam_id VARCHAR(255) NOT NULL,
+                    date DATE NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    kills INT DEFAULT 0,
+                    deaths INT DEFAULT 0,
+                    cash INT DEFAULT 0,
+                    PRIMARY KEY (server_id, steam_id, date)
+                )
+            ''')
     logging.info("Database initialized.")
 
 async def log_uptime(pool, server_id, is_online):
@@ -123,7 +136,6 @@ async def get_uptime_stats(pool, server_id):
 async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, cash):
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            # Hole aktuelle Werte
             await cur.execute('''
                 SELECT current_match_kills, current_match_deaths, current_match_cash 
                 FROM leaderboard 
@@ -131,10 +143,12 @@ async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, ca
             ''', (server_id, steam_id))
             row = await cur.fetchone()
 
+            added_kills = kills
+            added_deaths = deaths
+            added_cash = cash
+
             if row:
                 old_kills, old_deaths, old_cash = row
-                
-                # Wenn die API-Zahlen kleiner sind als vorher, hat ein neues Match gestartet
                 added_kills = kills if kills < old_kills else (kills - old_kills)
                 added_deaths = deaths if deaths < old_deaths else (deaths - old_deaths)
                 added_cash = cash if cash < old_cash else (cash - old_cash)
@@ -152,7 +166,6 @@ async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, ca
                     WHERE server_id = %s AND steam_id = %s
                 ''', (name, added_kills, added_deaths, added_cash, kills, deaths, cash, server_id, steam_id))
             else:
-                # Neuer Spieler
                 await cur.execute('''
                     INSERT INTO leaderboard (
                         server_id, steam_id, name, 
@@ -160,17 +173,41 @@ async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, ca
                         current_match_kills, current_match_deaths, current_match_cash
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (server_id, steam_id, name, kills, deaths, cash, kills, deaths, cash))
+            
+            # Log in daily stats
+            if added_kills > 0 or added_deaths > 0 or added_cash > 0 or not row:
+                await cur.execute('''
+                    INSERT INTO player_daily_stats (server_id, steam_id, date, name, kills, deaths, cash)
+                    VALUES (%s, %s, CURDATE(), %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        kills = kills + VALUES(kills),
+                        deaths = deaths + VALUES(deaths),
+                        cash = cash + VALUES(cash)
+                ''', (server_id, steam_id, name, added_kills, added_deaths, added_cash))
+
         await conn.commit()
 
-async def get_top_players(pool, server_id, limit=10):
+async def get_top_players(pool, server_id, timeframe="all", limit=10):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute('''
-                SELECT name, lifetime_kills, lifetime_deaths, lifetime_cash
-                FROM leaderboard
-                WHERE server_id = %s
-                ORDER BY lifetime_kills DESC, lifetime_deaths ASC
-                LIMIT %s
-            ''', (server_id, limit))
+            if timeframe == "all":
+                await cur.execute('''
+                    SELECT name, lifetime_kills as kills, lifetime_deaths as deaths, lifetime_cash as cash
+                    FROM leaderboard
+                    WHERE server_id = %s
+                    ORDER BY lifetime_kills DESC, lifetime_deaths ASC
+                    LIMIT %s
+                ''', (server_id, limit))
+            else:
+                days = 7 if timeframe == "7d" else 30
+                await cur.execute(f'''
+                    SELECT name, SUM(kills) as kills, SUM(deaths) as deaths, SUM(cash) as cash
+                    FROM player_daily_stats
+                    WHERE server_id = %s AND date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
+                    GROUP BY steam_id, name
+                    ORDER BY kills DESC, deaths ASC
+                    LIMIT %s
+                ''', (server_id, limit))
             return await cur.fetchall()
 

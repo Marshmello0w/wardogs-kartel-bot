@@ -82,67 +82,94 @@ class Leaderboard(commands.Cog):
                             cash
                         )
 
-        # Get Top 10 from Database
-        top_players = await database.get_top_players(self.db_pool, "server2", limit=10)
 
-        embed = discord.Embed(
-            title="🏆 Server 2 - Top 10 Leaderboard", 
-            color=discord.Color.gold(),
-            description="All-Time Kills Leaderboard"
-        )
+        # Get Top 10 from Database for different timeframes
+        timeframes = [
+            ("7d", "Top 10 (Letzte 7 Tage)"),
+            ("30d", "Top 10 (Letzte 30 Tage)"),
+            ("all", "Top 10 (All-Time)")
+        ]
+        
+        embeds = {}
+        for tf_key, tf_title in timeframes:
+            top_players = await database.get_top_players(self.db_pool, "server2", timeframe=tf_key, limit=10)
 
-        if not top_players:
-            embed.add_field(name="No Data", value="No players have been recorded yet.", inline=False)
-        else:
-            rank = 1
-            for p in top_players:
-                kills = p['lifetime_kills']
-                deaths = p['lifetime_deaths']
-                kd = round(kills / deaths, 2) if deaths > 0 else kills
-                
-                val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd}"
-                
-                # Format: 1. PlayerName
-                prefix = ""
-                if rank == 1: prefix = "🥇 "
-                elif rank == 2: prefix = "🥈 "
-                elif rank == 3: prefix = "🥉 "
-                else: prefix = f"**{rank}.** "
-                
-                embed.add_field(name=f"{prefix}{p['name']}", value=val, inline=False)
-                rank += 1
+            embed = discord.Embed(
+                title=f"🏆 Server 2 - {tf_title}", 
+                color=discord.Color.gold()
+            )
 
-        current_time = int(time.time())
-        embed.add_field(
-            name="\u200b",
-            value=f"Letzte Aktualisierung: <t:{current_time}:t>", 
-            inline=False
-        )
+            if not top_players:
+                embed.add_field(name="No Data", value="No players have been recorded yet.", inline=False)
+            else:
+                rank = 1
+                for p in top_players:
+                    kills = p['kills']
+                    deaths = p['deaths']
+                    kd = round(kills / deaths, 2) if deaths > 0 else kills
+                    
+                    val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd}"
+                    
+                    prefix = ""
+                    if rank == 1: prefix = "🥇 "
+                    elif rank == 2: prefix = "🥈 "
+                    elif rank == 3: prefix = "🥉 "
+                    else: prefix = f"**{rank}.** "
+                    
+                    embed.add_field(name=f"{prefix}{p['name']}", value=val, inline=False)
+                    rank += 1
 
-        message_id = self.get_saved_message_id()
-        message = None
+            current_time = int(time.time())
+            embed.add_field(
+                name="​",
+                value=f"Letzte Aktualisierung: <t:{current_time}:t>", 
+                inline=False
+            )
+            embeds[tf_key] = embed
 
-        if message_id:
+        # Read saved message IDs (dict mapping tf_key -> message_id)
+        saved_msgs = {}
+        if os.path.exists(config.LEADERBOARD_MSG_FILE):
             try:
-                message = await channel.fetch_message(message_id)
-                await message.edit(embed=embed)
-                logging.info("Updated existing leaderboard embed.")
-            except discord.NotFound:
-                logging.warning("Leaderboard message not found, creating a new one.")
-                message = None
-            except Exception as e:
-                logging.error(f"Error editing leaderboard message: {e}")
-                message = None
+                with open(config.LEADERBOARD_MSG_FILE, "r") as f:
+                    saved_msgs = json.load(f)
+            except:
+                pass
 
-        if message is None:
-            try:
-                new_message = await channel.send(embed=embed)
-                self.save_message_id(new_message.id)
-                logging.info("Created new leaderboard embed.")
-            except Exception as e:
-                logging.error(f"Error sending leaderboard message: {e}")
+        new_saved_msgs = {}
+        for tf_key, _ in timeframes:
+            embed = embeds[tf_key]
+            msg_id = saved_msgs.get(tf_key)
+            message = None
+
+            if msg_id:
+                try:
+                    message = await channel.fetch_message(msg_id)
+                    await message.edit(embed=embed)
+                    logging.info(f"Updated existing leaderboard embed ({tf_key}).")
+                except discord.NotFound:
+                    logging.warning(f"Leaderboard message {tf_key} not found, creating a new one.")
+                    message = None
+                except Exception as e:
+                    logging.error(f"Error editing leaderboard message {tf_key}: {e}")
+                    message = None
+
+            if message is None:
+                try:
+                    new_message = await channel.send(embed=embed)
+                    new_saved_msgs[tf_key] = new_message.id
+                    logging.info(f"Created new leaderboard embed ({tf_key}).")
+                except Exception as e:
+                    logging.error(f"Error sending leaderboard message {tf_key}: {e}")
+            else:
+                new_saved_msgs[tf_key] = msg_id
+
+        # Save the message IDs
+        with open(config.LEADERBOARD_MSG_FILE, "w") as f:
+            json.dump(new_saved_msgs, f)
 
     @update_leaderboard.before_loop
+
     async def before_update_leaderboard(self):
         await self.bot.wait_until_ready()
         self.db_pool = await database.get_db_pool()
