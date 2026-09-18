@@ -109,7 +109,7 @@ class ServerStatus(commands.Cog):
         current_time = int(time.time())
         embed.add_field(
             name="\u200b", # Unsichtbarer Titel
-            value=f"Letzte Aktualisierung: <t:{current_time}:R> (<t:{current_time}:T>)", 
+            value=f"Letzte Aktualisierung: <t:{current_time}:R> (<t:{current_time}:t>)", 
             inline=False
         )
 
