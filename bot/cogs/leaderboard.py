@@ -257,7 +257,7 @@ class Leaderboard(commands.Cog):
                 status_data = await self.fetch_status(session, srv["rcon_url"], srv["rcon_pass"])
                 if status_data and "factionScores" in status_data:
                     for faction in status_data["factionScores"]:
-                        if faction.get("score", 0) >= 95:  # Ab 95 Punkten gehen wir in den Turbo-Modus
+                        if faction.get("score", 0) >= 99:  # Ab 99 Punkten gehen wir in den Turbo-Modus
                             fast_mode = True
                             break
 
