@@ -17,6 +17,7 @@ async def on_ready():
 async def main():
     # Lade alle Erweiterungen (Cogs)
     await bot.load_extension("cogs.server_status")
+    await bot.load_extension("cogs.leaderboard")
     
     # Starte den Bot
     if not config.DISCORD_BOT_TOKEN:

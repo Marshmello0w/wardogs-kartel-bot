@@ -60,6 +60,21 @@ async def init_db(pool):
                     INDEX(timestamp)
                 )
             """)
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS leaderboard (
+                    server_id VARCHAR(255) NOT NULL,
+                    steam_id VARCHAR(255) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    lifetime_kills INT DEFAULT 0,
+                    lifetime_deaths INT DEFAULT 0,
+                    lifetime_cash INT DEFAULT 0,
+                    current_match_kills INT DEFAULT 0,
+                    current_match_deaths INT DEFAULT 0,
+                    current_match_cash INT DEFAULT 0,
+                    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (server_id, steam_id)
+                )
+            """)
     logging.info("Database initialized.")
 
 async def log_uptime(pool, server_id, is_online):
@@ -104,3 +119,58 @@ async def get_uptime_stats(pool, server_id):
                     stats[label] = "N/A"
                     
     return stats
+
+async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, cash):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            # Hole aktuelle Werte
+            await cur.execute('''
+                SELECT current_match_kills, current_match_deaths, current_match_cash 
+                FROM leaderboard 
+                WHERE server_id = %s AND steam_id = %s
+            ''', (server_id, steam_id))
+            row = await cur.fetchone()
+
+            if row:
+                old_kills, old_deaths, old_cash = row
+                
+                # Wenn die API-Zahlen kleiner sind als vorher, hat ein neues Match gestartet
+                added_kills = kills if kills < old_kills else (kills - old_kills)
+                added_deaths = deaths if deaths < old_deaths else (deaths - old_deaths)
+                added_cash = cash if cash < old_cash else (cash - old_cash)
+
+                await cur.execute('''
+                    UPDATE leaderboard 
+                    SET name = %s,
+                        lifetime_kills = lifetime_kills + %s,
+                        lifetime_deaths = lifetime_deaths + %s,
+                        lifetime_cash = lifetime_cash + %s,
+                        current_match_kills = %s,
+                        current_match_deaths = %s,
+                        current_match_cash = %s,
+                        last_seen = CURRENT_TIMESTAMP
+                    WHERE server_id = %s AND steam_id = %s
+                ''', (name, added_kills, added_deaths, added_cash, kills, deaths, cash, server_id, steam_id))
+            else:
+                # Neuer Spieler
+                await cur.execute('''
+                    INSERT INTO leaderboard (
+                        server_id, steam_id, name, 
+                        lifetime_kills, lifetime_deaths, lifetime_cash,
+                        current_match_kills, current_match_deaths, current_match_cash
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (server_id, steam_id, name, kills, deaths, cash, kills, deaths, cash))
+        await conn.commit()
+
+async def get_top_players(pool, server_id, limit=10):
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute('''
+                SELECT name, lifetime_kills, lifetime_deaths, lifetime_cash
+                FROM leaderboard
+                WHERE server_id = %s
+                ORDER BY lifetime_kills DESC, lifetime_deaths ASC
+                LIMIT %s
+            ''', (server_id, limit))
+            return await cur.fetchall()
+

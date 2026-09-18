@@ -21,3 +21,9 @@ MESSAGE_ID_FILE = "message_id.json"
 # Datenbank Konfiguration
 DB_CONNECTION_URL = os.getenv("DB_CONNECTION_URL")
 
+# RCON Konfiguration für Leaderboard (Server 2)
+SERVER2_RCON_URL = os.getenv("SERVER2_RCON_URL", "http://84.32.176.40:20001")
+SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "jWxyom4CXuFjCPsN")
+LEADERBOARD_CHANNEL_ID = os.getenv("LEADERBOARD_CHANNEL_ID", SERVER_STATUS_CHANNEL_ID)
+LEADERBOARD_MSG_FILE = "leaderboard_msg.json"
+
