@@ -201,7 +201,27 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
                         if response.status in [200, 204]:
                             success_list.append(srv["title"])
                         elif response.status == 404:
-                            success_list.append(f"{srv['title']} (War nicht gebannt)")
+                            config_url = f"{srv['rcon_url'].rstrip('/')}/v1/config"
+                            async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
+                                if conf_resp.status == 200:
+                                    conf_data = await conf_resp.json()
+                                    text = conf_data.get("text", "")
+                                    target_line1 = f"\r\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}"
+                                    target_line2 = f"\n.DefaultBannedPlayerIds={self.steam_id.value.strip()}"
+                                    
+                                    if target_line1 in text or target_line2 in text:
+                                        text = text.replace(target_line1, "").replace(target_line2, "")
+                                        async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
+                                            if put_resp.status in [200, 202, 204]:
+                                                success_list.append(srv["title"])
+                                            else:
+                                                error_list.append(f"{srv['title']} (Config PUT {put_resp.status})")
+                                                self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
+                                    else:
+                                        success_list.append(f"{srv['title']} (War nicht gebannt)")
+                                else:
+                                    error_list.append(f"{srv['title']} (Config GET {conf_resp.status})")
+                                    self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
                         else:
                             error_list.append(f"{srv['title']} (HTTP {response.status})")
                             self.bot.get_cog("AdminPanelCog").add_pending_action("unban", srv["id"], self.steam_id.value.strip(), "", interaction.user.mention)
@@ -450,8 +470,23 @@ class AdminPanelCog(commands.Cog):
                     url = f"{srv['url'].rstrip('/')}/v1/bans/{action['steam_id']}"
                     try:
                         async with session.delete(url, headers=headers, timeout=5) as response:
-                            if response.status in [200, 204, 404]:
+                            if response.status in [200, 204]:
                                 success = True
+                            elif response.status == 404:
+                                config_url = f"{srv['url'].rstrip('/')}/v1/config"
+                                async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
+                                    if conf_resp.status == 200:
+                                        conf_data = await conf_resp.json()
+                                        text = conf_data.get("text", "")
+                                        target_line1 = f"\r\n.DefaultBannedPlayerIds={action['steam_id']}"
+                                        target_line2 = f"\n.DefaultBannedPlayerIds={action['steam_id']}"
+                                        if target_line1 in text or target_line2 in text:
+                                            text = text.replace(target_line1, "").replace(target_line2, "")
+                                            async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
+                                                if put_resp.status in [200, 202, 204]:
+                                                    success = True
+                                        else:
+                                            success = True # War nicht in config gebannt
                     except: pass
                 
                 if success:
@@ -500,8 +535,29 @@ class AdminPanelCog(commands.Cog):
                                 headers = {"Authorization": f"Bearer {srv['rcon_pass']}"}
                                 try:
                                     async with session.delete(url, headers=headers, timeout=5) as response:
-                                        if response.status in [200, 204, 404]:
+                                        if response.status in [200, 204]:
                                             success_list.append(srv["title"])
+                                        elif response.status == 404:
+                                            config_url = f"{srv['rcon_url'].rstrip('/')}/v1/config"
+                                            async with session.get(config_url, headers=headers, timeout=5) as conf_resp:
+                                                if conf_resp.status == 200:
+                                                    conf_data = await conf_resp.json()
+                                                    text = conf_data.get("text", "")
+                                                    target_line1 = f"\r\n.DefaultBannedPlayerIds={steam_id}"
+                                                    target_line2 = f"\n.DefaultBannedPlayerIds={steam_id}"
+                                                    if target_line1 in text or target_line2 in text:
+                                                        text = text.replace(target_line1, "").replace(target_line2, "")
+                                                        async with session.put(config_url, headers=headers, json={"text": text}, timeout=5) as put_resp:
+                                                            if put_resp.status in [200, 202, 204]:
+                                                                success_list.append(srv["title"])
+                                                            else:
+                                                                error_list.append(f"{srv['title']} (Config PUT {put_resp.status})")
+                                                                self.add_pending_action("unban", srv["id"], steam_id, "", "System (Auto-Unban)")
+                                                    else:
+                                                        success_list.append(f"{srv['title']} (War nicht gebannt)")
+                                                else:
+                                                    error_list.append(f"{srv['title']} (Config GET {conf_resp.status})")
+                                                    self.add_pending_action("unban", srv["id"], steam_id, "", "System (Auto-Unban)")
                                         else:
                                             error_list.append(srv["title"])
                                             self.add_pending_action("unban", srv["id"], steam_id, "", "System (Auto-Unban)")
