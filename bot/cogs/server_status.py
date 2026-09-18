@@ -1,6 +1,6 @@
+import logging
 import json
 import os
-import logging
 import aiohttp
 import discord
 from discord.ext import tasks, commands
@@ -12,37 +12,35 @@ class ServerStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db_pool = None
-        # Start the loop
         self.update_status_embed.start()
 
     def cog_unload(self):
         self.update_status_embed.cancel()
-        if self.db_pool:
-            self.db_pool.close()
 
     def get_saved_message_id(self):
         if os.path.exists(config.MESSAGE_ID_FILE):
             with open(config.MESSAGE_ID_FILE, "r") as f:
-                data = json.load(f)
-                return data.get("message_id")
+                try:
+                    data = json.load(f)
+                    return data.get("message_id")
+                except:
+                    pass
         return None
 
     def save_message_id(self, message_id):
         with open(config.MESSAGE_ID_FILE, "w") as f:
             json.dump({"message_id": message_id}, f)
 
-    async def fetch_server_data(self, session, server_id):
-        url = f"{config.API_URL}?key=id|{server_id}"
+    async def fetch_status_rcon(self, session, rcon_url, rcon_pass):
+        headers = {"Authorization": f"Bearer {rcon_pass}"}
+        url = f"{rcon_url.rstrip('/')}/v1/status"
         try:
-            async with session.get(url, timeout=10) as response:
+            async with session.get(url, headers=headers, timeout=5) as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    logging.warning(f"Failed to fetch {server_id}: HTTP {response.status}")
-                    return None
         except Exception as e:
-            logging.error(f"Error fetching {server_id}: {e}")
-            return None
+            pass # Silent fail to avoid spamming logs when offline
+        return None
 
     @tasks.loop(seconds=60)
     async def update_status_embed(self):
@@ -52,7 +50,6 @@ class ServerStatus(commands.Cog):
             return
 
         if not config.SERVER_STATUS_CHANNEL_ID:
-
             logging.error("SERVER_STATUS_CHANNEL_ID is not set in .env")
             return
 
@@ -69,11 +66,21 @@ class ServerStatus(commands.Cog):
             color=discord.Color.green()
         )
 
+        servers = [
+            {"id": "server1", "uuid": config.SERVER_IDS[0], "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS},
+            {"id": "server2", "uuid": config.SERVER_IDS[1], "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS}
+        ]
+
         async with aiohttp.ClientSession() as session:
-            for s_id in config.SERVER_IDS:
-                data = await self.fetch_server_data(session, s_id)
+            for srv in servers:
+                s_id = srv["uuid"]
                 
-                is_online = bool(data and "server" in data)
+                is_online = False
+                data = None
+                if srv["rcon_url"] and srv["rcon_pass"]:
+                    data = await self.fetch_status_rcon(session, srv["rcon_url"], srv["rcon_pass"])
+                    if data:
+                        is_online = True
                 
                 # Log uptime in database
                 try:
@@ -85,17 +92,20 @@ class ServerStatus(commands.Cog):
                 uptime_str = f"24h: {stats['24h']} | 7d: {stats['7d']} | 30d: {stats['30d']}"
                 
                 if is_online:
-                    srv = data["server"]
-                    name = srv.get("name", "Unknown Server")
-                    region = srv.get("region", "Unknown").upper()
-                    players = srv.get("players", 0)
-                    max_players = srv.get("maxPlayers", 0)
-                    map_name = srv.get("map", "Unknown")
-                    mode = srv.get("gameMode", "Unknown")
+                    name = data.get("serverName", "Unknown Server")
+                    players = data.get("players", {}).get("current", 0)
+                    max_players = data.get("players", {}).get("max", 0)
+                    map_name = data.get("map", "Unknown")
+                    
+                    experiences = data.get("experiences", [])
+                    mode = "Unknown"
+                    if experiences:
+                        mode = experiences[0]
+                        if "_" in mode:
+                            mode = mode.split("_")[1] # z.B. "Bakurani_KOTH_01" -> "KOTH"
                     
                     value = (
                         f"**Status:** 🟢 Online\n"
-                        f"**Region:** {region}\n"
                         f"**Players:** {players}/{max_players}\n"
                         f"**Map:** {map_name}\n"
                         f"**Mode:** {mode}\n"
@@ -113,15 +123,14 @@ class ServerStatus(commands.Cog):
                         inline=False
                     )
         
-        # Markdown-Timestamp (wird unten als letztes Feld angefügt)
+        # Markdown-Timestamp
         import time
         current_time = int(time.time())
         embed.add_field(
-            name="\u200b", # Unsichtbarer Titel
+            name="\u200b", 
             value=f"Letzte Aktualisierung: <t:{current_time}:t>", 
             inline=False
         )
-
 
         message_id = self.get_saved_message_id()
         message = None
@@ -129,10 +138,11 @@ class ServerStatus(commands.Cog):
         if message_id:
             try:
                 message = await channel.fetch_message(message_id)
-                await message.edit(embed=embed)
-                logging.info("Updated existing embed.")
+                old_embed_dict = message.embeds[0].to_dict() if message.embeds else {}
+                new_embed_dict = embed.to_dict()
+                if old_embed_dict != new_embed_dict:
+                    await message.edit(embed=embed)
             except discord.NotFound:
-                logging.warning("Saved message not found, creating a new one.")
                 message = None
             except Exception as e:
                 logging.error(f"Error editing message: {e}")
@@ -142,15 +152,13 @@ class ServerStatus(commands.Cog):
             try:
                 new_message = await channel.send(embed=embed)
                 self.save_message_id(new_message.id)
-                logging.info("Created new embed and saved message ID.")
             except Exception as e:
-                logging.error(f"Error sending new message: {e}")
+                logging.error(f"Error sending message: {e}")
 
     @update_status_embed.before_loop
     async def before_update_status_embed(self):
         await self.bot.wait_until_ready()
         self.db_pool = await database.get_db_pool()
-        await database.init_db(self.db_pool)
 
 async def setup(bot):
     await bot.add_cog(ServerStatus(bot))
