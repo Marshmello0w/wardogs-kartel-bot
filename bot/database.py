@@ -254,3 +254,58 @@ async def get_top_players(pool, server_id, timeframe="all", limit=10, banned_ste
                 await cur.execute(query, params)
             return await cur.fetchall()
 
+
+async def sync_bans_and_get_new(pool, server_id, current_steam_ids):
+    """
+    Synchronisiert die Bannliste mit der DB.
+    Gibt eine Liste von Steam-IDs zurück, die NEU gebannt wurden und noch nicht announced sind.
+    """
+    if not current_steam_ids:
+        return []
+        
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            # Schauen, ob die Tabelle noch komplett leer ist (Initiale Befüllung)
+            await cur.execute('SELECT COUNT(*) as cnt FROM banned_players WHERE server_id = %s', (server_id,))
+            res = await cur.fetchone()
+            is_initial = (res['cnt'] == 0)
+            
+            new_bans = []
+            for sid in current_steam_ids:
+                await cur.execute('SELECT announced FROM banned_players WHERE server_id = %s AND steam_id = %s', (server_id, sid))
+                row = await cur.fetchone()
+                
+                if not row:
+                    # Neuer Ban
+                    # Wenn is_initial True ist, betrachten wir sie direkt als announced (altbestand)
+                    announced = True if is_initial else False
+                    await cur.execute(
+                        'INSERT INTO banned_players (server_id, steam_id, announced) VALUES (%s, %s, %s)', 
+                        (server_id, sid, announced)
+                    )
+                    if not announced:
+                        new_bans.append(sid)
+                elif not row['announced']:
+                    new_bans.append(sid)
+                    
+            await conn.commit()
+            return new_bans
+
+async def mark_ban_announced(pool, server_id, steam_id):
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                'UPDATE banned_players SET announced = TRUE WHERE server_id = %s AND steam_id = %s',
+                (server_id, steam_id)
+            )
+        await conn.commit()
+
+async def get_player_name(pool, server_id, steam_id):
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(
+                'SELECT name FROM leaderboard WHERE server_id = %s AND steam_id = %s LIMIT 1',
+                (server_id, steam_id)
+            )
+            row = await cur.fetchone()
+            return row['name'] if row else None
