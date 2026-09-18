@@ -17,8 +17,20 @@ async def load_cogs():
     await bot.load_extension("cogs.ban_tracker")
     await bot.load_extension("cogs.discord_logger")
     await bot.load_extension("cogs.map_vote")
+    await bot.load_extension("cogs.admin_panel")
 
 bot.setup_hook = load_cogs
+
+# Füge den View zur setup_hook hinzu, damit die Buttons nach Neustart funktionieren
+async def setup_persistent_views():
+    from cogs.admin_panel import AdminPanelView
+    bot.add_view(AdminPanelView(bot))
+
+original_load_cogs = bot.setup_hook
+async def new_setup_hook():
+    await original_load_cogs()
+    await setup_persistent_views()
+bot.setup_hook = new_setup_hook
 
 @bot.event
 async def on_ready():
