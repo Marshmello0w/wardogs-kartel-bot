@@ -202,10 +202,11 @@ async def get_top_players(pool, server_id, timeframe="all", limit=10):
             else:
                 days = 7 if timeframe == "7d" else 30
                 await cur.execute(f'''
-                    SELECT name, SUM(kills) as kills, SUM(deaths) as deaths, SUM(cash) as cash
-                    FROM player_daily_stats
-                    WHERE server_id = %s AND date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
-                    GROUP BY steam_id, name
+                    SELECT l.name, SUM(d.kills) as kills, SUM(d.deaths) as deaths, SUM(d.cash) as cash
+                    FROM player_daily_stats d
+                    JOIN leaderboard l ON d.server_id = l.server_id AND d.steam_id = l.steam_id
+                    WHERE d.server_id = %s AND d.date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
+                    GROUP BY d.steam_id, l.name
                     ORDER BY kills DESC, deaths ASC
                     LIMIT %s
                 ''', (server_id, limit))
