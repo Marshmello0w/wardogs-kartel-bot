@@ -92,7 +92,6 @@ class Leaderboard(commands.Cog):
         self.db_pool = None
         self.state_file = "leaderboard_state.json"
         self.fast_mode = False
-        self.broadcast_sent = {"server1": False, "server2": False}
         
         self.bot.add_view(PublicLeaderboardView(self, "server1"))
         self.bot.add_view(PublicLeaderboardView(self, "server2"))
@@ -135,18 +134,6 @@ class Leaderboard(commands.Cog):
                 return await self.fetch_bans(session, rcon_url, rcon_pass)
         except:
             return []
-
-    async def send_broadcast(self, session, rcon_url, rcon_pass, text):
-        headers = {"Authorization": f"Bearer {rcon_pass}"}
-        url = f"{rcon_url.rstrip('/')}/v1/broadcast"
-        try:
-            async with session.post(url, headers=headers, json={"message": text}, timeout=5) as response:
-                if response.status == 200:
-                    logging.info(f"Broadcast sent successfully: {text}")
-                else:
-                    logging.warning(f"Failed to send broadcast, HTTP {response.status}")
-        except Exception as e:
-            logging.error(f"Error sending broadcast: {e}")
 
     async def fetch_status(self, session, rcon_url, rcon_pass):
 
@@ -277,15 +264,6 @@ class Leaderboard(commands.Cog):
                             highest_score = score
                         if score >= 99:  # Ab 99 Punkten gehen wir in den Turbo-Modus
                             fast_mode = True
-
-                    if highest_score >= 100:
-                        if not self.broadcast_sent.get(srv["id"], False):
-                            msg = "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen – hier geht’s zum Discord: https://discord.gg/bakuranikartell"
-                            await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
-                            self.broadcast_sent[srv["id"]] = True
-                    elif highest_score < 50:
-                        # Runden-Neustart erkannt
-                        self.broadcast_sent[srv["id"]] = False
 
                 players = await self.fetch_players(session, srv["rcon_url"], srv["rcon_pass"])
 
