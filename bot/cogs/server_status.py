@@ -122,9 +122,23 @@ class ServerStatus(commands.Cog):
                     experiences = data.get("experiences", [])
                     mode = "Unknown"
                     if experiences:
-                        mode = experiences[0]
-                        if "_" in mode:
-                            mode = mode.split("_")[1] # z.B. "Bakurani_KOTH_01" -> "KOTH"
+                        main_exp = experiences[0]
+                        if "_" in main_exp:
+                            mode = main_exp.split("_")[1] # z.B. "Bakurani_KOTH_01" -> "KOTH"
+                        else:
+                            mode = main_exp
+                            
+                        modifiers = []
+                        for exp in experiences[1:]:
+                            if exp == "KOTH_InfantryOnly":
+                                modifiers.append("Infantry Only")
+                            elif exp == "KOTH_Hardcore":
+                                modifiers.append("Hardcore")
+                            else:
+                                modifiers.append(exp.replace("KOTH_", "").replace("_", " "))
+                                
+                        if modifiers:
+                            mode += " + " + " + ".join(modifiers)
                     
                     value = (
                         f"**Status:** 🟢 Online\n"
