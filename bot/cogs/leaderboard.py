@@ -9,29 +9,34 @@ import time
 import config
 import database
 
+
 class LeaderboardDropdown(discord.ui.Select):
     def __init__(self, cog, server_id, current_tf):
         self.cog = cog
         self.server_id = server_id
         options = [
-            discord.SelectOption(label="Letzte 7 Tage", value="7d", description="Top 10 der letzten 7 Tage", default=(current_tf == "7d"), emoji="📅"),
-            discord.SelectOption(label="Letzte 30 Tage", value="30d", description="Top 10 der letzten 30 Tage", default=(current_tf == "30d"), emoji="📆"),
-            discord.SelectOption(label="All-Time", value="all", description="All-Time Top 10", default=(current_tf == "all"), emoji="🏆")
+            discord.SelectOption(label="Letzte 7 Tage", value="7d", description="Top 10 der letzten 7 Tage", default=(
+                current_tf == "7d"), emoji="📅"),
+            discord.SelectOption(label="Letzte 30 Tage", value="30d", description="Top 10 der letzten 30 Tage", default=(
+                current_tf == "30d"), emoji="📆"),
+            discord.SelectOption(label="All-Time", value="all",
+                                 description="All-Time Top 10", default=(current_tf == "all"), emoji="🏆")
         ]
-        super().__init__(placeholder="Wähle einen Zeitraum...", min_values=1, max_values=1, options=options, custom_id=f"lb_select_{server_id}")
+        super().__init__(placeholder="Wähle einen Zeitraum...", min_values=1,
+              max_values=1, options=options, custom_id=f"lb_select_{server_id}")
 
     async def callback(self, interaction: discord.Interaction):
         new_tf = self.values[0]
-        
+
         # Lade State und speichere neuen TF
         saved = self.cog.get_saved_state()
         if self.server_id not in saved:
             saved[self.server_id] = {}
         saved[self.server_id]["tf"] = new_tf
         self.cog.save_state(saved)
-        
+
         await interaction.response.defer()
-        
+
         # Das Update wird direkt geforced
         await self.cog.force_update_message(self.server_id, interaction.message)
 
@@ -47,13 +52,13 @@ class Leaderboard(commands.Cog):
         self.bot = bot
         self.db_pool = None
         self.state_file = "leaderboard_state.json"
-        
+
         # Load views persistently
         saved = self.get_saved_state()
         for server_id, data in saved.items():
             tf = data.get("tf", "7d")
             self.bot.add_view(LeaderboardView(self, server_id, tf))
-            
+
         self.update_leaderboard.start()
 
     def cog_unload(self):
@@ -94,7 +99,8 @@ class Leaderboard(commands.Cog):
                     data = await response.json()
                     return data.get("players", [])
                 else:
-                    logging.warning(f"Failed to fetch leaderboard: HTTP {response.status}")
+                    logging.warning(
+                        f"Failed to fetch leaderboard: HTTP {response.status}")
                     return None
         except Exception as e:
             logging.error(f"Error fetching leaderboard: {e}")
@@ -103,15 +109,17 @@ class Leaderboard(commands.Cog):
     async def generate_embed(self, server_id, server_title, tf_key, banned_ids=None):
         top_players = await database.get_top_players(self.db_pool, server_id, timeframe=tf_key, limit=10, banned_steam_ids=banned_ids)
 
-        titles = {"7d": "Letzte 7 Tage", "30d": "Letzte 30 Tage", "all": "All-Time"}
-        
+        titles = {"7d": "Letzte 7 Tage",
+            "30d": "Letzte 30 Tage", "all": "All-Time"}
+
         embed = discord.Embed(
-            title=f"🏆 {server_title} - {titles[tf_key]}", 
+            title=f"🏆 {server_title} - {titles[tf_key]}",
             color=discord.Color.gold()
         )
 
         if not top_players:
-            embed.add_field(name="No Data", value="Noch keine Spielerdaten vorhanden.", inline=False)
+            embed.add_field(
+                name="No Data", value="Noch keine Spielerdaten vorhanden.", inline=False)
         else:
             rank = 1
             for p in top_players:
@@ -119,35 +127,37 @@ class Leaderboard(commands.Cog):
                 deaths = p['deaths']
                 cash = p.get('cash', 0)
                 kd = round(kills / deaths, 2) if deaths > 0 else kills
-                
+
                 val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd} | **Cash:** ${cash}"
-                
+
                 prefix = ""
                 if rank == 1: prefix = "🥇 "
                 elif rank == 2: prefix = "🥈 "
                 elif rank == 3: prefix = "🥉 "
                 else: prefix = f"**{rank}.** "
-                
-                embed.add_field(name=f"{prefix}{p['name']}", value=val, inline=False)
+
+                embed.add_field(
+                    name=f"{prefix}{p['name']}", value=val, inline=False)
                 rank += 1
 
         current_time = int(time.time())
         embed.add_field(
             name="\u200b",
-            value=f"Letzte Aktualisierung: <t:{current_time}:t>", 
+            value=f"Letzte Aktualisierung: <t:{current_time}:t>",
             inline=False
         )
         return embed
 
-async def force_update_message(self, server_id, message):
+
+    async def force_update_message(self, server_id, message):
         saved = self.get_saved_state()
         tf = saved.get(server_id, {}).get("tf", "7d")
-        
+
         title = "Server 1" if server_id == "server1" else "Server 2"
-        
+
         rcon_url = config.SERVER1_RCON_URL if server_id == "server1" else config.SERVER2_RCON_URL
         rcon_pass = config.SERVER1_RCON_PASS if server_id == "server1" else config.SERVER2_RCON_PASS
-        
+
         banned_ids = []
         try:
             async with aiohttp.ClientSession() as session:
@@ -157,7 +167,7 @@ async def force_update_message(self, server_id, message):
 
         embed = await self.generate_embed(server_id, title, tf, banned_ids)
         view = LeaderboardView(self, server_id, tf)
-        
+
         try:
             await message.edit(embed=embed, view=view)
         except Exception as e:
@@ -229,7 +239,7 @@ async def force_update_message(self, server_id, message):
                             except Exception as e:
                                 logging.error(f"DB Error updating player: {e}")
 
-banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
+                banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
 
                 srv_state = saved.get(srv["id"], {})
                 tf = srv_state.get("tf", "7d")
