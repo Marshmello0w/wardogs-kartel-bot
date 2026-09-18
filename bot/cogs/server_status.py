@@ -103,6 +103,8 @@ class ServerStatus(commands.Cog):
                         inline=False
                     )
         
+        embed.set_footer(text="Letzte Aktualisierung")
+
         message_id = self.get_saved_message_id()
         message = None
 
