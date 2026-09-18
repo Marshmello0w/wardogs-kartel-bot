@@ -10,14 +10,33 @@ async def get_db_pool():
 
     # mysql://user:password@host:port/dbname
     parsed = urlparse(config.DB_CONNECTION_URL)
+    dbname = parsed.path.lstrip('/')
     
+    # 1. Versuche, die Datenbank zu erstellen (falls der User die Rechte dafür hat)
+    try:
+        temp_pool = await aiomysql.create_pool(
+            host=parsed.hostname,
+            port=parsed.port or 3306,
+            user=parsed.username,
+            password=unquote(parsed.password) if parsed.password else None,
+            autocommit=True
+        )
+        async with temp_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(f"CREATE DATABASE IF NOT EXISTS `{dbname}`")
+        temp_pool.close()
+        await temp_pool.wait_closed()
+    except Exception as e:
+        logging.warning(f"Could not auto-create database (might lack permissions, or it already exists): {e}")
+
+    # 2. Verbinde mit der (nun sicher existierenden) Datenbank
     try:
         pool = await aiomysql.create_pool(
             host=parsed.hostname,
             port=parsed.port or 3306,
             user=parsed.username,
             password=unquote(parsed.password) if parsed.password else None,
-            db=parsed.path.lstrip('/'),
+            db=dbname,
             autocommit=True
         )
         return pool
