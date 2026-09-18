@@ -97,6 +97,12 @@ class ServerStatus(commands.Cog):
                     max_players = data.get("players", {}).get("max", 0)
                     map_name = data.get("map", "Unknown")
                     
+                    region = "Unknown"
+                    import re as in_re
+                    region_match = in_re.search(r'\[(.*?)\]', name)
+                    if region_match:
+                        region = region_match.group(1).upper()
+                    
                     experiences = data.get("experiences", [])
                     mode = "Unknown"
                     if experiences:
@@ -106,6 +112,7 @@ class ServerStatus(commands.Cog):
                     
                     value = (
                         f"**Status:** 🟢 Online\n"
+                        f"**Region:** {region}\n"
                         f"**Players:** {players}/{max_players}\n"
                         f"**Map:** {map_name}\n"
                         f"**Mode:** {mode}\n"
