@@ -292,5 +292,29 @@ class MapVoteCog(commands.Cog):
         status_text = "aktiviert" if enable else "deaktiviert"
         await interaction.response.send_message(f"✅ Map-Voting wurde **{status_text}**.", ephemeral=True)
 
+    @app_commands.command(name="forcemap", description="[Admin] Erzwingt eine Map-Änderung in der Server-Rotation zum Testen.")
+    @app_commands.describe(map_name="Die Map, die erzwungen werden soll")
+    @app_commands.choices(map_name=[
+        app_commands.Choice(name=opt, value=opt) for opt in config.MAP_VOTE_OPTIONS.keys()
+    ])
+    async def force_map(self, interaction: discord.Interaction, map_name: app_commands.Choice[str]):
+        if config.ADMIN_ROLE_IDS:
+            user_roles = [r.id for r in interaction.user.roles] if hasattr(interaction.user, 'roles') else []
+            is_admin = getattr(interaction.user.guild_permissions, 'administrator', False)
+            if not any(r in config.ADMIN_ROLE_IDS for r in user_roles) and not is_admin:
+                await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
+                return
+
+        await interaction.response.defer(ephemeral=True)
+        
+        server = "server2"
+        async with aiohttp.ClientSession() as session:
+            success = await self.modify_rotation(session, config.SERVER2_RCON_URL, config.SERVER2_RCON_PASS, map_name.value)
+            if success:
+                await interaction.followup.send(f"✅ Die Map **{map_name.value}** wurde erfolgreich auf Platz 1 der Rotation für {server} gesetzt!")
+                self.bot.dispatch("bot_log", "🛠️ Admin Force Map", f"Ein Admin hat manuell die Map **{map_name.value}** auf Platz 1 gesetzt.", discord.Color.green())
+            else:
+                await interaction.followup.send(f"❌ Fehler beim Setzen der Map **{map_name.value}**.")
+
 async def setup(bot):
     await bot.add_cog(MapVoteCog(bot))
