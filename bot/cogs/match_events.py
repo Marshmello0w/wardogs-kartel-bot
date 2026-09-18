@@ -57,18 +57,18 @@ class MatchEvents(commands.Cog):
                         if score > highest_score:
                             highest_score = score
                             
-                    # Match is ending / has ended
-                    if highest_score >= 100:
+                    # Wenn das Match frisch startet (alle Scores auf 0)
+                    if highest_score == 0:
                         if not self.broadcast_sent.get(srv["id"], False):
                             msg = "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen – hier geht’s zum Discord: https://discord.gg/bakuranikartell"
                             await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
                             self.broadcast_sent[srv["id"]] = True
                             
                             import discord
-                            self.bot.dispatch("bot_log", "🏁 Runden-Ende Broadcast", f"Auf **{srv['id']}** endete eine Runde.\nGesendet:\n```{msg}```", discord.Color.gold())
+                            self.bot.dispatch("bot_log", "🏁 Runden-Start Broadcast", f"Auf **{srv['id']}** startete eine Runde.\nGesendet:\n```{msg}```", discord.Color.gold())
                             
-                    # Match restarted
-                    elif highest_score < 50:
+                    # Match ist im Gange (z.B. über 10 Punkte), wir entsperren den Broadcast für den nächsten Rundenstart
+                    elif highest_score > 10:
                         self.broadcast_sent[srv["id"]] = False
 
     @check_match_events.before_loop
