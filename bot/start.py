@@ -24,8 +24,14 @@ bot.setup_hook = load_cogs
 async def on_ready():
     logging.info(f"Logged in as {bot.user.name} ({bot.user.id})")
     try:
-        synced = await bot.tree.sync()
-        logging.info(f"Synced {len(synced)} command(s)")
+        if config.GUILD_ID:
+            guild = discord.Object(id=int(config.GUILD_ID))
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            logging.info(f"Synced {len(synced)} command(s) to guild {config.GUILD_ID}")
+        else:
+            synced = await bot.tree.sync()
+            logging.info(f"Synced {len(synced)} command(s) globally")
     except Exception as e:
         logging.error(f"Failed to sync commands: {e}")
 

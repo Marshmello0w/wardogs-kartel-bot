@@ -6,6 +6,7 @@ load_dotenv()
 
 # Discord Konfiguration
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+GUILD_ID = os.getenv("GUILD_ID")
 SERVER_STATUS_CHANNEL_ID = os.getenv("SERVER_STATUS_CHANNEL_ID")
 DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
 
