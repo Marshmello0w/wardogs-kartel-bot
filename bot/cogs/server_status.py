@@ -97,11 +97,7 @@ class ServerStatus(commands.Cog):
                     max_players = data.get("players", {}).get("max", 0)
                     map_name = data.get("map", "Unknown")
                     
-                    region = "Unknown"
-                    import re as in_re
-                    region_match = in_re.search(r'\[(.*?)\]', name)
-                    if region_match:
-                        region = region_match.group(1).upper()
+                    region = "EU-Central"
                     
                     experiences = data.get("experiences", [])
                     mode = "Unknown"
