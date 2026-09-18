@@ -59,9 +59,8 @@ class ServerStatus(commands.Cog):
                 return
 
         embed = discord.Embed(
-            title="📡 WARDOGS Server Status", 
-            color=discord.Color.green(),
-            description="Live overview of our servers."
+            title="Das Kartell Server Status", 
+            color=discord.Color.green()
         )
 
         async with aiohttp.ClientSession() as session:
@@ -103,8 +102,6 @@ class ServerStatus(commands.Cog):
                         inline=False
                     )
         
-        embed.set_footer(text="Updates every 60 seconds")
-
         message_id = self.get_saved_message_id()
         message = None
 
