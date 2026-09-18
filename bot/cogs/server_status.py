@@ -79,6 +79,7 @@ class ServerStatus(commands.Cog):
                 if is_online:
                     srv = data["server"]
                     name = srv.get("name", "Unknown Server")
+                    region = srv.get("region", "Unknown").upper()
                     players = srv.get("players", 0)
                     max_players = srv.get("maxPlayers", 0)
                     map_name = srv.get("map", "Unknown")
@@ -86,6 +87,7 @@ class ServerStatus(commands.Cog):
                     
                     value = (
                         f"**Status:** 🟢 Online\n"
+                        f"**Region:** {region}\n"
                         f"**Players:** {players}/{max_players}\n"
                         f"**Map:** {map_name}\n"
                         f"**Mode:** {mode}\n"
