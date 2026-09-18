@@ -98,23 +98,24 @@ class Leaderboard(commands.Cog):
         )
 
         if not top_players:
-            embed.description = "Noch keine Spielerdaten vorhanden."
+            embed.add_field(name="No Data", value="Noch keine Spielerdaten vorhanden.", inline=False)
         else:
-            table = "```\n"
-            table += f"{'#':<3} | {'Name':<16} | {'Kills':<6} | {'Deaths':<7} | {'K/D':<5}\n"
-            table += "-" * 46 + "\n"
-            
             rank = 1
             for p in top_players:
                 kills = p['kills']
                 deaths = p['deaths']
-                kd = f"{round(kills / deaths, 2):.2f}" if deaths > 0 else f"{kills:.2f}"
-                name = p['name'][:15]
-                table += f"{rank:<3} | {name:<16} | {kills:<6} | {deaths:<7} | {kd:<5}\n"
+                kd = round(kills / deaths, 2) if deaths > 0 else kills
+                
+                val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd}"
+                
+                prefix = ""
+                if rank == 1: prefix = "🥇 "
+                elif rank == 2: prefix = "🥈 "
+                elif rank == 3: prefix = "🥉 "
+                else: prefix = f"**{rank}.** "
+                
+                embed.add_field(name=f"{prefix}{p['name']}", value=val, inline=False)
                 rank += 1
-            table += "```"
-            
-            embed.description = table
 
         current_time = int(time.time())
         embed.add_field(
