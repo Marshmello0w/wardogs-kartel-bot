@@ -211,6 +211,53 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
         await interaction.followup.send(f"Entbann-Vorgang abgeschlossen! Erfolgreich: {len(success_list)}, Fehler: {len(error_list)}.", ephemeral=True)
 
 
+class LookupModal(discord.ui.Modal, title='Spieler Ban-Historie'):
+    steam_id = discord.ui.TextInput(
+        label='Steam64 ID',
+        placeholder='7656119...',
+        required=True,
+        min_length=17,
+        max_length=17
+    )
+
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        steam_id_val = self.steam_id.value.strip()
+        try:
+            import aiomysql
+            import database
+            pool = await database.get_db_pool()
+            async with pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cur:
+                    await cur.execute("SELECT * FROM global_bans WHERE steam_id = %s ORDER BY issued_at DESC", (steam_id_val,))
+                    rows = await cur.fetchall()
+                    
+            if not rows:
+                return await interaction.followup.send(f"Für die SteamID `{steam_id_val}` gibt es keine Ban-Einträge in der Datenbank.", ephemeral=True)
+                
+            embed = discord.Embed(title=f"🔍 Ban-Historie: {steam_id_val}", color=discord.Color.blue())
+            for row in rows:
+                status_emoji = "🔴" if row['status'] == 'active' else "🟢"
+                expires = row['expires_at'].strftime('%d.%m.%Y %H:%M') if row['expires_at'] else "Nie"
+                
+                desc = (
+                    f"**Admin:** {row['admin_mention']}\n"
+                    f"**Dauer:** {row['duration_str']} (Bis: {expires})\n"
+                    f"**Grund:** {row['reason']}\n"
+                    f"**Status:** {row['status'].capitalize()}"
+                )
+                embed.add_field(name=f"{status_emoji} Ban am {row['issued_at'].strftime('%d.%m.%Y %H:%M')}", value=desc, inline=False)
+                
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except Exception as e:
+            import logging
+            logging.error(f"Error in ban_lookup: {e}")
+            await interaction.followup.send("Fehler beim Abrufen der Datenbank.", ephemeral=True)
+
 class AdminPanelView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
@@ -239,6 +286,12 @@ class AdminPanelView(discord.ui.View):
             
         await interaction.response.send_modal(UnbanModal(self.bot))
 
+    @discord.ui.button(label="Ban Historie", style=discord.ButtonStyle.secondary, custom_id="admin_panel_lookup", emoji="🔍")
+    async def lookup_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self._is_admin(interaction.user):
+            return await interaction.response.send_message("❌ Du hast keine Berechtigung für diese Aktion.", ephemeral=True)
+            
+        await interaction.response.send_modal(LookupModal(self.bot))
 
 class AdminPanelCog(commands.Cog):
     def __init__(self, bot):
@@ -279,9 +332,9 @@ class AdminPanelCog(commands.Cog):
             embed = discord.Embed(
                 title="🛡️ Kartell Global Admin Panel",
                 description=(
-                    "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\\n\\n"
-                    "**Hinweis:**\\n"
-                    "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\\n"
+                    "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\n\n"
+                    "**Hinweis:**\n"
+                    "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\n"
                     "• Alle Aktionen werden zentral in den Logs aufgezeichnet."
                 ),
                 color=discord.Color.dark_theme()
@@ -453,9 +506,9 @@ class AdminPanelCog(commands.Cog):
         embed = discord.Embed(
             title="🛡️ Kartell Global Admin Panel",
             description=(
-                "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\\n\\n"
-                "**Hinweis:**\\n"
-                "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\\n"
+                "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\n\n"
+                "**Hinweis:**\n"
+                "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\n"
                 "• Alle Aktionen werden zentral in den Logs aufgezeichnet."
             ),
             color=discord.Color.dark_theme()
