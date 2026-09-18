@@ -60,8 +60,7 @@ class ServerStatus(commands.Cog):
 
         embed = discord.Embed(
             title="Das Kartell Server Status", 
-            color=discord.Color.green(),
-            timestamp=discord.utils.utcnow()
+            color=discord.Color.green()
         )
 
         async with aiohttp.ClientSession() as session:
@@ -103,7 +102,15 @@ class ServerStatus(commands.Cog):
                         inline=False
                     )
         
-        embed.set_footer(text="Letzte Aktualisierung")
+        # Markdown-Timestamp (wird unten als letztes Feld angefügt)
+        import time
+        current_time = int(time.time())
+        embed.add_field(
+            name="\u200b", # Unsichtbarer Titel
+            value=f"Letzte Aktualisierung: <t:{current_time}:R> (<t:{current_time}:T>)", 
+            inline=False
+        )
+
 
         message_id = self.get_saved_message_id()
         message = None
