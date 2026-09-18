@@ -7,7 +7,7 @@ from discord.ext import tasks, commands
 from discord import app_commands
 import config
 
-STATE_FILE = "map_vote_state.json"
+STATE_FILE = "bot/map_vote_state.json"
 
 class MapVoteButton(discord.ui.Button):
     def __init__(self, option_name):
