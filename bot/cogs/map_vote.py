@@ -182,7 +182,6 @@ class MapVoteCog(commands.Cog):
         await self.bot.wait_until_ready()
         
         servers = [
-            {"id": "server1", "title": "Server 1", "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS, "channel": config.SERVER1_VOTE_CHANNEL_ID},
             {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS, "channel": config.SERVER2_VOTE_CHANNEL_ID}
         ]
 
@@ -273,8 +272,8 @@ class MapVoteCog(commands.Cog):
                 return
                 
         server = server.lower()
-        if server not in ["server1", "server2"]:
-            await ctx.send("Bitte `server1` oder `server2` angeben.", ephemeral=True)
+        if server not in ["server2"]:
+            await ctx.send("Aktuell wird das Map-Voting nur für `server2` unterstützt.", ephemeral=True)
             return
             
         if status.lower() not in ["on", "off"]:
