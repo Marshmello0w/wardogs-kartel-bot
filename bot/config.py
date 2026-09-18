@@ -34,6 +34,17 @@ SERVER3_RCON_PASS = os.getenv("SERVER3_RCON_PASS", "")
 SERVER3_VOTE_CHANNEL_ID = os.getenv("SERVER3_VOTE_CHANNEL_ID", "")
 ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(",") if x.strip().isdigit()]
 
+
+# -----------------
+# Ingame Broadcasts (Runden-Ende)
+# -----------------
+# Der Bot wählt am Ende jeder Runde zufällig eine dieser Nachrichten aus und sendet sie auf dem Server.
+BROADCAST_MESSAGES = [
+    "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen 👉 hier geht’s zum Discord: https://discord.gg/bakuranikartell",
+    "Tritt dem Bakurani Kartell bei und kämpfe mit uns auf dem Discord: https://discord.gg/bakuranikartell",
+    "Dir gefällt der Server? Lass uns ein Feedback auf unserem Discord da: https://discord.gg/bakuranikartell"
+]
+
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
