@@ -85,8 +85,8 @@ class MapVoteCog(commands.Cog):
             except:
                 pass
         return {
-            "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID, "injected_map": None},
-            "server3": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER3_VOTE_CHANNEL_ID, "injected_map": None}
+            "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID, "injected_map": None, "waiting_to_cleanup": None},
+            "server3": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER3_VOTE_CHANNEL_ID, "injected_map": None, "waiting_to_cleanup": None}
         }
 
     def save_state(self):
@@ -237,7 +237,7 @@ class MapVoteCog(commands.Cog):
                         continue
                         
                 if s_id not in self.state:
-                    self.state[s_id] = {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": srv["channel"], "last_highest_score": -1, "injected_map": None}
+                    self.state[s_id] = {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": srv["channel"], "last_highest_score": -1, "injected_map": None, "waiting_to_cleanup": None}
                 state = self.state[s_id]
                 
                 if not state.get("enabled", True):
@@ -255,14 +255,11 @@ class MapVoteCog(commands.Cog):
                     
                     # Detect if a new match started (score reset) OR if it's the very first time
                     if (highest_score < last_score) or (state.get("msg_id") is None and highest_score < 95):
-                        # Cleanup the injected map from the previous round so it doesn't stay permanently
+                        # Shift the injected map to "waiting_to_cleanup". 
+                        # We won't delete it immediately at score 0, but wait for the first point.
                         injected = state.get("injected_map")
                         if injected:
-                            try:
-                                await self.remove_injected_map(session, srv["rcon_url"], srv["rcon_pass"], injected)
-                                logging.info(f"Removed injected map for {s_id}")
-                            except Exception as e:
-                                logging.error(f"Failed to remove injected map: {e}")
+                            state["waiting_to_cleanup"] = injected
                             state["injected_map"] = None
                             
                         # Unlock and clear votes
@@ -276,6 +273,16 @@ class MapVoteCog(commands.Cog):
                         state["msg_id"] = msg.id
                         self.bot.dispatch("bot_log", "🗺️ Map Voting Gestartet", f"Das Voting für die nächste Map auf **{srv['title']}** wurde gestartet.", discord.Color.blue())
                         
+                    # If a new round has started and scored its first point, finally clean up the old injected map
+                    if highest_score > 0 and state.get("waiting_to_cleanup"):
+                        to_clean = state["waiting_to_cleanup"]
+                        try:
+                            await self.remove_injected_map(session, srv["rcon_url"], srv["rcon_pass"], to_clean)
+                            logging.info(f"Removed injected map for {s_id} after first point scored.")
+                        except Exception as e:
+                            logging.error(f"Failed to remove injected map: {e}")
+                        state["waiting_to_cleanup"] = None
+
                     # Lock votes when score hits 95
                     elif highest_score >= 95 and not state.get("locked", False):
                         state["locked"] = True
