@@ -84,7 +84,6 @@ class MapVoteCog(commands.Cog):
             except:
                 pass
         return {
-            "server1": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER1_VOTE_CHANNEL_ID},
             "server2": {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": config.SERVER2_VOTE_CHANNEL_ID}
         }
 
