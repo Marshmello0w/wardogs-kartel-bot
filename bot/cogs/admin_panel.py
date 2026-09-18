@@ -155,19 +155,24 @@ class AdminPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
+    def _is_admin(self, member: discord.Member):
+        if member.guild_permissions.administrator:
+            return True
+        for role in member.roles:
+            if role.id in config.ADMIN_ROLE_IDS:
+                return True
+        return False
+
     @discord.ui.button(label="Spieler Bannen", style=discord.ButtonStyle.danger, custom_id="admin_panel_ban", emoji="🔨")
     async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # We can add an extra permission check here if we want, but the view should only be in an admin channel.
-        if not interaction.user.guild_permissions.administrator:
+        if not self._is_admin(interaction.user):
             return await interaction.response.send_message("❌ Du hast keine Berechtigung für diese Aktion.", ephemeral=True)
-            
         await interaction.response.send_modal(BanModal(self.bot))
 
     @discord.ui.button(label="Spieler Entbannen", style=discord.ButtonStyle.success, custom_id="admin_panel_unban", emoji="🕊️")
     async def unban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
+        if not self._is_admin(interaction.user):
             return await interaction.response.send_message("❌ Du hast keine Berechtigung für diese Aktion.", ephemeral=True)
-            
         await interaction.response.send_modal(UnbanModal(self.bot))
 
 
@@ -255,8 +260,15 @@ class AdminPanelCog(commands.Cog):
         await self.bot.wait_until_ready()
 
     @app_commands.command(name="adminpanel", description="Sendet das globale Admin-Panel zum Bannen/Entbannen von Spielern.")
-    @app_commands.default_permissions(administrator=True)
     async def admin_panel(self, interaction: discord.Interaction):
+        is_admin = interaction.user.guild_permissions.administrator
+        if not is_admin:
+            for role in interaction.user.roles:
+                if role.id in config.ADMIN_ROLE_IDS:
+                    is_admin = True
+                    break
+        if not is_admin:
+            return await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
         embed = discord.Embed(
             title="🛡️ Kartell Global Admin Panel",
             description=(
