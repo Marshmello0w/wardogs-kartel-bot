@@ -303,7 +303,11 @@ class Leaderboard(commands.Cog):
                 if msg_id:
                     try:
                         message = await channel.fetch_message(msg_id)
-                        await message.edit(embed=embed, view=view)
+                        old_embed_dict = message.embeds[0].to_dict() if message.embeds else {}
+                        new_embed_dict = embed.to_dict()
+                        # Nur updaten, wenn sich was geändert hat (Rate Limit Schutz)
+                        if old_embed_dict != new_embed_dict:
+                            await message.edit(embed=embed, view=view)
                     except discord.NotFound:
                         message = None
                     except Exception as e:
