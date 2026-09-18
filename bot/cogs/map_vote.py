@@ -255,6 +255,17 @@ class MapVoteCog(commands.Cog):
                     
                     # Detect if a new match started (score reset) OR if it's the very first time
                     if (highest_score < last_score) or (state.get("msg_id") is None and highest_score < 95):
+                        
+                        # Falls das alte Match abgebrochen wurde (z.B. Server Restart oder Force Map mitten in der Runde),
+                        # löschen wir das alte Embed, um den Chat nicht vollzuspammen.
+                        old_msg_id = state.get("msg_id")
+                        if old_msg_id and 0 <= last_score < 95:
+                            try:
+                                old_msg = await channel.fetch_message(old_msg_id)
+                                await old_msg.delete()
+                            except:
+                                pass
+
                         # Shift the injected map to "waiting_to_cleanup". 
                         # We won't delete it immediately at score 0, but wait for the first point.
                         injected = state.get("injected_map")
