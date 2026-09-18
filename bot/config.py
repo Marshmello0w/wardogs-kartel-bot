@@ -32,6 +32,9 @@ SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "jWxyom4CXuFjCPsN")
 
 # Map Voting
 SERVER2_VOTE_CHANNEL_ID = os.getenv("SERVER2_VOTE_CHANNEL_ID", "")
+SERVER3_RCON_URL = os.getenv("SERVER3_RCON_URL", "")
+SERVER3_RCON_PASS = os.getenv("SERVER3_RCON_PASS", "")
+SERVER3_VOTE_CHANNEL_ID = os.getenv("SERVER3_VOTE_CHANNEL_ID", "")
 ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(",") if x.strip().isdigit()]
 
 # Format: Name im Discord -> (Map, Experience, Lighting)
