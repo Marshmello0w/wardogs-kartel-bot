@@ -307,6 +307,15 @@ async def sync_bans_and_get_new(pool, server_id, current_steam_ids):
             
             new_bans = []
             for sid in current_steam_ids:
+                # 1. Sync global_bans (ensuring no duplicates)
+                await cur.execute("SELECT id FROM global_bans WHERE steam_id = %s AND status = 'active'", (sid,))
+                if not await cur.fetchone():
+                    await cur.execute(
+                        "INSERT INTO global_bans (steam_id, reason, admin_mention, duration_str, status) VALUES (%s, %s, %s, %s, 'active')",
+                        (sid, "Unknown", "System", "Permanent")
+                    )
+
+                # 2. Sync banned_players (for announcements)
                 await cur.execute('SELECT announced FROM banned_players WHERE server_id = %s AND steam_id = %s', (server_id, sid))
                 row = await cur.fetchone()
                 
