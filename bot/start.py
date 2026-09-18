@@ -27,13 +27,16 @@ async def on_ready():
         if config.GUILD_ID:
             guild = discord.Object(id=int(config.GUILD_ID))
             
-            # Clear global commands to remove duplicates
-            bot.tree.clear_commands(guild=None)
-            await bot.tree.sync()
-            
+            # 1. Copy global commands (from our Cogs) to the specific guild
             bot.tree.copy_global_to(guild=guild)
+            
+            # 2. Sync the guild commands to Discord API
             synced = await bot.tree.sync(guild=guild)
             logging.info(f"Synced {len(synced)} command(s) to guild {config.GUILD_ID}")
+            
+            # 3. Wipe the global commands from the bot's memory and sync to delete them globally from Discord
+            bot.tree.clear_commands(guild=None)
+            await bot.tree.sync(guild=None)
         else:
             synced = await bot.tree.sync()
             logging.info(f"Synced {len(synced)} command(s) globally")
