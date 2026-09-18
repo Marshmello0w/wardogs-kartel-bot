@@ -6,14 +6,25 @@ import discord
 from discord.ext import tasks, commands
 
 import config
+import database
 
 class ServerStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.db_pool = None
+        # Start the loop
         self.update_status_embed.start()
 
     def cog_unload(self):
         self.update_status_embed.cancel()
+        if self.db_pool:
+            self.db_pool.close()
+
+    @update_status_embed.before_loop
+    async def before_update_status_embed(self):
+        await self.bot.wait_until_ready()
+        self.db_pool = await database.get_db_pool()
+        await database.init_db(self.db_pool)
 
     def get_saved_message_id(self):
         if os.path.exists(config.MESSAGE_ID_FILE):
@@ -41,9 +52,6 @@ class ServerStatus(commands.Cog):
 
     @tasks.loop(seconds=60)
     async def update_status_embed(self):
-        # Wait until bot is fully ready before running the task
-        await self.bot.wait_until_ready()
-
         if not config.SERVER_STATUS_CHANNEL_ID:
             logging.error("SERVER_STATUS_CHANNEL_ID is not set in .env")
             return
@@ -65,7 +73,17 @@ class ServerStatus(commands.Cog):
         async with aiohttp.ClientSession() as session:
             for s_id in config.SERVER_IDS:
                 data = await self.fetch_server_data(session, s_id)
-                if data and "server" in data:
+                
+                is_online = bool(data and "server" in data)
+                
+                # Log uptime in database
+                await database.log_uptime(self.db_pool, s_id, is_online)
+                
+                # Fetch uptime statistics
+                stats = await database.get_uptime_stats(self.db_pool, s_id)
+                uptime_str = f"24h: {stats['24h']} | 7d: {stats['7d']} | 30d: {stats['30d']}"
+                
+                if is_online:
                     srv = data["server"]
                     name = srv.get("name", "Unknown Server")
                     players = srv.get("players", 0)
@@ -78,12 +96,16 @@ class ServerStatus(commands.Cog):
                         f"**Players:** {players}/{max_players}\n"
                         f"**Map:** {map_name}\n"
                         f"**Mode:** {mode}\n"
+                        f"**Uptime:** {uptime_str}\n"
                     )
                     embed.add_field(name=name, value=value, inline=False)
                 else:
                     embed.add_field(
                         name=f"Server: {s_id}", 
-                        value="**Status:** 🔴 Offline / Not Found", 
+                        value=(
+                            f"**Status:** 🔴 Offline / Not Found\n"
+                            f"**Uptime:** {uptime_str}\n"
+                        ), 
                         inline=False
                     )
         
@@ -114,3 +136,4 @@ class ServerStatus(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ServerStatus(bot))
+

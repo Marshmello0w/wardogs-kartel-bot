@@ -17,3 +17,7 @@ SERVER_IDS = [
 ]
 API_URL = "https://wardogserverlist.com/api/server"
 MESSAGE_ID_FILE = "message_id.json"
+
+# Datenbank Konfiguration
+DB_CONNECTION_URL = os.getenv("DB_CONNECTION_URL")
+
