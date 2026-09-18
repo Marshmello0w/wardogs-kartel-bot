@@ -1,0 +1,17 @@
+{
+  "bans": [
+    {
+      "steamId": "00000000000000000",
+      "bannedAtUtc": "0001-01-01T00:00:00.000Z",
+      "bannedBy": "config",
+      "reason": null
+    },
+    {
+      "steamId": "76561199433541634",
+      "bannedAtUtc": "0001-01-01T00:00:00.000Z",
+      "bannedBy": "config",
+      "reason": null
+    }
+  ],
+  "count": 2
+}

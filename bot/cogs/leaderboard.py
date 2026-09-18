@@ -72,7 +72,20 @@ class Leaderboard(commands.Cog):
         with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(data, f)
 
+    async def fetch_bans(self, session, rcon_url, rcon_pass):
+        headers = {"Authorization": f"Bearer {rcon_pass}"}
+        url = f"{rcon_url.rstrip('/')}/v1/bans"
+        try:
+            async with session.get(url, headers=headers, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return [b["steamId"] for b in data.get("bans", []) if "steamId" in b]
+        except Exception as e:
+            logging.error(f"Error fetching bans: {e}")
+        return []
+
     async def fetch_players(self, session, rcon_url, rcon_pass):
+
         headers = {"Authorization": f"Bearer {rcon_pass}"}
         url = f"{rcon_url.rstrip('/')}/v1/players"
         try:
@@ -87,8 +100,8 @@ class Leaderboard(commands.Cog):
             logging.error(f"Error fetching leaderboard: {e}")
             return None
 
-    async def generate_embed(self, server_id, server_title, tf_key):
-        top_players = await database.get_top_players(self.db_pool, server_id, timeframe=tf_key, limit=10)
+    async def generate_embed(self, server_id, server_title, tf_key, banned_ids=None):
+        top_players = await database.get_top_players(self.db_pool, server_id, timeframe=tf_key, limit=10, banned_steam_ids=banned_ids)
 
         titles = {"7d": "Letzte 7 Tage", "30d": "Letzte 30 Tage", "all": "All-Time"}
         
@@ -126,12 +139,23 @@ class Leaderboard(commands.Cog):
         )
         return embed
 
-    async def force_update_message(self, server_id, message):
+async def force_update_message(self, server_id, message):
         saved = self.get_saved_state()
         tf = saved.get(server_id, {}).get("tf", "7d")
         
         title = "Server 1" if server_id == "server1" else "Server 2"
-        embed = await self.generate_embed(server_id, title, tf)
+        
+        rcon_url = config.SERVER1_RCON_URL if server_id == "server1" else config.SERVER2_RCON_URL
+        rcon_pass = config.SERVER1_RCON_PASS if server_id == "server1" else config.SERVER2_RCON_PASS
+        
+        banned_ids = []
+        try:
+            async with aiohttp.ClientSession() as session:
+                banned_ids = await self.fetch_bans(session, rcon_url, rcon_pass)
+        except:
+            pass
+
+        embed = await self.generate_embed(server_id, title, tf, banned_ids)
         view = LeaderboardView(self, server_id, tf)
         
         try:
@@ -205,11 +229,13 @@ class Leaderboard(commands.Cog):
                             except Exception as e:
                                 logging.error(f"DB Error updating player: {e}")
 
+banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
+
                 srv_state = saved.get(srv["id"], {})
                 tf = srv_state.get("tf", "7d")
                 msg_id = srv_state.get("msg_id")
 
-                embed = await self.generate_embed(srv["id"], srv["title"], tf)
+                embed = await self.generate_embed(srv["id"], srv["title"], tf, banned_ids)
                 view = LeaderboardView(self, srv["id"], tf)
 
                 message = None

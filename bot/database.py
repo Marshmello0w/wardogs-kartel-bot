@@ -205,27 +205,47 @@ async def update_player_stats(pool, server_id, steam_id, name, kills, deaths, ca
 
         await conn.commit()
 
-async def get_top_players(pool, server_id, timeframe="all", limit=10):
+async def get_top_players(pool, server_id, timeframe="all", limit=10, banned_steam_ids=None):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             if timeframe == "all":
-                await cur.execute('''
-                    SELECT name, lifetime_kills as kills, lifetime_deaths as deaths, lifetime_cash as cash
+                query = '''
+                    SELECT name, lifetime_kills as kills, lifetime_deaths as deaths, lifetime_cash as cash, steam_id
                     FROM leaderboard
                     WHERE server_id = %s
+                '''
+                params = [server_id]
+                if banned_steam_ids:
+                    query += f" AND steam_id NOT IN ({','.join(['%s']*len(banned_steam_ids))})"
+                    params.extend(banned_steam_ids)
+                
+                query += '''
                     ORDER BY (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) DESC, lifetime_kills DESC
                     LIMIT %s
-                ''', (server_id, limit))
+                '''
+                params.append(limit)
+                
+                await cur.execute(query, params)
             else:
                 days = 7 if timeframe == "7d" else 30
-                await cur.execute(f'''
-                    SELECT l.name, SUM(d.kills) as kills, SUM(d.deaths) as deaths, SUM(d.cash) as cash
+                query = f'''
+                    SELECT l.name, SUM(d.kills) as kills, SUM(d.deaths) as deaths, SUM(d.cash) as cash, d.steam_id
                     FROM player_daily_stats d
                     JOIN leaderboard l ON d.server_id = l.server_id AND d.steam_id = l.steam_id
                     WHERE d.server_id = %s AND d.date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
+                '''
+                params = [server_id]
+                if banned_steam_ids:
+                    query += f" AND d.steam_id NOT IN ({','.join(['%s']*len(banned_steam_ids))})"
+                    params.extend(banned_steam_ids)
+                
+                query += '''
                     GROUP BY d.steam_id, l.name
                     ORDER BY (SUM(d.kills) / IF(SUM(d.deaths)=0, 1, SUM(d.deaths))) DESC, SUM(d.kills) DESC
                     LIMIT %s
-                ''', (server_id, limit))
+                '''
+                params.append(limit)
+                
+                await cur.execute(query, params)
             return await cur.fetchall()
 
