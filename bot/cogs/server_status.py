@@ -99,6 +99,7 @@ class ServerStatus(commands.Cog):
                         f"**Players:** {players}/{max_players}\n"
                         f"**Map:** {map_name}\n"
                         f"**Mode:** {mode}\n"
+                        f"**Connection ID:** `{s_id}`\n"
                         f"**Uptime:** {uptime_str}\n"
                     )
                     embed.add_field(name=name, value=value, inline=False)
