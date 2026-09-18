@@ -92,14 +92,12 @@ class Leaderboard(commands.Cog):
         self.db_pool = None
         self.state_file = "leaderboard_state.json"
         self.fast_mode = False
-        
-        self.bot.add_view(PublicLeaderboardView(self, "server1"))
-        self.bot.add_view(PublicLeaderboardView(self, "server2"))
-            
-        self.update_leaderboard.start()
+        self.update_leaderboard_data.start()
+        self.update_leaderboard_ui.start()
 
     def cog_unload(self):
-        self.update_leaderboard.cancel()
+        self.update_leaderboard_data.cancel()
+        self.update_leaderboard_ui.cancel()
 
     def get_saved_state(self):
         if os.path.exists(self.state_file):
@@ -212,7 +210,7 @@ class Leaderboard(commands.Cog):
         return embed
 
     @tasks.loop(seconds=15)
-    async def update_leaderboard(self):
+    async def update_leaderboard_data(self):
         self.db_pool = await database.check_and_reconnect(self.db_pool)
         if not self.db_pool:
             logging.warning("Database unavailable, skipping leaderboard update this round.")
@@ -244,8 +242,6 @@ class Leaderboard(commands.Cog):
                 "rcon_pass": config.SERVER2_RCON_PASS,
             }
         ]
-
-        saved = self.get_saved_state()
         
         fast_mode = False
 
@@ -290,9 +286,41 @@ class Leaderboard(commands.Cog):
                             except Exception as e:
                                 logging.error(f"DB Error updating player: {e}")
 
-                banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
+        # Passe das Intervall an
+        if fast_mode and not self.fast_mode:
+            self.update_leaderboard_data.change_interval(seconds=5)
+            self.fast_mode = True
+            logging.info("Match fast vorbei: Wechsle in den 5-Sekunden-Turbo-Modus!")
+        elif not fast_mode and self.fast_mode:
+            self.update_leaderboard_data.change_interval(seconds=15)
+            self.fast_mode = False
+            logging.info("Match läuft normal: Wechsle zurück in den 15-Sekunden-Modus.")
 
-                # The public message is always fixed to 7d / kd
+
+    @tasks.loop(seconds=30)
+    async def update_leaderboard_ui(self):
+        self.db_pool = await database.check_and_reconnect(self.db_pool)
+        if not self.db_pool:
+            return
+
+        servers = [
+            {"id": "server1", "title": "Server 1", "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS},
+            {"id": "server2", "title": "Server 2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS}
+        ]
+        
+        channel = self.bot.get_channel(int(config.LEADERBOARD_CHANNEL_ID))
+        if not channel:
+            try:
+                channel = await self.bot.fetch_channel(int(config.LEADERBOARD_CHANNEL_ID))
+            except:
+                return
+
+        async with aiohttp.ClientSession() as session:
+            for srv in servers:
+                if not srv["rcon_url"] or not srv["rcon_pass"]:
+                    continue
+
+                banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
                 embed = await self.generate_embed(srv["id"], srv["title"], tf_key="7d", sort_by="kd", banned_ids=banned_ids, show_sort_text=False)
                 view = PublicLeaderboardView(self, srv["id"])
 
@@ -305,7 +333,6 @@ class Leaderboard(commands.Cog):
                         message = await channel.fetch_message(msg_id)
                         old_embed_dict = message.embeds[0].to_dict() if message.embeds else {}
                         new_embed_dict = embed.to_dict()
-                        # Nur updaten, wenn sich was geändert hat (Rate Limit Schutz)
                         if old_embed_dict != new_embed_dict:
                             await message.edit(embed=embed, view=view)
                     except discord.NotFound:
@@ -317,27 +344,19 @@ class Leaderboard(commands.Cog):
                 if message is None:
                     try:
                         new_message = await channel.send(embed=embed, view=view)
-                        
                         if srv["id"] not in saved:
                             saved[srv["id"]] = {}
                         saved[srv["id"]]["msg_id"] = new_message.id
                         self.save_state(saved)
                     except Exception as e:
                         logging.error(f"Error sending message for {srv['id']}: {e}")
+    @update_leaderboard_data.before_loop
+    async def before_update_leaderboard_data(self):
+        await self.bot.wait_until_ready()
+        self.db_pool = await database.get_db_pool()
 
-        # Passe das Intervall an
-        if fast_mode and not self.fast_mode:
-            self.update_leaderboard.change_interval(seconds=5)
-            self.fast_mode = True
-            logging.info("Match fast vorbei: Wechsle in den 5-Sekunden-Turbo-Modus!")
-        elif not fast_mode and self.fast_mode:
-            self.update_leaderboard.change_interval(seconds=15)
-            self.fast_mode = False
-            logging.info("Match läuft normal: Wechsle zurück in den 15-Sekunden-Modus.")
-
-    @update_leaderboard.before_loop
-
-    async def before_update_leaderboard(self):
+    @update_leaderboard_ui.before_loop
+    async def before_update_leaderboard_ui(self):
         await self.bot.wait_until_ready()
         self.db_pool = await database.get_db_pool()
 
