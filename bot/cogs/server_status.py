@@ -60,7 +60,8 @@ class ServerStatus(commands.Cog):
 
         embed = discord.Embed(
             title="Das Kartell Server Status", 
-            color=discord.Color.green()
+            color=discord.Color.green(),
+            timestamp=discord.utils.utcnow()
         )
 
         async with aiohttp.ClientSession() as session:
