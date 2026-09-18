@@ -3,8 +3,16 @@ from urllib.parse import urlparse, unquote
 import aiomysql
 import config
 
+_global_pool = None
+
 async def get_db_pool():
+    global _global_pool
+    if _global_pool is not None:
+        return _global_pool
+
     if not config.DB_CONNECTION_URL:
+        logging.error("DB_CONNECTION_URL is not set!")
+        return None
         logging.error("DB_CONNECTION_URL is not set!")
         return None
 
@@ -39,7 +47,9 @@ async def get_db_pool():
             db=dbname,
             autocommit=True
         )
-        return pool
+        _global_pool = pool
+        await init_db(_global_pool)
+        return _global_pool
     except Exception as e:
         logging.error(f"Failed to connect to database: {e}")
         return None
@@ -120,7 +130,9 @@ async def check_and_reconnect(pool):
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("SELECT 1")
-        return pool
+        _global_pool = pool
+        await init_db(_global_pool)
+        return _global_pool
     except Exception as e:
         logging.error(f"DB Connection lost: {e}. Trying to reconnect...")
         try:
