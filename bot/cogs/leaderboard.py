@@ -146,8 +146,7 @@ class Leaderboard(commands.Cog):
             return
 
         # Wir nutzen nun LEADERBOARD_CHANNEL_ID
- als Hauptkanal für beide Server
-        channel_id_str = config.LEADERBOARD_CHANNEL_ID_1 or config.LEADERBOARD_CHANNEL_ID_2
+        channel_id_str = config.LEADERBOARD_CHANNEL_ID
         if not channel_id_str:
             return
 
