@@ -149,7 +149,7 @@ class Leaderboard(commands.Cog):
             pass
         return None
 
-    async def fetch_players(self, session, rcon_url, rcon_pass):
+    async def fetch_players(self, session, rcon_url, rcon_pass, server_title="Unbekannter Server"):
 
         headers = {"Authorization": f"Bearer {rcon_pass}"}
         url = f"{rcon_url.rstrip('/')}/v1/players"
@@ -271,7 +271,7 @@ class Leaderboard(commands.Cog):
                         if score >= 99:  # Ab 99 Punkten gehen wir in den Turbo-Modus
                             fast_mode = True
 
-                players = await self.fetch_players(session, srv["rcon_url"], srv["rcon_pass"])
+                players = await self.fetch_players(session, srv["rcon_url"], srv["rcon_pass"], srv.get("title", srv["id"]))
 
                 
                 if players is not None:
