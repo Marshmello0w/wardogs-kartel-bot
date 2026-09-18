@@ -71,7 +71,15 @@ class PublicLeaderboardDropdown(discord.ui.Select):
         embed = await self.cog.generate_embed(self.server_id, title, tf, sort_by="kd", banned_ids=banned_ids)
         view = EphemeralLeaderboardView(self.cog, self.server_id, tf, "kd")
         
+        # 1. Schicke die persönliche/ephemere Nachricht
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        
+        # 2. Setze das Haupt-Dropdown direkt wieder auf den Placeholder zurück
+        try:
+            reset_view = PublicLeaderboardView(self.cog, self.server_id)
+            await interaction.message.edit(view=reset_view)
+        except:
+            pass
 
 class PublicLeaderboardView(discord.ui.View):
     def __init__(self, cog, server_id):
