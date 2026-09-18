@@ -50,11 +50,11 @@ class MapVoteView(discord.ui.View):
     def generate_embed(self):
         embed = discord.Embed(
             title=f"🗺️ Map Voting: {self.server_title}",
-            description="Stimme für die nächste Map ab! (Benötigt mindestens 5 Stimmen für einen Wechsel)",
+            description="Stimme für die nächste Map auf **Server 2** ab! (Benötigt mindestens 5 Stimmen für einen Wechsel)\n\n*(Dieses Voting gilt ausschließlich für Server 2)*",
             color=discord.Color.blue() if not self.locked else discord.Color.red()
         )
         if self.locked:
-            embed.description = "Das Voting für die nächste Runde ist **GESCHLOSSEN**."
+            embed.description = "Das Voting für die nächste Runde auf **Server 2** ist **GESCHLOSSEN**."
 
         vote_counts = {opt: 0 for opt in config.MAP_VOTE_OPTIONS.keys()}
         for uid, opt in self.votes.items():
