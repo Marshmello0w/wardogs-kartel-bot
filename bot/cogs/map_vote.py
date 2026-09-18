@@ -210,8 +210,10 @@ class MapVoteCog(commands.Cog):
                         if score > highest_score:
                             highest_score = score
                             
-                    # Start of new match OR initial startup
-                    if (highest_score == 0 and state.get("locked", False)) or (state.get("msg_id") is None and highest_score < 95):
+                    last_score = state.get("last_highest_score", -1)
+                    
+                    # Detect if a new match started (score reset) OR if it's the very first time
+                    if (highest_score < last_score) or (state.get("msg_id") is None and highest_score < 95):
                         # Unlock and clear votes
                         state["locked"] = False
                         state["votes"] = {}
@@ -221,8 +223,6 @@ class MapVoteCog(commands.Cog):
                         
                         msg = await channel.send(embed=embed, view=view)
                         state["msg_id"] = msg.id
-                        self.save_state()
-                        
                         self.bot.dispatch("bot_log", "🗺️ Map Voting Gestartet", f"Das Voting für die nächste Map auf **{srv['title']}** wurde gestartet.", discord.Color.blue())
                         
                     # Lock votes when score hits 95
@@ -264,7 +264,9 @@ class MapVoteCog(commands.Cog):
                             await channel.send("ℹ️ **Voting Beendet!** Nicht genügend Stimmen (mindestens 5 erforderlich). Die Rotation bleibt unverändert.")
                             self.bot.dispatch("bot_log", "🗺️ Map Voting Beendet", f"Auf **{srv['title']}** gab es nicht genügend Stimmen. Die Rotation bleibt unverändert.", discord.Color.orange())
                             
-                        self.save_state()
+                # Update last known score for next loop
+                state["last_highest_score"] = highest_score
+                self.save_state()
 
     @app_commands.command(name="voting", description="Schaltet das Map-Voting an oder aus.")
     @app_commands.describe(status="Soll das Voting an oder aus sein?")
