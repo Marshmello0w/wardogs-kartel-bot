@@ -12,6 +12,7 @@ class ServerStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db_pool = None
+        self.last_regions = {}
         self.update_status_embed.start()
 
     def cog_unload(self):
@@ -42,7 +43,19 @@ class ServerStatus(commands.Cog):
             pass # Silent fail to avoid spamming logs when offline
         return None
 
+    async def fetch_wardogs_api(self, session, server_id):
+        url = f"https://wardogserverlist.com/api/server?key=id|{server_id}"
+        try:
+            async with session.get(url, timeout=5) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("server", {}).get("region", "Unknown")
+        except Exception:
+            pass
+        return "Unknown"
+
     @tasks.loop(seconds=60)
+
     async def update_status_embed(self):
         self.db_pool = await database.check_and_reconnect(self.db_pool)
         if not self.db_pool:
@@ -97,7 +110,13 @@ class ServerStatus(commands.Cog):
                     max_players = data.get("players", {}).get("max", 0)
                     map_name = data.get("map", "Unknown")
                     
-                    region = "EU-Central"
+                    # Fetch region from Master Server List since RCON doesn't provide it
+                    region = await self.fetch_wardogs_api(session, s_id)
+                    if region != "Unknown":
+                        self.last_regions[s_id] = region
+                    else:
+                        region = self.last_regions.get(s_id, "Unknown")
+                    region = region.upper()
                     
                     experiences = data.get("experiences", [])
                     mode = "Unknown"
