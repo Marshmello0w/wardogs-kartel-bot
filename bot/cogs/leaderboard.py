@@ -44,7 +44,7 @@ class Leaderboard(commands.Cog):
             logging.error(f"Error fetching leaderboard: {e}")
             return None
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=15)
     async def update_leaderboard(self):
         if not config.LEADERBOARD_CHANNEL_ID:
             logging.error("LEADERBOARD_CHANNEL_ID is not set.")
