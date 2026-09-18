@@ -13,7 +13,7 @@ DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
 # Konfiguration für das Server Status Feature
 SERVER_IDS = [id.strip() for id in os.getenv("SERVER_IDS", "a4ecfba6-2c2d-47db-bd46-58843bafd8ed,34f3a634-8db3-4725-8264-44bbc6bb39d3").split(",") if id.strip()]
 API_URL = "https://wardogserverlist.com/api/server"
-MESSAGE_ID_FILE = "bot/message_id.json"
+MESSAGE_ID_FILE = "message_id.json"
 
 # Datenbank Konfiguration
 DB_CONNECTION_URL = os.getenv("DB_CONNECTION_URL")
