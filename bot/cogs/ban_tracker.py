@@ -81,6 +81,9 @@ class BanTracker(commands.Cog):
                     # Broadcast in-game senden
                     await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
                     
+                    import discord
+                    self.bot.dispatch("bot_log", "🚨 Bann-Broadcast", f"Auf **{srv['id']}** wurde ein neuer Bann gemeldet.\nGesendet:\n```{msg}```", discord.Color.red())
+                    
                     # In der DB als 'gesendet' markieren
                     try:
                         await database.mark_ban_announced(self.db_pool, srv["id"], steam_id)

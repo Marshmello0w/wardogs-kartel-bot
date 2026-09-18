@@ -4,11 +4,10 @@ from dotenv import load_dotenv
 # Lade die .env Datei
 load_dotenv()
 
-# Discord Bot Token
+# Discord Konfiguration
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-
-# Channel ID für den Server Status Embed
 SERVER_STATUS_CHANNEL_ID = os.getenv("SERVER_STATUS_CHANNEL_ID")
+DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
 
 # Konfiguration für das Server Status Feature
 SERVER_IDS = [

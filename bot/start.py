@@ -20,6 +20,7 @@ async def main():
     await bot.load_extension("cogs.leaderboard")
     await bot.load_extension("cogs.match_events")
     await bot.load_extension("cogs.ban_tracker")
+    await bot.load_extension("cogs.discord_logger")
     
     # Starte den Bot
     if not config.DISCORD_BOT_TOKEN:

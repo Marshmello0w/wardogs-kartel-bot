@@ -64,6 +64,9 @@ class MatchEvents(commands.Cog):
                             await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
                             self.broadcast_sent[srv["id"]] = True
                             
+                            import discord
+                            self.bot.dispatch("bot_log", "🏁 Runden-Ende Broadcast", f"Auf **{srv['id']}** endete eine Runde.\nGesendet:\n```{msg}```", discord.Color.gold())
+                            
                     # Match restarted
                     elif highest_score < 50:
                         self.broadcast_sent[srv["id"]] = False
