@@ -149,7 +149,7 @@ class Leaderboard(commands.Cog):
             logging.error(f"Error fetching leaderboard: {e}")
             return None
 
-    async def generate_embed(self, server_id, server_title, tf_key, sort_by="kd", banned_ids=None):
+    async def generate_embed(self, server_id, server_title, tf_key, sort_by="kd", banned_ids=None, show_sort_text=True):
         try:
             top_players = await database.get_top_players(self.db_pool, server_id, timeframe=tf_key, limit=10, banned_steam_ids=banned_ids, sort_by=sort_by)
         except Exception as e:
@@ -157,10 +157,14 @@ class Leaderboard(commands.Cog):
             top_players = []
 
         titles = {"7d": "Letzte 7 Tage", "30d": "Letzte 30 Tage", "all": "All-Time"}
-        sort_text = "Nach Cash" if sort_by == "cash" else "Nach K/D"
+        sort_text = f" (Nach Cash)" if sort_by == "cash" else f" (Nach K/D)"
         
+        title_str = f"🏆 {server_title} - {titles[tf_key]}"
+        if show_sort_text:
+            title_str += sort_text
+            
         embed = discord.Embed(
-            title=f"🏆 {server_title} - {titles[tf_key]} ({sort_text})", 
+            title=title_str, 
             color=discord.Color.gold()
         )
 
@@ -261,7 +265,7 @@ class Leaderboard(commands.Cog):
                 banned_ids = await self.fetch_bans(session, srv["rcon_url"], srv["rcon_pass"])
 
                 # The public message is always fixed to 7d / kd
-                embed = await self.generate_embed(srv["id"], srv["title"], tf_key="7d", sort_by="kd", banned_ids=banned_ids)
+                embed = await self.generate_embed(srv["id"], srv["title"], tf_key="7d", sort_by="kd", banned_ids=banned_ids, show_sort_text=False)
                 view = PublicLeaderboardView(self, srv["id"])
 
                 srv_state = saved.get(srv["id"], {})
