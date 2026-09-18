@@ -125,7 +125,7 @@ class MapVoteCog(commands.Cog):
         url = f"{rcon_url.rstrip('/')}/v1/config?force=true&fullApply=true"
         try:
             async with session.put(url, headers=headers, data=config_text.encode('utf-8'), timeout=10) as response:
-                return response.status == 200
+                return response.status in (200, 202)
         except Exception as e:
             logging.error(f"Error pushing config: {e}")
         return False
