@@ -30,7 +30,6 @@ SERVER2_RCON_URL = os.getenv("SERVER2_RCON_URL", "http://84.32.176.40:20001")
 SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "jWxyom4CXuFjCPsN")
 
 # Map Voting
-SERVER1_VOTE_CHANNEL_ID = os.getenv("SERVER1_VOTE_CHANNEL_ID", "")
 SERVER2_VOTE_CHANNEL_ID = os.getenv("SERVER2_VOTE_CHANNEL_ID", "")
 ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(",") if x.strip().isdigit()]
 
