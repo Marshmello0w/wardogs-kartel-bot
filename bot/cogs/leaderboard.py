@@ -104,9 +104,10 @@ class Leaderboard(commands.Cog):
             for p in top_players:
                 kills = p['kills']
                 deaths = p['deaths']
+                cash = p.get('cash', 0)
                 kd = round(kills / deaths, 2) if deaths > 0 else kills
                 
-                val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd}"
+                val = f"**Kills:** {kills} | **Deaths:** {deaths} | **K/D:** {kd} | **Cash:** ${cash}"
                 
                 prefix = ""
                 if rank == 1: prefix = "🥇 "
