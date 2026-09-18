@@ -20,12 +20,6 @@ class ServerStatus(commands.Cog):
         if self.db_pool:
             self.db_pool.close()
 
-    @update_status_embed.before_loop
-    async def before_update_status_embed(self):
-        await self.bot.wait_until_ready()
-        self.db_pool = await database.get_db_pool()
-        await database.init_db(self.db_pool)
-
     def get_saved_message_id(self):
         if os.path.exists(config.MESSAGE_ID_FILE):
             with open(config.MESSAGE_ID_FILE, "r") as f:
@@ -134,6 +128,11 @@ class ServerStatus(commands.Cog):
             except Exception as e:
                 logging.error(f"Error sending new message: {e}")
 
+    @update_status_embed.before_loop
+    async def before_update_status_embed(self):
+        await self.bot.wait_until_ready()
+        self.db_pool = await database.get_db_pool()
+        await database.init_db(self.db_pool)
+
 async def setup(bot):
     await bot.add_cog(ServerStatus(bot))
-
