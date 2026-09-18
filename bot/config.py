@@ -33,6 +33,8 @@ SERVER3_RCON_URL = os.getenv("SERVER3_RCON_URL", "")
 SERVER3_RCON_PASS = os.getenv("SERVER3_RCON_PASS", "")
 SERVER3_VOTE_CHANNEL_ID = os.getenv("SERVER3_VOTE_CHANNEL_ID", "")
 ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(",") if x.strip().isdigit()]
+ADMIN_PANEL_CHANNEL_ID = os.getenv("ADMIN_PANEL_CHANNEL_ID", "")
+ADMIN_PANEL_MSG_ID_FILE = "admin_panel_msg_id.json"
 
 
 # -----------------
@@ -41,7 +43,7 @@ ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(
 # Der Bot wählt am Ende jeder Runde zufällig eine dieser Nachrichten aus und sendet sie auf dem Server.
 BROADCAST_MESSAGES = [
     "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen 👉 hier geht’s zum Discord: https://discord.gg/bakuranikartell",
-    "Tritt dem Bakurani Kartell bei und kämpfe mit uns auf dem Discord: https://discord.gg/bakuranikartell",
+    "Während ihr gerade wartet: Verpasst keine News, Events und unser neues Leaderboard auf dem Discord: https://discord.gg/bakuranikartell",
     "Dir gefällt der Server? Lass uns ein Feedback auf unserem Discord da: https://discord.gg/bakuranikartell"
 ]
 

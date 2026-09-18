@@ -181,6 +181,65 @@ class AdminPanelCog(commands.Cog):
         self.bot = bot
         self.pending_actions = load_pending_actions()
         self.process_pending_actions.start()
+        self.ensure_panel.start()
+
+    def get_saved_message_id(self):
+        if os.path.exists(config.ADMIN_PANEL_MSG_ID_FILE):
+            try:
+                with open(config.ADMIN_PANEL_MSG_ID_FILE, "r") as f:
+                    return json.load(f).get("message_id")
+            except: pass
+        return None
+
+    def save_message_id(self, message_id):
+        try:
+            with open(config.ADMIN_PANEL_MSG_ID_FILE, "w") as f:
+                json.dump({"message_id": message_id}, f)
+        except: pass
+
+    @tasks.loop(count=1)
+    async def ensure_panel(self):
+        if not config.ADMIN_PANEL_CHANNEL_ID:
+            return
+            
+        try:
+            channel = self.bot.get_channel(int(config.ADMIN_PANEL_CHANNEL_ID)) or await self.bot.fetch_channel(int(config.ADMIN_PANEL_CHANNEL_ID))
+            if not channel: return
+                
+            embed = discord.Embed(
+                title="🛡️ Kartell Global Admin Panel",
+                description=(
+                    "Über dieses Panel können Spieler **gleichzeitig auf allen Servern** (Server 1, Server 2 & Server 3) gebannt oder entbannt werden.\n\n"
+                    "**Hinweis:**\n"
+                    "• Du benötigst die 17-stellige **Steam64 ID** des Spielers.\n"
+                    "• Alle Aktionen werden zentral in den Logs aufgezeichnet."
+                ),
+                color=discord.Color.dark_theme()
+            )
+            
+            view = AdminPanelView(self.bot)
+            msg_id = self.get_saved_message_id()
+            msg = None
+            
+            if msg_id:
+                try:
+                    msg = await channel.fetch_message(msg_id)
+                    await msg.edit(embed=embed, view=view)
+                except discord.NotFound:
+                    msg = None
+                except Exception:
+                    msg = None
+                    
+            if msg is None:
+                new_msg = await channel.send(embed=embed, view=view)
+                self.save_message_id(new_msg.id)
+                
+        except Exception:
+            pass
+
+    @ensure_panel.before_loop
+    async def before_ensure_panel(self):
+        await self.bot.wait_until_ready()
 
     def cog_unload(self):
         self.process_pending_actions.cancel()
