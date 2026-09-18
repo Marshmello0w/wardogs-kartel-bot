@@ -91,6 +91,7 @@ class Leaderboard(commands.Cog):
         self.bot = bot
         self.db_pool = None
         self.state_file = "leaderboard_state.json"
+        self.fast_mode = False
         
         self.bot.add_view(PublicLeaderboardView(self, "server1"))
         self.bot.add_view(PublicLeaderboardView(self, "server2"))
@@ -134,7 +135,19 @@ class Leaderboard(commands.Cog):
         except:
             return []
 
+    async def fetch_status(self, session, rcon_url, rcon_pass):
+        headers = {"Authorization": f"Bearer {rcon_pass}"}
+        url = f"{rcon_url.rstrip('/')}/v1/status"
+        try:
+            async with session.get(url, headers=headers, timeout=5) as response:
+                if response.status == 200:
+                    return await response.json()
+        except:
+            pass
+        return None
+
     async def fetch_players(self, session, rcon_url, rcon_pass):
+
         headers = {"Authorization": f"Bearer {rcon_pass}"}
         url = f"{rcon_url.rstrip('/')}/v1/players"
         try:
@@ -232,13 +245,24 @@ class Leaderboard(commands.Cog):
         ]
 
         saved = self.get_saved_state()
+        
+        fast_mode = False
 
         async with aiohttp.ClientSession() as session:
+
             for srv in servers:
                 if not srv["rcon_url"] or not srv["rcon_pass"]:
                     continue
+                    
+                status_data = await self.fetch_status(session, srv["rcon_url"], srv["rcon_pass"])
+                if status_data and "factionScores" in status_data:
+                    for faction in status_data["factionScores"]:
+                        if faction.get("score", 0) >= 95:  # Ab 95 Punkten gehen wir in den Turbo-Modus
+                            fast_mode = True
+                            break
 
                 players = await self.fetch_players(session, srv["rcon_url"], srv["rcon_pass"])
+
                 
                 if players is not None:
                     for p in players:
@@ -293,7 +317,18 @@ class Leaderboard(commands.Cog):
                     except Exception as e:
                         logging.error(f"Error sending message for {srv['id']}: {e}")
 
+        # Passe das Intervall an
+        if fast_mode and not self.fast_mode:
+            self.update_leaderboard.change_interval(seconds=5)
+            self.fast_mode = True
+            logging.info("Match fast vorbei: Wechsle in den 5-Sekunden-Turbo-Modus!")
+        elif not fast_mode and self.fast_mode:
+            self.update_leaderboard.change_interval(seconds=15)
+            self.fast_mode = False
+            logging.info("Match läuft normal: Wechsle zurück in den 15-Sekunden-Modus.")
+
     @update_leaderboard.before_loop
+
     async def before_update_leaderboard(self):
         await self.bot.wait_until_ready()
         self.db_pool = await database.get_db_pool()
