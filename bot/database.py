@@ -88,6 +88,14 @@ async def init_db(pool):
                     PRIMARY KEY (server_id, steam_id, date)
                 )
             ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS banned_players (
+                    server_id VARCHAR(50),
+                    steam_id VARCHAR(50),
+                    announced BOOLEAN DEFAULT FALSE,
+                    PRIMARY KEY (server_id, steam_id)
+                )
+            ''')
     logging.info("Database initialized.")
 
 async def check_and_reconnect(pool):
