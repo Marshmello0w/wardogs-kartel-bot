@@ -51,11 +51,11 @@ class MapVoteView(discord.ui.View):
     def generate_embed(self):
         embed = discord.Embed(
             title=f"🗺️ Map Voting: {self.server_title}",
-            description="Stimme für die nächste Map auf **Server 2** ab! (Benötigt mindestens 5 Stimmen für einen Wechsel)\n\n*(Dieses Voting gilt ausschließlich für Server 2)*",
+            description=f"Stimme für die nächste Map auf **{self.server_title}** ab! (Benötigt mindestens 5 Stimmen für einen Wechsel)\n\n*(Dieses Voting gilt ausschließlich für {self.server_title})*",
             color=discord.Color.blue() if not self.locked else discord.Color.red()
         )
         if self.locked:
-            embed.description = "Das Voting für die nächste Runde auf **Server 2** ist **GESCHLOSSEN**."
+            embed.description = f"Das Voting für die nächste Runde auf **{self.server_title}** ist **GESCHLOSSEN**."
 
         vote_counts = {opt: 0 for opt in config.MAP_VOTE_OPTIONS.keys()}
         for uid, opt in self.votes.items():
@@ -200,7 +200,10 @@ class MapVoteCog(commands.Cog):
                     except:
                         continue
                         
-                state = self.state.get(s_id, {})
+                if s_id not in self.state:
+                    self.state[s_id] = {"enabled": True, "msg_id": None, "votes": {}, "locked": False, "channel_id": srv["channel"], "last_highest_score": -1}
+                state = self.state[s_id]
+                
                 if not state.get("enabled", True):
                     continue
 
@@ -309,7 +312,7 @@ class MapVoteCog(commands.Cog):
             try:
                 channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))
                 msg = await channel.fetch_message(int(msg_id))
-                view = MapVoteView(server, "Server 2", self, votes=self.state[server].get("votes", {}), locked=True)
+                view = MapVoteView(server, f"Server {server[-1]}", self, votes=self.state[server].get("votes", {}), locked=True)
                 embed = view.generate_embed()
                 embed.description = "⚠️ **Map-Voting wurde vom Admin vorzeitig DEAKTIVIERT.**"
                 embed.color = discord.Color.orange()
