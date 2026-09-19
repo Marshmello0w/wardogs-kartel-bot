@@ -18,6 +18,7 @@ async def load_cogs():
     await bot.load_extension("cogs.discord_logger")
     await bot.load_extension("cogs.map_vote")
     await bot.load_extension("cogs.admin_panel")
+    await bot.load_extension("cogs.playtime_tracker")
 
 bot.setup_hook = load_cogs
 

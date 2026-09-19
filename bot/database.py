@@ -121,6 +121,17 @@ async def init_db(pool):
                     PRIMARY KEY (server_id, steam_id)
                 )
             ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS player_playtime (
+                    server_id VARCHAR(50) NOT NULL,
+                    steam_id VARCHAR(50) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    playtime_seconds BIGINT DEFAULT 0,
+                    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (server_id, steam_id),
+                    INDEX(steam_id)
+                )
+            ''')
     logging.info("Database initialized.")
 
 async def check_and_reconnect(pool):
