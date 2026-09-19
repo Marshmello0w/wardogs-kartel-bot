@@ -1,4 +1,7 @@
 import os
+import logging
+from dataclasses import dataclass, field
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Lade die .env Datei
@@ -24,8 +27,8 @@ LEADERBOARD_CHANNEL_ID = os.getenv("LEADERBOARD_CHANNEL_ID", "")
 SERVER1_RCON_URL = os.getenv("SERVER1_RCON_URL", "")
 SERVER1_RCON_PASS = os.getenv("SERVER1_RCON_PASS", "")
 
-SERVER2_RCON_URL = os.getenv("SERVER2_RCON_URL", "http://84.32.176.40:20001")
-SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "jWxyom4CXuFjCPsN")
+SERVER2_RCON_URL = os.getenv("SERVER2_RCON_URL", "")
+SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "")
 
 # Map Voting
 SERVER2_VOTE_CHANNEL_ID = os.getenv("SERVER2_VOTE_CHANNEL_ID", "")
@@ -52,4 +55,47 @@ MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
     "Ozeti": {"Map": "Europe", "Experience": "Madrid_KOTH_01", "Lighting": "DayStartClear"}
 }
+
+
+@dataclass(frozen=True)
+class Server:
+    id: str
+    title: str
+    url: str
+    password: str = field(repr=False)
+    uuid: str = ""
+    vote_channel_id: str = ""
+
+    @property
+    def enabled(self):
+        parsed = urlparse(self.url)
+        return bool(parsed.scheme in ("http", "https") and parsed.hostname and self.password)
+
+
+def servers():
+    return tuple(Server(
+        f"server{i}", f"Server {i}", globals()[f"SERVER{i}_RCON_URL"].rstrip("/"),
+        globals()[f"SERVER{i}_RCON_PASS"],
+        SERVER_IDS[i - 1] if len(SERVER_IDS) >= i else "",
+        globals().get(f"SERVER{i}_VOTE_CHANNEL_ID", ""),
+    ) for i in range(1, 4))
+
+
+def server(server_id):
+    return next(s for s in servers() if s.id == server_id)
+
+
+def validate():
+    """Disable only the misconfigured surface; never print credentials."""
+    for key in ("GUILD_ID", "SERVER_STATUS_CHANNEL_ID", "DISCORD_LOG_CHANNEL_ID",
+                "LEADERBOARD_CHANNEL_ID", "ADMIN_PANEL_CHANNEL_ID",
+                "SERVER2_VOTE_CHANNEL_ID", "SERVER3_VOTE_CHANNEL_ID"):
+        value = globals()[key]
+        if value and (not str(value).isascii() or not str(value).isdigit() or int(value) <= 0):
+            logging.error("Invalid %s; associated surface disabled", key)
+            globals()[key] = ""
+    for srv in servers():
+        if not srv.enabled:
+            logging.warning("%s disabled: missing or invalid RCON configuration", srv.title)
+    return bool(DISCORD_BOT_TOKEN)
 

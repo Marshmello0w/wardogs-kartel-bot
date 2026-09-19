@@ -1,58 +1,42 @@
 import logging
+import asyncio
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse, unquote
 import aiomysql
 import config
 
 _global_pool = None
+_pool_lock = asyncio.Lock()
 
 async def get_db_pool():
     global _global_pool
-    if _global_pool is not None:
-        return _global_pool
-
-    if not config.DB_CONNECTION_URL:
-        logging.error("DB_CONNECTION_URL is not set!")
-        return None
-        logging.error("DB_CONNECTION_URL is not set!")
-        return None
-
-    # mysql://user:password@host:port/dbname
-    parsed = urlparse(config.DB_CONNECTION_URL)
-    dbname = parsed.path.lstrip('/')
-    
-    # 1. Versuche, die Datenbank zu erstellen (falls der User die Rechte dafür hat)
-    try:
-        temp_pool = await aiomysql.create_pool(
-            host=parsed.hostname,
-            port=parsed.port or 3306,
-            user=parsed.username,
-            password=unquote(parsed.password) if parsed.password else None,
-            autocommit=True
-        )
-        async with temp_pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(f"CREATE DATABASE IF NOT EXISTS `{dbname}`")
-        temp_pool.close()
-        await temp_pool.wait_closed()
-    except Exception as e:
-        logging.warning(f"Could not auto-create database (might lack permissions, or it already exists): {e}")
-
-    # 2. Verbinde mit der (nun sicher existierenden) Datenbank
-    try:
-        pool = await aiomysql.create_pool(
-            host=parsed.hostname,
-            port=parsed.port or 3306,
-            user=parsed.username,
-            password=unquote(parsed.password) if parsed.password else None,
-            db=dbname,
-            autocommit=True
-        )
-        _global_pool = pool
-        await init_db(_global_pool)
-        return _global_pool
-    except Exception as e:
-        logging.error(f"Failed to connect to database: {e}")
-        return None
+    async with _pool_lock:
+        if _global_pool is not None and not _global_pool.closed:
+            return _global_pool
+        _global_pool = None
+        if not config.DB_CONNECTION_URL:
+            return None
+        pool = None
+        try:
+            parsed = urlparse(config.DB_CONNECTION_URL)
+            if parsed.scheme != "mysql" or not parsed.hostname or not parsed.path.strip("/"):
+                raise ValueError("Invalid database URL")
+            pool = await aiomysql.create_pool(
+                host=parsed.hostname, port=parsed.port or 3306,
+                user=unquote(parsed.username or ""), password=unquote(parsed.password or ""),
+                db=unquote(parsed.path.lstrip("/")), autocommit=True,
+                charset="utf8mb4", connect_timeout=5, pool_recycle=300,
+                init_command="SET time_zone = '+00:00'",
+            )
+            await init_db(pool)
+            _global_pool = pool
+            return pool
+        except Exception as exc:
+            if pool is not None:
+                pool.close()
+                await pool.wait_closed()
+            logging.error("Database initialization failed: %s", type(exc).__name__)
+            return None
 
 async def init_db(pool):
     if not pool:
@@ -195,23 +179,48 @@ async def init_db(pool):
     logging.info("Database initialized.")
 
 async def check_and_reconnect(pool):
+    global _global_pool
+    pool = await get_db_pool()
     if pool is None:
-        return await get_db_pool()
+        return None
     try:
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("SELECT 1")
-        _global_pool = pool
-        await init_db(_global_pool)
-        return _global_pool
+        return pool
     except Exception as e:
-        logging.error(f"DB Connection lost: {e}. Trying to reconnect...")
-        try:
+        logging.error("Database connection lost: %s", type(e).__name__)
+        async with _pool_lock:
+            if _global_pool is pool:
+                _global_pool = None
+                pool.close()
+        await pool.wait_closed()
+        return await get_db_pool()
+
+
+async def close_pool():
+    global _global_pool
+    async with _pool_lock:
+        pool, _global_pool = _global_pool, None
+        if pool is not None:
             pool.close()
             await pool.wait_closed()
-        except:
-            pass
-        return await get_db_pool()
+
+
+@asynccontextmanager
+async def transaction():
+    pool = await check_and_reconnect(None)
+    if pool is None:
+        raise RuntimeError("Database unavailable")
+    async with pool.acquire() as conn:
+        await conn.begin()
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                yield cur
+            await conn.commit()
+        except BaseException:
+            await conn.rollback()
+            raise
 
 async def log_uptime(pool, server_id, is_online):
     if not pool:

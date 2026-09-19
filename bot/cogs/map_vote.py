@@ -6,6 +6,7 @@ import discord
 from discord.ext import tasks, commands
 from discord import app_commands
 import config
+from permissions import require_admin
 
 STATE_FILE = "map_vote_state.json"
 
@@ -352,12 +353,8 @@ class MapVoteCog(commands.Cog):
         ]
     )
     async def toggle_voting(self, interaction: discord.Interaction, server: app_commands.Choice[str], status: app_commands.Choice[str]):
-        if config.ADMIN_ROLE_IDS:
-            user_roles = [r.id for r in interaction.user.roles] if hasattr(interaction.user, 'roles') else []
-            is_admin = getattr(interaction.user.guild_permissions, 'administrator', False)
-            if not any(r in config.ADMIN_ROLE_IDS for r in user_roles) and not is_admin:
-                await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
-                return
+        if not await require_admin(interaction):
+            return
                 
         server = server.value
         enable = status.value == "on"
@@ -398,12 +395,8 @@ class MapVoteCog(commands.Cog):
         ]
     )
     async def force_map(self, interaction: discord.Interaction, server: app_commands.Choice[str], map_name: app_commands.Choice[str]):
-        if config.ADMIN_ROLE_IDS:
-            user_roles = [r.id for r in interaction.user.roles] if hasattr(interaction.user, 'roles') else []
-            is_admin = getattr(interaction.user.guild_permissions, 'administrator', False)
-            if not any(r in config.ADMIN_ROLE_IDS for r in user_roles) and not is_admin:
-                await interaction.response.send_message("❌ Du hast keine Berechtigung für diesen Befehl.", ephemeral=True)
-                return
+        if not await require_admin(interaction):
+            return
 
         await interaction.response.defer(ephemeral=True)
         

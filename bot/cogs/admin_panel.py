@@ -8,6 +8,7 @@ import config
 import json
 import os
 import database
+from permissions import require_admin, valid_steam_id, is_admin
 from datetime import datetime, timedelta
 
 PENDING_ACTIONS_FILE = "pending_admin_actions.json"
@@ -50,6 +51,11 @@ class BanModal(discord.ui.Modal, title='Spieler Global Bannen'):
         self.duration_label = duration_label
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not await require_admin(interaction):
+            return
+        if not valid_steam_id(self.steam_id.value.strip()):
+            await interaction.response.send_message("Steam64 ID muss aus 17 Ziffern bestehen.", ephemeral=True)
+            return
         await interaction.response.defer(ephemeral=True)
         
         servers = [
@@ -159,6 +165,11 @@ class UnbanModal(discord.ui.Modal, title='Spieler Global Entbannen'):
         self.bot = bot
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not await require_admin(interaction):
+            return
+        if not valid_steam_id(self.steam_id.value.strip()):
+            await interaction.response.send_message("Steam64 ID muss aus 17 Ziffern bestehen.", ephemeral=True)
+            return
         await interaction.response.defer(ephemeral=True)
         
         servers = [
@@ -235,6 +246,8 @@ class LookupModal(discord.ui.Modal, title='Spieler Ban-Historie'):
         self.bot = bot
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not await require_admin(interaction):
+            return
         await interaction.response.defer(ephemeral=True)
         steam_id_val = self.steam_id.value.strip()
         try:
@@ -274,12 +287,7 @@ class AdminPanelView(discord.ui.View):
         self.bot = bot
 
     def _is_admin(self, member: discord.Member):
-        if member.guild_permissions.administrator:
-            return True
-        for role in member.roles:
-            if role.id in config.ADMIN_ROLE_IDS:
-                return True
-        return False
+        return is_admin(member)
 
     @discord.ui.button(label="Spieler Bannen", style=discord.ButtonStyle.danger, custom_id="admin_panel_ban", emoji="🔨")
     async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -523,12 +531,7 @@ class AdminPanelCog(commands.Cog):
         await self.bot.wait_until_ready()
 
     def _is_admin(self, member: discord.Member):
-        if member.guild_permissions.administrator:
-            return True
-        for role in member.roles:
-            if role.id in config.ADMIN_ROLE_IDS:
-                return True
-        return False
+        return is_admin(member)
 
     @app_commands.command(name="adminpanel", description="Sendet das globale Admin-Panel zum Bannen/Entbannen von Spielern.")
     async def admin_panel(self, interaction: discord.Interaction):

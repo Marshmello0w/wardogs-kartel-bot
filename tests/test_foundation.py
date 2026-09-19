@@ -1,0 +1,90 @@
+import asyncio
+import os
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+import unittest
+from unittest.mock import AsyncMock, patch
+
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
+import config
+import database
+from permissions import is_admin, valid_steam_id
+
+
+class PermissionsTests(unittest.TestCase):
+    def test_empty_roles_is_not_public_access(self):
+        member = SimpleNamespace(guild_permissions=SimpleNamespace(administrator=False), roles=[])
+        with patch.object(config, "ADMIN_ROLE_IDS", []):
+            self.assertFalse(is_admin(member))
+            member.guild_permissions.administrator = True
+            self.assertTrue(is_admin(member))
+        self.assertFalse(is_admin(object()))
+
+    def test_steam_id(self):
+        self.assertTrue(valid_steam_id("76561190000000000"))
+        self.assertFalse(valid_steam_id("a" * 17))
+        self.assertFalse(valid_steam_id("١" * 17))
+
+
+class FakePool:
+    def __init__(self, broken=False):
+        self.closed = False
+        self.broken = broken
+
+    def acquire(self):
+        if self.broken:
+            raise RuntimeError("connection lost")
+        return self
+
+    def cursor(self):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+    async def execute(self, *args):
+        pass
+
+    def close(self):
+        self.closed = True
+
+    async def wait_closed(self):
+        pass
+
+
+class PoolTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        database._global_pool = None
+        database._pool_lock = asyncio.Lock()
+
+    async def asyncTearDown(self):
+        await database.close_pool()
+
+    async def test_reconnect_discards_closed_pool(self):
+        old, new = FakePool(broken=True), FakePool()
+        database._global_pool = old
+        with patch.object(config, "DB_CONNECTION_URL", "mysql://test:test@localhost/test"), \
+             patch.object(database.aiomysql, "create_pool", AsyncMock(return_value=new)), \
+             patch.object(database, "init_db", AsyncMock()) as init:
+            self.assertIs(await database.check_and_reconnect(old), new)
+            self.assertTrue(old.closed)
+            await database.check_and_reconnect(new)
+            init.assert_awaited_once()
+
+    async def test_concurrent_initialization_creates_one_pool(self):
+        new = FakePool()
+        with patch.object(config, "DB_CONNECTION_URL", "mysql://test:test@localhost/test"), \
+             patch.object(database.aiomysql, "create_pool", AsyncMock(return_value=new)) as create, \
+             patch.object(database, "init_db", AsyncMock()):
+            pools = await asyncio.gather(*(database.get_db_pool() for _ in range(5)))
+            self.assertTrue(all(p is new for p in pools))
+            create.assert_awaited_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
