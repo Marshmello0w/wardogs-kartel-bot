@@ -329,12 +329,10 @@ class MapVoteCog(commands.Cog):
                         if winner:
                             success = await self.modify_rotation(session, srv["rcon_url"], srv["rcon_pass"], winner)
                             if success:
-                                await channel.send(f"✅ **Voting Beendet!** Die Map für die nächste Runde ist: **{winner}** ({highest_votes} Stimmen).")
                                 self.bot.dispatch("bot_log", "🗺️ Map Voting Erfolgreich", f"Auf {srv['title']} wurde erfolgreich **{winner}** gewählt und auf Platz 1 der Rotation gesetzt.", discord.Color.green())
                             else:
-                                await channel.send(f"❌ **Fehler!** Konnte die Map **{winner}** nicht in der Server-Config setzen.")
+                                self.bot.dispatch("bot_log", "🗺️ Map Voting Fehler", f"Auf **{srv['title']}** konnte die Map **{winner}** nicht gesetzt werden.", discord.Color.red())
                         else:
-                            await channel.send("ℹ️ **Voting Beendet!** Nicht genügend Stimmen (mindestens 5 erforderlich). Die Rotation bleibt unverändert.")
                             self.bot.dispatch("bot_log", "🗺️ Map Voting Beendet", f"Auf **{srv['title']}** gab es nicht genügend Stimmen. Die Rotation bleibt unverändert.", discord.Color.orange())
                             
                 # Update last known score for next loop
