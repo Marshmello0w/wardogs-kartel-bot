@@ -132,6 +132,66 @@ async def init_db(pool):
                     INDEX(steam_id)
                 )
             ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS player_faction_stats (
+                    server_id VARCHAR(50) NOT NULL,
+                    steam_id VARCHAR(50) NOT NULL,
+                    faction VARCHAR(50) NOT NULL,
+                    times_seen INT DEFAULT 0,
+                    PRIMARY KEY (server_id, steam_id, faction),
+                    INDEX(steam_id)
+                )
+            ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS player_ping_stats (
+                    server_id VARCHAR(50) NOT NULL,
+                    steam_id VARCHAR(50) NOT NULL,
+                    total_ping BIGINT DEFAULT 0,
+                    ping_samples INT DEFAULT 0,
+                    PRIMARY KEY (server_id, steam_id)
+                )
+            ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS server_player_snapshots (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    server_id VARCHAR(50) NOT NULL,
+                    player_count INT DEFAULT 0,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX(server_id),
+                    INDEX(timestamp)
+                )
+            ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS round_history (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    server_id VARCHAR(50) NOT NULL,
+                    winner_faction VARCHAR(50),
+                    map_name VARCHAR(100),
+                    experience VARCHAR(255),
+                    lighting VARCHAR(100),
+                    started_at DATETIME,
+                    ended_at DATETIME,
+                    duration_seconds INT DEFAULT 0,
+                    INDEX(server_id),
+                    INDEX(ended_at)
+                )
+            ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS faction_wins (
+                    server_id VARCHAR(50) NOT NULL,
+                    faction VARCHAR(50) NOT NULL,
+                    wins INT DEFAULT 0,
+                    PRIMARY KEY (server_id, faction)
+                )
+            ''')
+            await cur.execute('''
+                CREATE TABLE IF NOT EXISTS map_play_stats (
+                    server_id VARCHAR(50) NOT NULL,
+                    map_name VARCHAR(100) NOT NULL,
+                    times_played INT DEFAULT 0,
+                    PRIMARY KEY (server_id, map_name)
+                )
+            ''')
     logging.info("Database initialized.")
 
 async def check_and_reconnect(pool):
