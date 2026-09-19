@@ -181,10 +181,21 @@ class PlayerRankModal(discord.ui.Modal, title='Eigenen Platz im Leaderboard find
             await interaction.followup.send("Fehler beim Abrufen der Datenbank.", ephemeral=True)
 
 class PublicLeaderboardView(discord.ui.View):
-
     def __init__(self, cog, server_id):
         super().__init__(timeout=None)
+        self.cog = cog
+        self.server_id = server_id
+        
+        # Das Dropdown (wie bisher)
         self.add_item(PublicLeaderboardDropdown(cog, server_id))
+        
+        # Der neue Button für die eigene Platzierung
+        btn = discord.ui.Button(label="Eigenen Platz finden", style=discord.ButtonStyle.secondary, custom_id=f"lb_rank_btn_{server_id}", emoji="🔍", row=1)
+        btn.callback = self.find_rank_callback
+        self.add_item(btn)
+
+    async def find_rank_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(PlayerRankModal(self.cog, self.server_id))
 
 class Leaderboard(commands.Cog):
     def __init__(self, bot):
