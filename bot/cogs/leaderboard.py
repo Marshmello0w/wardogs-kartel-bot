@@ -81,7 +81,107 @@ class PublicLeaderboardDropdown(discord.ui.Select):
         except:
             pass
 
+
+class PlayerRankModal(discord.ui.Modal, title='Eigenen Platz im Leaderboard finden'):
+    steam_id = discord.ui.TextInput(
+        label='Steam64 ID',
+        placeholder='7656119...',
+        required=True,
+        min_length=17,
+        max_length=17
+    )
+
+    def __init__(self, cog, server_id):
+        super().__init__()
+        self.cog = cog
+        self.server_id = server_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        steam_id = self.steam_id.value.strip()
+        
+        try:
+            import aiomysql
+            import database
+            pool = await database.get_db_pool()
+            
+            embed = discord.Embed(title="📊 Deine Leaderboard Statistiken", color=discord.Color.gold())
+            
+            async with pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cur:
+                    # All-Time
+                    await cur.execute('''
+                        SELECT name, lifetime_kills as kills, lifetime_deaths as deaths, lifetime_cash as cash, 
+                        (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) as kd
+                        FROM leaderboard 
+                        WHERE server_id = %s AND steam_id = %s
+                    ''', (self.server_id, steam_id))
+                    at_row = await cur.fetchone()
+                    
+                    if not at_row:
+                        return await interaction.followup.send("❌ Für diese SteamID wurden auf diesem Server keine Daten gefunden.", ephemeral=True)
+                        
+                    name = at_row['name']
+                    
+                    # Compute All-Time Rank
+                    await cur.execute('''
+                        SELECT COUNT(*) as higher
+                        FROM leaderboard
+                        WHERE server_id = %s AND (
+                            (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) > %s
+                            OR ( (lifetime_kills / IF(lifetime_deaths=0, 1, lifetime_deaths)) = %s AND lifetime_kills > %s )
+                        )
+                    ''', (self.server_id, at_row['kd'], at_row['kd'], at_row['kills']))
+                    at_rank = (await cur.fetchone())['higher'] + 1
+                    
+                    embed.add_field(
+                        name=f"🏆 All-Time (Platz #{at_rank})",
+                        value=f"**Kills:** {int(at_row['kills'])}\n**Deaths:** {int(at_row['deaths'])}\n**K/D:** {at_row['kd']:.2f}\n**Cash:** ${int(at_row['cash'])}",
+                        inline=False
+                    )
+                    
+                    # 30 Days and 7 Days
+                    for days, title in [(30, "Letzte 30 Tage"), (7, "Letzte 7 Tage")]:
+                        await cur.execute(f'''
+                            SELECT SUM(kills) as kills, SUM(deaths) as deaths, SUM(cash) as cash,
+                            (SUM(kills) / IF(SUM(deaths)=0, 1, SUM(deaths))) as kd
+                            FROM player_daily_stats
+                            WHERE server_id = %s AND steam_id = %s AND date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
+                        ''', (self.server_id, steam_id))
+                        d_row = await cur.fetchone()
+                        
+                        if d_row and d_row['kills'] is not None: # SUM returns None if no rows
+                            await cur.execute(f'''
+                                SELECT COUNT(*) as higher
+                                FROM (
+                                    SELECT steam_id, SUM(kills) as k, SUM(deaths) as d, (SUM(kills) / IF(SUM(deaths)=0, 1, SUM(deaths))) as kd
+                                    FROM player_daily_stats
+                                    WHERE server_id = %s AND date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)
+                                    GROUP BY steam_id
+                                ) AS t
+                                WHERE kd > %s OR (kd = %s AND k > %s)
+                            ''', (self.server_id, d_row['kd'], d_row['kd'], d_row['kills']))
+                            d_rank = (await cur.fetchone())['higher'] + 1
+                            
+                            embed.add_field(
+                                name=f"📅 {title} (Platz #{d_rank})",
+                                value=f"**Kills:** {int(d_row['kills'])}\n**Deaths:** {int(d_row['deaths'])}\n**K/D:** {d_row['kd']:.2f}\n**Cash:** ${int(d_row['cash'])}",
+                                inline=False
+                            )
+                        else:
+                            embed.add_field(name=f"📅 {title}", value="Keine Spieldaten in diesem Zeitraum.", inline=False)
+            
+            embed.set_author(name=name)
+            embed.set_footer(text=f"Server: {self.server_id.capitalize()}")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            import logging
+            logging.error(f"Error fetching player rank: {e}")
+            await interaction.followup.send("Fehler beim Abrufen der Datenbank.", ephemeral=True)
+
 class PublicLeaderboardView(discord.ui.View):
+
     def __init__(self, cog, server_id):
         super().__init__(timeout=None)
         self.add_item(PublicLeaderboardDropdown(cog, server_id))
