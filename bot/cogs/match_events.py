@@ -1,3 +1,5 @@
+import discord
+import random
 import logging
 import aiohttp
 from discord.ext import tasks, commands
@@ -65,9 +67,6 @@ class MatchEvents(commands.Cog):
                             await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
                             self.broadcast_sent[srv["id"]] = True
                             
-                            import discord
-                            import random
-                            import config
                             self.bot.dispatch("bot_log", "🏁 Runden-Ende Broadcast", f"Auf **{srv['id']}** endete eine Runde.\nGesendet:\n```{msg}```", discord.Color.gold())
                             
                     # Match restarted
