@@ -351,7 +351,7 @@ class Leaderboard(commands.Cog):
                         message = None
                     except Exception as e:
                         logging.error(f"Error editing message for {srv['id']}: {e}")
-                        message = None
+                        continue
 
                 if message is None:
                     try:

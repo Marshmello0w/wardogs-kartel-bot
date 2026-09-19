@@ -183,7 +183,7 @@ class ServerStatus(commands.Cog):
                 message = None
             except Exception as e:
                 logging.error(f"Error editing message: {e}")
-                message = None
+                return
 
         if message is None:
             try:

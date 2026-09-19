@@ -275,8 +275,10 @@ class MapVoteCog(commands.Cog):
                         if old_msg_id:
                             try:
                                 msg = await channel.fetch_message(old_msg_id)
-                            except:
-                                pass
+                            except discord.NotFound:
+                                msg = None
+                            except Exception:
+                                continue
                                 
                         if msg:
                             await msg.edit(embed=embed, view=view)
@@ -320,7 +322,7 @@ class MapVoteCog(commands.Cog):
                                 msg = await channel.fetch_message(msg_id)
                                 view = MapVoteView(s_id, srv["title"], self, votes=state["votes"], locked=True)
                                 await msg.edit(embed=view.generate_embed(), view=view)
-                            except:
+                            except Exception:
                                 pass
                                 
                         # Apply to server
