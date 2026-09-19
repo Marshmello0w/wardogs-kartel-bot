@@ -61,11 +61,13 @@ class MatchEvents(commands.Cog):
                     # Match is ending / has ended
                     if highest_score >= 100:
                         if not self.broadcast_sent.get(srv["id"], False):
-                            msg = "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen – hier geht’s zum Discord: https://discord.gg/bakuranikartell"
+                            msg = random.choice(config.BROADCAST_MESSAGES)
                             await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
                             self.broadcast_sent[srv["id"]] = True
                             
                             import discord
+                            import random
+                            import config
                             self.bot.dispatch("bot_log", "🏁 Runden-Ende Broadcast", f"Auf **{srv['id']}** endete eine Runde.\nGesendet:\n```{msg}```", discord.Color.gold())
                             
                     # Match restarted
