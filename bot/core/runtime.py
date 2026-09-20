@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 import tempfile
+import time
 import discord
 
 
@@ -33,10 +34,20 @@ class Health:
     def __init__(self, bot):
         self.bot = bot
         self.failed = set()
+        self.last_error = {}
+        self.last_log_at = {}
 
     def error(self, key, exc):
         # Exception bodies may contain remote responses or connection strings.
-        logging.error("%s: %s", key, getattr(exc, 'safe_message', type(exc).__name__))
+        message = getattr(exc, 'safe_message', type(exc).__name__)
+        now = time.monotonic()
+        # Polling must keep retrying, but a temporarily unavailable RCON endpoint
+        # should not write an identical error to the console every few seconds.
+        if (self.last_error.get(key) != message or
+                now - self.last_log_at.get(key, 0) >= 300):
+            logging.error("%s: %s", key, message)
+            self.last_log_at[key] = now
+        self.last_error[key] = message
         if key not in self.failed:
             self.failed.add(key)
             self.bot.dispatch("bot_log", "⚠️ Funktion gestört", key, discord.Color.orange())
@@ -44,4 +55,6 @@ class Health:
     def ok(self, key):
         if key in self.failed:
             self.failed.remove(key)
+            self.last_error.pop(key, None)
+            self.last_log_at.pop(key, None)
             self.bot.dispatch("bot_log", "✅ Funktion wieder verfügbar", key, discord.Color.green())

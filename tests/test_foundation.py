@@ -4,12 +4,13 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
 from core import config
 from core.permissions import is_admin, valid_steam_id
+from core.runtime import Health
 from infrastructure import database
 
 
@@ -26,6 +27,20 @@ class PermissionsTests(unittest.TestCase):
         self.assertTrue(valid_steam_id("76561190000000000"))
         self.assertFalse(valid_steam_id("a" * 17))
         self.assertFalse(valid_steam_id("١" * 17))
+
+
+class HealthTests(unittest.TestCase):
+    def test_repeated_identical_error_is_logged_once_until_interval(self):
+        bot = Mock()
+        health = Health(bot)
+        error = SimpleNamespace(safe_message='RconError (HTTP 404)')
+        with patch('core.runtime.time.monotonic', side_effect=(10, 20, 310)), \
+             patch('core.runtime.logging.error') as log_error:
+            health.error('Admin-Aufträge Server 1', error)
+            health.error('Admin-Aufträge Server 1', error)
+            health.error('Admin-Aufträge Server 1', error)
+        self.assertEqual(log_error.call_count, 2)
+        self.assertEqual(bot.dispatch.call_count, 1)
 
 
 class FakePool:
