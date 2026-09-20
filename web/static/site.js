@@ -1,5 +1,12 @@
 /* Relative times are text-only; data remains server-rendered and escaped. */
 const language = document.body.dataset.language || 'de';
+const languageMenu = document.querySelector('.language-menu');
+const languageToggle = document.querySelector('.language-toggle');
+const languageOptions = document.querySelector('.language-options');
+function closeLanguageMenu() { if (languageOptions) languageOptions.hidden = true; if (languageToggle) languageToggle.setAttribute('aria-expanded', 'false'); }
+languageToggle?.addEventListener('click', () => { const open = languageOptions.hidden; languageOptions.hidden = !open; languageToggle.setAttribute('aria-expanded', String(open)); });
+document.addEventListener('click', event => { if (languageMenu && !languageMenu.contains(event.target)) closeLanguageMenu(); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeLanguageMenu(); });
 const copy = language === 'en' ? {updated: 'Updated:', last: 'Last known data', players: 'Players · last known'} : {updated: 'Stand:', last: 'Letzte bekannte Daten', players: 'Spieler · zuletzt'};
 const relative = new Intl.RelativeTimeFormat(language, {numeric: 'auto'});
 function updateTimes() {
