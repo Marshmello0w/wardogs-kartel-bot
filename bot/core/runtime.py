@@ -36,7 +36,7 @@ class Health:
 
     def error(self, key, exc):
         # Exception bodies may contain remote responses or connection strings.
-        logging.error("%s: %s", key, type(exc).__name__)
+        logging.error("%s: %s", key, getattr(exc, 'safe_message', type(exc).__name__))
         if key not in self.failed:
             self.failed.add(key)
             self.bot.dispatch("bot_log", "⚠️ Funktion gestört", key, discord.Color.orange())

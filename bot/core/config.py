@@ -13,6 +13,18 @@ GUILD_ID = os.getenv("GUILD_ID")
 SERVER_STATUS_CHANNEL_ID = os.getenv("SERVER_STATUS_CHANNEL_ID")
 DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
 
+
+def _bounded_int(name, default, minimum, maximum):
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        logging.warning("Invalid %s; using %s", name, default)
+        return default
+    if minimum <= value <= maximum:
+        return value
+    logging.warning("Invalid %s; using %s", name, default)
+    return default
+
 # Konfiguration für das Server Status Feature
 SERVER_IDS = [id.strip() for id in os.getenv("SERVER_IDS", "a4ecfba6-2c2d-47db-bd46-58843bafd8ed,34f3a634-8db3-4725-8264-44bbc6bb39d3").split(",") if id.strip()]
 API_URL = "https://wardogserverlist.com/api/server"
@@ -34,6 +46,7 @@ SERVER2_RCON_PASS = os.getenv("SERVER2_RCON_PASS", "")
 SERVER2_VOTE_CHANNEL_ID = os.getenv("SERVER2_VOTE_CHANNEL_ID", "")
 SERVER3_RCON_URL = os.getenv("SERVER3_RCON_URL", "")
 SERVER3_RCON_PASS = os.getenv("SERVER3_RCON_PASS", "")
+RCON_TIMEOUT_SECONDS = _bounded_int("RCON_TIMEOUT_SECONDS", 10, 1, 60)
 SERVER3_VOTE_CHANNEL_ID = os.getenv("SERVER3_VOTE_CHANNEL_ID", "")
 ADMIN_ROLE_IDS = [int(x.strip()) for x in os.getenv("ADMIN_ROLE_IDS", "").split(",") if x.strip().isdigit()]
 ADMIN_PANEL_CHANNEL_ID = os.getenv("ADMIN_PANEL_CHANNEL_ID", "")

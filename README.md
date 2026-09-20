@@ -43,7 +43,9 @@ sind normale Python-Module und können von mehreren Cogs gemeinsam verwendet wer
 
 ## Verhalten
 
-- Eine zentrale Serverliste und ein gemeinsamer HTTP-Client versorgen die Cogs.
+- Eine zentrale Serverliste und ein gemeinsamer HTTP-Client versorgen die Cogs. RCON-Anfragen
+  werden je Server serialisiert, identische parallele Lesezugriffe zusammengefasst und erhalten
+  standardmäßig zehn Sekunden Zeit; `RCON_TIMEOUT_SECONDS` kann zwischen 1 und 60 gesetzt werden.
 - Der RoundTracker pollt alle fünf Sekunden. Zusätzliche Statusabfragen vor und nach
   Spielerabfragen sichern die Zuordnung der Zähler zu einer Runde ab.
 - Rundenzustand und Ereignisse werden in der Datenbank gespeichert. Unbekannte

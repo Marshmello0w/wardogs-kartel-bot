@@ -12,7 +12,7 @@ import discord
 from core import config
 from cogs.admin_panel import AdminPanelCog
 from cogs.leaderboard import PublicLeaderboardDropdown
-from cogs.map_vote import MapVoteCog
+from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
 from core.runtime import Health
 from services.rcon import RconClient, RconError, Reply
@@ -20,6 +20,49 @@ from start import KartelBot
 
 
 class RconTests(unittest.IsolatedAsyncioTestCase):
+    async def test_identical_reads_are_singleflight(self):
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        class Response:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def text(self):
+                entered.set()
+                await release.wait()
+                return '{"players": []}'
+
+        class Session:
+            closed = False
+
+            def __init__(self):
+                self.calls = 0
+
+            def request(self, *args, **kwargs):
+                self.calls += 1
+                return Response()
+
+        client = RconClient()
+        client.session = Session()
+        server = SimpleNamespace(enabled=True, password='not-logged', url='http://rcon.invalid')
+        with patch('services.rcon.config.server', return_value=server):
+            first = asyncio.create_task(client.get('server1', '/v1/players'))
+            await entered.wait()
+            second = asyncio.create_task(client.get('server1', '/v1/players'))
+            await asyncio.sleep(0)
+            self.assertEqual(client.session.calls, 1)
+            release.set()
+            self.assertEqual(await asyncio.gather(first, second), [{'players': []}, {'players': []}])
+
+    async def test_rcon_error_log_message_is_safe_and_specific(self):
+        self.assertEqual(RconError(503).safe_message, 'RconError (HTTP 503)')
+        self.assertEqual(RconError(reason='timeout').safe_message, 'RconError (timeout)')
+
     async def test_failed_ban_read_is_not_empty_list(self):
         client = RconClient()
         client.get = AsyncMock(side_effect=RconError(503))
@@ -49,6 +92,17 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscordTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetched_component_ids_do_not_refresh_unchanged_voting_panel(self):
+        embed = discord.Embed(title='Map Voting')
+        planned = [{'type': 1, 'components': [
+            {'type': 2, 'style': 1, 'label': 'Bakurani', 'custom_id': 'vote_Bakurani', 'disabled': True}]}]
+        fetched = [{'type': 1, 'id': 0, 'components': [
+            {'type': 2, 'id': 42, 'style': 1, 'label': 'Bakurani', 'custom_id': 'vote_Bakurani', 'disabled': True}]}]
+        message = SimpleNamespace(embeds=[embed], components=[
+            SimpleNamespace(to_dict=lambda payload=fetched[0]: payload)])
+        view = SimpleNamespace(to_components=lambda: planned)
+        self.assertFalse(_panel_changed(message, embed, view))
+
     async def test_leaderboard_defers_before_slow_query(self):
         response = SimpleNamespace(defer=AsyncMock())
         interaction = SimpleNamespace(response=response,followup=SimpleNamespace(send=AsyncMock()))

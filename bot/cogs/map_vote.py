@@ -11,6 +11,27 @@ from domain.rotation import entries, replace_entries, format_entry, RotationConf
 from infrastructure import storage
 
 
+def _component_payload(value):
+    """Remove Discord's server-assigned component IDs before comparing views."""
+    if isinstance(value, list):
+        return [_component_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _component_payload(item)
+            for key, item in value.items()
+            # Component IDs are an implementation detail added by Discord on fetch.
+            # Do not remove an emoji's ID, which has no component ``type`` field.
+            if not (key == 'id' and 'type' in value)
+        }
+    return value
+
+
+def _panel_changed(message, embed, view):
+    return (not message.embeds or message.embeds[0].to_dict() != embed.to_dict()
+            or _component_payload([component.to_dict() for component in message.components])
+            != _component_payload(view.to_components()))
+
+
 class MapVoteButton(discord.ui.Button):
     def __init__(self, option, locked=False):
         super().__init__(label=option, custom_id=f'vote_{option}', style=discord.ButtonStyle.primary, disabled=locked)
@@ -106,8 +127,7 @@ class MapVoteCog(commands.Cog):
             message = await channel.send(embed=embed, view=view)
             state['msg_id'] = message.id
             await self.save(srv.id, state)
-        elif (not message.embeds or message.embeds[0].to_dict() != embed.to_dict()
-              or [c.to_dict() for c in message.components] != view.to_components()):
+        elif _panel_changed(message, embed, view):
             await message.edit(embed=embed, view=view)
 
     async def prepare_change(self, srv, state, winner, current):
