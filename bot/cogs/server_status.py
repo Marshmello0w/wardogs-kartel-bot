@@ -79,8 +79,10 @@ class ServerStatus(commands.Cog):
                 text += f"\n**Region:** {region}\n**Server-Verfügbarkeit:** {uptime}"
                 embed.add_field(name=str((data or {}).get('serverName', srv.title))[:256], value=text[:1024], inline=False)
             updated_at = discord.utils.utcnow()
-            embed.set_footer(text=f'Letzte Aktualisierung: <t:{int(updated_at.timestamp())}:R>')
-            embed.timestamp = updated_at
+            # Footer-Texte unterstützen Discords dynamische Zeitstempel nicht.
+            # In Embed-Feldern wird <t:...:R> hingegen als „vor X Sekunden“ gerendert.
+            embed.add_field(name='Letzte Aktualisierung',
+                            value=f'<t:{int(updated_at.timestamp())}:R>', inline=False)
             channel = self.bot.get_channel(int(config.SERVER_STATUS_CHANNEL_ID)) or await self.bot.fetch_channel(int(config.SERVER_STATUS_CHANNEL_ID))
             saved = read_state(config.MESSAGE_ID_FILE, {})
             message = None

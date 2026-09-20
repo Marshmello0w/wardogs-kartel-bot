@@ -135,10 +135,13 @@ class Leaderboard(commands.Cog):
         tracker = self.bot.get_cog('RoundTracker')
         updated_at = discord.utils.utcnow()
         if not tracker or not tracker.current(server_id):
-            embed.set_footer(text=f'Erfassung unterbrochen · <t:{int(updated_at.timestamp())}:R>')
+            embed.add_field(name='⚠️ Erfassung unterbrochen',
+                            value=f'Letzte Aktualisierung: <t:{int(updated_at.timestamp())}:R>', inline=False)
         else:
-            embed.set_footer(text=f'Letzte Aktualisierung: <t:{int(updated_at.timestamp())}:R>')
-        embed.timestamp = updated_at
+            # Footer-Texte unterstützen Discords dynamische Zeitstempel nicht.
+            # In Embed-Feldern wird <t:...:R> hingegen als „vor X Sekunden“ gerendert.
+            embed.add_field(name='Letzte Aktualisierung',
+                            value=f'<t:{int(updated_at.timestamp())}:R>', inline=False)
         return embed
 
     async def sample(self, srv):
