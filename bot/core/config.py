@@ -65,6 +65,15 @@ BROADCAST_MESSAGES = [
     "Dir gefällt der Server? Lass uns ein Feedback auf unserem Discord da: https://discord.gg/bakuranikartell"
 ]
 
+# Nach der deutschen Runden-Ende-Nachricht wird nach kurzer Einblendepause eine
+# inhaltlich gleiche englische Variante zufällig ausgewählt.
+BROADCAST_FOLLOWUP_DELAY_SECONDS = 10
+ENGLISH_BROADCAST_MESSAGES = [
+    "Stay up to date with the latest WarDogs news and events, and find new teammates 👉 join our Discord: https://discord.gg/bakuranikartell",
+    "While you're waiting: don't miss news, events, and our new leaderboard on Discord: https://discord.gg/bakuranikartell",
+    "Enjoying the server? Leave us some feedback on our Discord: https://discord.gg/bakuranikartell"
+]
+
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
