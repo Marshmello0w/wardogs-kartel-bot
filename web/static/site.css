@@ -33,9 +33,15 @@ p { max-width: 65ch; }
 .muted, .field-label, .footnote { color: var(--color-muted); }
 .shell { max-width: 1400px; margin-inline: auto; padding-inline: clamp(var(--space-md), 4vw, var(--space-2xl)); }
 .masthead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-lg); padding-block: var(--space-lg); flex-wrap: wrap; }
-.header-actions, .language-form { display: flex; align-items: center; gap: var(--space-sm); }
-.language-form label { color: var(--color-muted); font-size: var(--text-sm); }
-.language-form select { width: auto; min-height: 36px; font-size: var(--text-sm); }
+.header-actions { display: flex; align-items: center; gap: var(--space-sm); }
+.language-menu { position: relative; }
+.language-menu summary { display: grid; place-items: center; list-style: none; width: 44px; height: 44px; border: var(--rule-thin) solid var(--color-control); border-radius: var(--radius-sm); cursor: pointer; }
+.language-menu summary::-webkit-details-marker { display: none; }
+.language-menu summary img { width: 24px; height: 16px; box-shadow: 0 0 0 1px var(--color-control); }
+.language-options { position: absolute; z-index: 5; inset-inline-end: 0; top: calc(100% + var(--space-xs)); min-width: 9rem; padding: var(--space-xs); background: var(--color-paper-2); border: var(--rule-thin) solid var(--color-control); box-shadow: 0 12px 28px rgb(0 0 0 / 0.35); }
+.language-options button { display: flex; align-items: center; width: 100%; gap: var(--space-sm); padding: var(--space-sm); border: 0; background: transparent; color: var(--color-ink); text-align: start; }
+.language-options button:hover { background: var(--color-paper-3); }
+.language-options img { width: 24px; height: 16px; }
 .brand { display: inline-flex; align-items: center; gap: var(--space-sm); font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg); line-height: 1; min-height: 44px; }
 .brand small { display: block; font-family: var(--font-body); font-weight: 400; font-size: 0.625rem; letter-spacing: 0.14em; color: var(--color-muted); padding-block-start: var(--space-xs); }
 .brand-symbol { display: grid; place-items: center; width: 44px; height: 44px; font-size: 2rem; background: var(--color-accent); color: var(--color-accent-ink); clip-path: polygon(15% 0, 100% 0, 85% 100%, 0 100%); }

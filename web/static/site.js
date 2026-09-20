@@ -1,6 +1,5 @@
 /* Relative times are text-only; data remains server-rendered and escaped. */
 const language = document.body.dataset.language || 'de';
-document.querySelector('.language-form select')?.addEventListener('change', event => event.currentTarget.form.requestSubmit());
 const copy = language === 'en' ? {updated: 'Updated:', last: 'Last known data', players: 'Players · last known'} : {updated: 'Stand:', last: 'Letzte bekannte Daten', players: 'Spieler · zuletzt'};
 const relative = new Intl.RelativeTimeFormat(language, {numeric: 'auto'});
 function updateTimes() {
