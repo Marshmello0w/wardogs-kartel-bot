@@ -155,6 +155,15 @@ def create_app(settings=None, repository=None, steam_client=None):
             target = '/'
         return RedirectResponse(target, status_code=303)
 
+    @app.get('/language/{selected}')
+    async def select_language(request: Request, selected: Literal['de', 'en'], next: str = '/'):
+        """Language preference is non-sensitive and works without form submission."""
+        parsed = urlsplit(next)
+        if parsed.scheme or parsed.netloc or not parsed.path.startswith('/'):
+            next = '/'
+        request.session['language'] = selected
+        return RedirectResponse(next, status_code=303)
+
     @app.get('/')
     async def home(request: Request):
         error = None

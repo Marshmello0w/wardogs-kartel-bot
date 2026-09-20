@@ -38,8 +38,8 @@ p { max-width: 65ch; }
 .language-toggle { display: grid; place-items: center; width: 44px; height: 44px; border: var(--rule-thin) solid var(--color-control); border-radius: var(--radius-sm); background: var(--color-paper); }
 .language-toggle img { width: 24px; height: 16px; box-shadow: 0 0 0 1px var(--color-control); }
 .language-options { position: absolute; z-index: 5; inset-inline-end: 0; top: calc(100% + var(--space-xs)); min-width: 9rem; padding: var(--space-xs); background: var(--color-paper-2); border: var(--rule-thin) solid var(--color-control); box-shadow: 0 12px 28px rgb(0 0 0 / 0.35); }
-.language-options button { display: flex; align-items: center; width: 100%; gap: var(--space-sm); padding: var(--space-sm); border: 0; background: transparent; color: var(--color-ink); text-align: start; }
-.language-options button:hover { background: var(--color-paper-3); }
+.language-options a { display: flex; align-items: center; width: 100%; gap: var(--space-sm); padding: var(--space-sm); color: var(--color-ink); text-align: start; }
+.language-options a:hover { background: var(--color-paper-3); }
 .language-options img { width: 24px; height: 16px; }
 .brand { display: inline-flex; align-items: center; gap: var(--space-sm); font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg); line-height: 1; min-height: 44px; }
 .brand small { display: block; font-family: var(--font-body); font-weight: 400; font-size: 0.625rem; letter-spacing: 0.14em; color: var(--color-muted); padding-block-start: var(--space-xs); }
