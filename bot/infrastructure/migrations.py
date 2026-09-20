@@ -49,9 +49,16 @@ FACTION_ENTRY_CORRECTION = (
     "DELETE FROM player_faction_stats",
 )
 
+IGNORED_FACTION_CORRECTION = (
+    # "White" is the unassigned/non-team entry supplied by RCON, never a team.
+    "DELETE FROM player_faction_stats WHERE LOWER(TRIM(faction))='white'",
+    "DELETE FROM player_faction_state WHERE LOWER(TRIM(faction))='white'",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
+    (3, IGNORED_FACTION_CORRECTION),
 )
 
 

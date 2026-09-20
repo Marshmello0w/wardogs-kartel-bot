@@ -91,7 +91,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
         await database.init_db(self.pool)
         self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)
-        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 2)
+        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 3)
 
     async def test_faction_counter_migration_removes_legacy_poll_samples_once(self):
         await self.rows("""INSERT INTO player_faction_stats(server_id,steam_id,faction,times_seen)
@@ -103,6 +103,16 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await self.rows('SELECT * FROM player_faction_state')), 0)
         await database.init_db(self.pool)
         self.assertFalse(await self.rows('SELECT * FROM player_faction_stats'))
+
+    async def test_ignored_faction_migration_removes_white(self):
+        await self.rows("""INSERT INTO player_faction_stats(server_id,steam_id,faction,times_seen)
+            VALUES (%s,%s,%s,%s)""", ('server1', STEAM, 'White', 4))
+        await self.rows("""INSERT INTO player_faction_state(server_id,steam_id,faction,last_seen)
+            VALUES (%s,%s,%s,UTC_TIMESTAMP())""", ('server1', STEAM, 'WHITE'))
+        await self.rows('DELETE FROM schema_migrations WHERE version=3')
+        await database.init_db(self.pool)
+        self.assertFalse(await self.rows("SELECT * FROM player_faction_stats WHERE LOWER(faction)='white'"))
+        self.assertFalse(await self.rows("SELECT * FROM player_faction_state WHERE LOWER(faction)='white'"))
 
     async def test_expired_offline_ban_never_posts(self):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
@@ -249,6 +259,24 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
             await cog.sample(config.server('server1'))
         rows = await self.rows('SELECT faction,times_seen FROM player_faction_stats ORDER BY faction')
         self.assertEqual(rows, [dict(faction='A', times_seen=1), dict(faction='B', times_seen=2)])
+
+    async def test_white_faction_is_never_counted(self):
+        from cogs.stats_tracker import StatsTracker
+        cog = StatsTracker.__new__(StatsTracker)
+        cog.bot, cog.last_online, cog.last_observed = self.bot, {}, {}
+        self.bot.rcon.players = AsyncMock(return_value=[dict(steamId=OTHER,name='Player',faction=' White ',pingMs=20)])
+        with patch('cogs.stats_tracker.monotonic', return_value=100):
+            await cog.sample(config.server('server1'))
+        with patch('cogs.stats_tracker.monotonic', return_value=160):
+            await cog.sample(config.server('server1'))
+        self.assertFalse(await self.rows('SELECT * FROM player_faction_stats'))
+        state = (await self.rows('SELECT faction FROM player_faction_state'))[0]
+        self.assertEqual(state['faction'], 'Unknown')
+        self.bot.rcon.players = AsyncMock(return_value=[dict(steamId=OTHER,name='Player',faction='Blue',pingMs=20)])
+        with patch('cogs.stats_tracker.monotonic', return_value=220):
+            await cog.sample(config.server('server1'))
+        self.assertEqual(await self.rows('SELECT faction,times_seen FROM player_faction_stats'),
+                         [dict(faction='Blue', times_seen=1)])
 
     async def test_round_events_and_results_survive_reload_without_duplicates(self):
         tracker = RoundTracker.__new__(RoundTracker)

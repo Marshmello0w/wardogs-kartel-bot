@@ -7,6 +7,8 @@ from infrastructure import database
 
 
 class StatsTracker(commands.Cog):
+    NON_TEAM_FACTIONS = frozenset({'white'})
+
     def __init__(self, bot):
         self.bot = bot
         self.last_online = {}
@@ -20,7 +22,9 @@ class StatsTracker(commands.Cog):
     def faction_name(player):
         """Return a stored faction label without treating a missing value as a team."""
         faction = str(player.get('faction', '')).strip()[:50]
-        return faction or 'Unknown'
+        if not faction or faction.casefold() in StatsTracker.NON_TEAM_FACTIONS:
+            return 'Unknown'
+        return faction
 
     async def recent_factions(self, cur, server_id, steam_ids):
         """Return faction state from the preceding polling window only.
