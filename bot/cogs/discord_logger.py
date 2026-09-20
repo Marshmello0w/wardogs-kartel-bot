@@ -1,4 +1,5 @@
 import logging
+from io import BytesIO
 import discord
 from discord.ext import commands
 
@@ -38,6 +39,19 @@ class DiscordLogger(commands.Cog):
             await channel.send(embed=embed)
         except Exception as e:
             logging.error(f"Konnte Bot-Log nicht in Discord senden: {e}")
+
+    @commands.Cog.listener()
+    async def on_server_recap(self, embed: discord.Embed, image: bytes, filename: str):
+        """Central delivery point for the public daily server recap."""
+        if not config.SERVER_RECAP_CHANNEL_ID:
+            return
+        try:
+            channel = self.bot.get_channel(int(config.SERVER_RECAP_CHANNEL_ID))
+            if channel is None:
+                channel = await self.bot.fetch_channel(int(config.SERVER_RECAP_CHANNEL_ID))
+            await channel.send(embed=embed, file=discord.File(BytesIO(image), filename=filename))
+        except Exception as exc:
+            logging.error("Konnte Server-Rückblick nicht in Discord senden: %s", type(exc).__name__)
 
 
 async def setup(bot):

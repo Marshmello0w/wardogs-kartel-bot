@@ -6,6 +6,18 @@ from core.runtime import read_state, write_state
 from infrastructure import database
 
 
+def format_scores(data):
+    scores = data.get('factionScores', []) if isinstance(data, dict) else []
+    values = []
+    for item in scores:
+        if not isinstance(item, dict) or not isinstance(item.get('name'), str):
+            continue
+        score = item.get('score')
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            values.append(f"{item['name']}: {int(score) if float(score).is_integer() else score}")
+    return ' · '.join(values)
+
+
 class ServerStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -58,14 +70,15 @@ class ServerStatus(commands.Cog):
                 if data:
                     counts = data.get('players', {})
                     modes = ', '.join(data['experiences'])
-                    text += (f"\n**Players:** {counts.get('current','?')}/{counts.get('max','?')}"
-                             f"\n**Map:** {data['map']}\n**Mode:** {modes[:150]}")
+                    text += (f"\n**Spieler:** {counts.get('current','?')}/{counts.get('max','?')}"
+                             f"\n**Karte:** {data['map']}\n**Modus:** {modes[:150]}")
+                    scores = format_scores(data)
+                    if scores:
+                        text += f"\n**Teamstände:** {scores[:300]}"
                 region = await self.region(srv)
-                text += f"\n**Region:** {region}\n**RCON-Verfügbarkeit:** {uptime}"
-                if srv.uuid:
-                    text += f"\n**Connection ID:** {srv.uuid}"
+                text += f"\n**Region:** {region}\n**Server-Verfügbarkeit:** {uptime}"
                 embed.add_field(name=str((data or {}).get('serverName', srv.title))[:256], value=text[:1024], inline=False)
-            embed.set_footer(text='API-Erreichbarkeit ist nicht gleich Gameserver-Uptime.')
+            embed.set_footer(text='Server-Verfügbarkeit wird über die RCON-Erreichbarkeit gemessen.')
             embed.timestamp = discord.utils.utcnow()
             channel = self.bot.get_channel(int(config.SERVER_STATUS_CHANNEL_ID)) or await self.bot.fetch_channel(int(config.SERVER_STATUS_CHANNEL_ID))
             saved = read_state(config.MESSAGE_ID_FILE, {})

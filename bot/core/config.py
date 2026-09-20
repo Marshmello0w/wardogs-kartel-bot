@@ -11,6 +11,7 @@ load_dotenv()
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")
 SERVER_STATUS_CHANNEL_ID = os.getenv("SERVER_STATUS_CHANNEL_ID")
+SERVER_RECAP_CHANNEL_ID = os.getenv("SERVER_RECAP_CHANNEL_ID")
 DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
 
 
@@ -106,7 +107,7 @@ def server(server_id):
 
 def validate():
     """Disable only the misconfigured surface; never print credentials."""
-    for key in ("GUILD_ID", "SERVER_STATUS_CHANNEL_ID", "DISCORD_LOG_CHANNEL_ID",
+    for key in ("GUILD_ID", "SERVER_STATUS_CHANNEL_ID", "SERVER_RECAP_CHANNEL_ID", "DISCORD_LOG_CHANNEL_ID",
                 "LEADERBOARD_CHANNEL_ID", "ADMIN_PANEL_CHANNEL_ID",
                 "SERVER2_VOTE_CHANNEL_ID", "SERVER3_VOTE_CHANNEL_ID"):
         value = globals()[key]

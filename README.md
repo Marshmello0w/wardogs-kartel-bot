@@ -61,6 +61,12 @@ sind normale Python-Module und können von mehreren Cogs gemeinsam verwendet wer
   werden nicht durch alte Konfigurationskopien überschrieben.
 - Erfolgslogs entstehen erst nach bestätigter Ausführung. Unklar zugestellte
   Broadcasts werden nicht blind erneut gesendet.
+- Der öffentliche Live-Status zeigt Spielerzahl, Karte, Modus, Teamstände, Region
+  und die über RCON gemessene Server-Verfügbarkeit. `SERVER_RECAP_CHANNEL_ID`
+  aktiviert zusätzlich um 00:00 Uhr (Europe/Berlin) drei Tagesrückblicke mit
+  Runden, Karten, Fraktionssiegen, Verfügbarkeit und einem 24-Stunden-Graphen
+  der Spielerzahl. Die Messung nutzt den bereits erfassten Rundenzustand und
+  erzeugt keine zusätzlichen RCON-Anfragen.
 
 Bestehende Statistiken bleiben bei der Umstellung erhalten. Die erste Spielerprobe
 setzt eine Messbasis; verpasste historische Werte werden nicht erfunden.

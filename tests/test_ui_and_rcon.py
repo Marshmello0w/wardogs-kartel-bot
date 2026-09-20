@@ -1,10 +1,12 @@
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
+from zoneinfo import ZoneInfo
 
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
@@ -14,6 +16,8 @@ from cogs.admin_panel import AdminPanelCog
 from cogs.leaderboard import PublicLeaderboardDropdown
 from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
+from cogs.server_recap import player_graph, previous_day_window
+from cogs.server_status import format_scores
 from core.runtime import Health
 from services.rcon import RconClient, RconError, Reply
 from start import KartelBot
@@ -92,6 +96,22 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscordTests(unittest.IsolatedAsyncioTestCase):
+    def test_live_status_formats_team_scores(self):
+        self.assertEqual(format_scores({'factionScores': [
+            {'name': 'Valkyra', 'score': 87}, {'name': 'Chernaya', 'score': 81.5}]}),
+            'Valkyra: 87 · Chernaya: 81.5')
+
+    def test_daily_player_graph_is_png_with_berlin_day_bounds(self):
+        now = datetime(2026, 9, 21, 0, 0, tzinfo=ZoneInfo('Europe/Berlin'))
+        start_local, end_local = previous_day_window(now)
+        start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+        end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+        image = player_graph([
+            {'timestamp': start + timedelta(hours=1), 'player_count': 5},
+            {'timestamp': start + timedelta(hours=2), 'player_count': 18}], start, end)
+        self.assertTrue(image.startswith(b'\x89PNG\r\n\x1a\n'))
+        self.assertEqual((start_local.hour, end_local.hour), (0, 0))
+
     async def test_fetched_component_ids_do_not_refresh_unchanged_voting_panel(self):
         embed = discord.Embed(title='Map Voting')
         planned = [{'type': 1, 'components': [
@@ -143,8 +163,8 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
         bot = KartelBot()
         async with bot:
             for name in ('discord_logger','round_tracker','server_status','leaderboard','match_events',
-                         'ban_tracker','map_vote','admin_panel','stats_tracker'):
+                         'ban_tracker','map_vote','admin_panel','stats_tracker','server_recap'):
                 await bot.load_extension('cogs.' + name)
-            self.assertEqual(len(bot.cogs), 9)
+            self.assertEqual(len(bot.cogs), 10)
             self.assertEqual({c.name for c in bot.tree.get_commands()}, {'voting','forcemap','adminpanel','ban_lookup'})
             self.assertEqual(len(bot.persistent_views), 4)
