@@ -20,7 +20,7 @@ class KartelBot(commands.Bot):
     async def setup_hook(self):
         for name in ('discord_logger', 'round_tracker', 'server_status', 'leaderboard',
                      'match_events', 'ban_tracker', 'map_vote', 'admin_panel', 'stats_tracker',
-                     'server_recap'):
+                     'server_recap', 'player_lookup'):
             await self.load_extension(f'cogs.{name}')
         try:
             if config.GUILD_ID:

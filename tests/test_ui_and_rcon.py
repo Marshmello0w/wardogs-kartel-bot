@@ -16,6 +16,7 @@ from cogs.admin_panel import AdminPanelCog
 from cogs.leaderboard import PublicLeaderboardDropdown
 from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
+from cogs.player_lookup import PlayerLookupCog, unique_matches
 from cogs.server_recap import player_graph, previous_day_window
 from cogs.server_status import format_scores
 from core.runtime import Health
@@ -96,6 +97,28 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscordTests(unittest.IsolatedAsyncioTestCase):
+    def test_lookup_name_matches_are_deduplicated_and_limited(self):
+        rows = [
+            {'steam_id': '76561190000000001', 'name': 'Same', 'last_seen': datetime(2026, 1, 2)},
+            {'steam_id': '76561190000000001', 'name': 'Older', 'last_seen': datetime(2026, 1, 1)},
+            {'steam_id': '76561190000000002', 'name': 'Other', 'last_seen': datetime(2026, 1, 1)},
+        ]
+        matches = unique_matches(rows)
+        self.assertEqual([row['steam_id'] for row in matches], ['76561190000000001', '76561190000000002'])
+        self.assertEqual(matches[0]['name'], 'Same')
+
+    def test_lookup_profile_pages_include_bans_and_jobs(self):
+        cog = PlayerLookupCog.__new__(PlayerLookupCog)
+        profile = dict(steam_id='76561190000000001', names=['Tester'], servers={}, target=None,
+                       bans=[dict(issued_at=datetime(2026, 1, 1), status='active', admin_mention='Admin',
+                                  duration_str='Permanent', expires_at=None, reason='Test')],
+                       jobs=[dict(server_id='server1', action='ban', status='pending', attempts=2,
+                                  next_attempt=datetime(2026, 1, 2), last_error='HTTP 503')])
+        pages = PlayerLookupCog.pages(cog, profile)
+        self.assertEqual(len(pages), 4)
+        self.assertIn('Ban-Historie', pages[2].title)
+        self.assertIn('Admin-Aufträge', pages[3].title)
+
     def test_live_status_formats_team_scores(self):
         self.assertEqual(format_scores({'factionScores': [
             {'name': 'Valkyra', 'score': 87}, {'name': 'Chernaya', 'score': 81.5}]}),
@@ -163,8 +186,8 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
         bot = KartelBot()
         async with bot:
             for name in ('discord_logger','round_tracker','server_status','leaderboard','match_events',
-                         'ban_tracker','map_vote','admin_panel','stats_tracker','server_recap'):
+                         'ban_tracker','map_vote','admin_panel','stats_tracker','server_recap','player_lookup'):
                 await bot.load_extension('cogs.' + name)
-            self.assertEqual(len(bot.cogs), 10)
-            self.assertEqual({c.name for c in bot.tree.get_commands()}, {'voting','forcemap','adminpanel','ban_lookup'})
-            self.assertEqual(len(bot.persistent_views), 4)
+            self.assertEqual(len(bot.cogs), 11)
+            self.assertEqual({c.name for c in bot.tree.get_commands()}, {'voting','forcemap','adminpanel','ban_lookup','lookup'})
+            self.assertEqual(len(bot.persistent_views), 5)

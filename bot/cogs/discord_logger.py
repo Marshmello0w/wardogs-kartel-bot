@@ -68,6 +68,17 @@ class DiscordLogger(commands.Cog):
         except Exception as exc:
             logging.error("Konnte Server-Rückblick nicht in Discord senden: %s", type(exc).__name__)
 
+    @commands.Cog.listener()
+    async def on_public_lookup(self, channel_id: int, embed: discord.Embed, view: discord.ui.View):
+        """Central sender for admin-authorized public player lookup reports."""
+        try:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel is None:
+                channel = await self.bot.fetch_channel(int(channel_id))
+            await channel.send(embed=embed, view=view)
+        except Exception as exc:
+            logging.error("Konnte öffentlichen Spieler-Lookup nicht senden: %s", type(exc).__name__)
+
 
 async def setup(bot):
     await bot.add_cog(DiscordLogger(bot))
