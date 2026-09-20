@@ -146,10 +146,12 @@ class ServerRecapCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.sample_players.start()
+        self.initial_recap.start()
         self.daily_recap.start()
 
     def cog_unload(self):
         self.sample_players.cancel()
+        self.initial_recap.cancel()
         self.daily_recap.cancel()
 
     @tasks.loop(minutes=1)
@@ -237,25 +239,37 @@ class ServerRecapCog(commands.Cog):
         embed.timestamp = discord.utils.utcnow()
         return embed, filename
 
+    async def publish_recap(self, log_title):
+        start_local, end_local = previous_day_window(datetime.now(BERLIN))
+        start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+        end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+        for srv in config.servers():
+            data = await self.recap_data(srv, start, end)
+            embed, filename = self.embed(srv, data, start_local, end_local)
+            self.bot.dispatch('server_recap', srv.id, embed, player_graph(data['samples'], start, end), filename)
+        self.bot.dispatch('bot_log', log_title,
+                          f'Tagesrückblick für {start_local:%d.%m.%Y} aktualisiert.', discord.Color.blue())
+        self.bot.health.ok('Server-Rückblick')
+
+    @tasks.loop(count=1)
+    async def initial_recap(self):
+        if config.SERVER_RECAP_CHANNEL_ID:
+            try:
+                await self.publish_recap('📈 Server-Rückblick initialisiert')
+            except Exception as exc:
+                self.bot.health.error('Server-Rückblick', exc)
+
+    @initial_recap.before_loop
+    async def before_initial_recap(self):
+        await self.bot.wait_until_ready()
+
     @tasks.loop(time=clock_time(hour=0, minute=0, tzinfo=BERLIN))
     async def daily_recap(self):
-        if not config.SERVER_RECAP_CHANNEL_ID:
-            return
-        try:
-            start_local, end_local = previous_day_window(datetime.now(BERLIN))
-            start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
-            end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
-            delivered = 0
-            for srv in config.servers():
-                data = await self.recap_data(srv, start, end)
-                embed, filename = self.embed(srv, data, start_local, end_local)
-                self.bot.dispatch('server_recap', embed, player_graph(data['samples'], start, end), filename)
-                delivered += 1
-            self.bot.dispatch('bot_log', '📈 Server-Rückblick erstellt',
-                              f'{delivered} Tagesrückblick(e) für {start_local:%d.%m.%Y} erstellt.', discord.Color.blue())
-            self.bot.health.ok('Server-Rückblick')
-        except Exception as exc:
-            self.bot.health.error('Server-Rückblick', exc)
+        if config.SERVER_RECAP_CHANNEL_ID:
+            try:
+                await self.publish_recap('📈 Server-Rückblick aktualisiert')
+            except Exception as exc:
+                self.bot.health.error('Server-Rückblick', exc)
 
     @daily_recap.before_loop
     async def before_recap(self):
