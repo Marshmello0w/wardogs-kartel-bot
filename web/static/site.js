@@ -1,26 +1,28 @@
 /* Relative times are text-only; data remains server-rendered and escaped. */
-const relative = new Intl.RelativeTimeFormat('de', {numeric: 'auto'});
+const language = document.body.dataset.language || 'de';
+const copy = language === 'en' ? {updated: 'Updated:', last: 'Last known data', players: 'Players · last known'} : {updated: 'Stand:', last: 'Letzte bekannte Daten', players: 'Spieler · zuletzt'};
+const relative = new Intl.RelativeTimeFormat(language, {numeric: 'auto'});
 function updateTimes() {
   document.querySelectorAll('time[data-relative]').forEach(element => {
     const seconds = Math.min(0, Math.round((Date.parse(element.dateTime) - Date.now()) / 1000));
     if (!Number.isFinite(seconds)) return;
     const unit = Math.abs(seconds) < 60 ? 'second' : Math.abs(seconds) < 3600 ? 'minute' : Math.abs(seconds) < 86400 ? 'hour' : 'day';
     const divisor = {second: 1, minute: 60, hour: 3600, day: 86400}[unit];
-    element.textContent = 'Stand: ' + relative.format(Math.round(seconds / divisor), unit);
-    element.title = new Date(element.dateTime).toLocaleString('de-DE');
+    element.textContent = copy.updated + ' ' + relative.format(Math.round(seconds / divisor), unit);
+    element.title = new Date(element.dateTime).toLocaleString(language === 'en' ? 'en-GB' : 'de-DE');
     const row = element.closest('.server-row');
     if (row && row.dataset.fresh === 'true' && seconds < -30) {
       row.dataset.fresh = 'false';
       row.classList.add('stale');
       row.querySelector('.state').classList.remove('online');
-      row.querySelector('.state').textContent = 'Letzte bekannte Daten';
-      row.querySelector('.server-players .field-label').textContent = 'Spieler · zuletzt';
+      row.querySelector('.state').textContent = copy.last;
+      row.querySelector('.server-players .field-label').textContent = copy.players;
     }
   });
   const rows = [...document.querySelectorAll('.server-row[data-fresh="true"]')];
   const total = document.querySelector('[data-live-total]');
   const count = document.querySelector('[data-live-servers]');
-  if (total) total.textContent = rows.length ? new Intl.NumberFormat('de').format(rows.reduce((sum, row) => sum + Number(row.dataset.players), 0)) : '—';
+  if (total) total.textContent = rows.length ? new Intl.NumberFormat(language).format(rows.reduce((sum, row) => sum + Number(row.dataset.players), 0)) : '—';
   if (count) count.textContent = rows.length;
 }
 updateTimes();

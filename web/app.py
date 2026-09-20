@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
+from jinja2 import pass_context
 from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -20,27 +21,45 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .repository import DataUnavailable, ReadDatabase, Repository, parse_time, server_status
 from .settings import ROOT, SERVERS, Settings
 from .steam import LoginError, SteamLogin
+from .i18n import LANGUAGES, translate
 
 logger = logging.getLogger('kartell.web')
-PERIODS = {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'}
+PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
+           'en': {'7d': '7 days', '30d': '30 days', 'all': 'All time'}}
 
 
-def number(value, digits=0):
+@pass_context
+def number(context, value, digits=0):
     if value is None:
         return '—'
-    return f'{float(value):,.{digits}f}'.replace(',', '\u00a0').replace('.', ',')
+    rendered = f'{float(value):,.{digits}f}'
+    return rendered if context.get('language') == 'en' else rendered.replace(',', '\u00a0').replace('.', ',')
 
 
-def duration(value):
+@pass_context
+def duration(context, value):
     if value is None:
         return '—'
     hours, remaining = divmod(int(value), 3600)
-    return f'{number(hours)} Std. {remaining // 60:02d} Min.'
+    if context.get('language') == 'en':
+        return f'{number(context, hours)} hr {remaining // 60:02d} min'
+    return f'{number(context, hours)} Std. {remaining // 60:02d} Min.'
 
 
-def when(value):
+@pass_context
+def when(context, value):
     stamp = parse_time(value)
-    return stamp.astimezone(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y · %H:%M') if stamp else '—'
+    if not stamp:
+        return '—'
+    local = stamp.astimezone(ZoneInfo('Europe/Berlin'))
+    return local.strftime('%b %d, %Y · %H:%M') if context.get('language') == 'en' else local.strftime('%d.%m.%Y · %H:%M')
+
+
+@pass_context
+def date(context, value):
+    if not value:
+        return '—'
+    return value.strftime('%b %d, %Y') if context.get('language') == 'en' else value.strftime('%d.%m.%Y')
 
 
 def iso(value):
@@ -73,7 +92,7 @@ def create_app(settings=None, repository=None, steam_client=None):
                                                            'localhost', '127.0.0.1'])
     app.mount('/static', StaticFiles(directory=ROOT / 'static'), name='static')
     templates = Jinja2Templates(directory=ROOT / 'templates')
-    templates.env.filters.update(number=number, duration=duration, when=when, iso=iso)
+    templates.env.filters.update(number=number, duration=duration, when=when, date=date, iso=iso)
 
     @app.get('/tokens.css', include_in_schema=False)
     async def tokens():
@@ -100,11 +119,41 @@ def create_app(settings=None, repository=None, steam_client=None):
 
     def render(request, template, status=200, **context):
         user = request.session.get('user')
-        if user and not request.session.get('csrf'):
+        language = request.session.get('language', 'de')
+        if language not in LANGUAGES:
+            language = 'de'
+        if not request.session.get('csrf'):
             request.session['csrf'] = secrets.token_urlsafe(32)
+        next_path = request.url.path
         return templates.TemplateResponse(request=request, name=template, status_code=status,
             context={'user': user, 'csrf': request.session.get('csrf', ''), 'servers': SERVERS,
-                     'periods': PERIODS, 'path': request.url.path, **context})
+                     'periods': PERIODS[language], 'path': request.url.path, 'language': language,
+                     'languages': LANGUAGES, 'next_path': next_path,
+                     't': lambda key, **values: translate(language, key, **values), **context})
+
+    @app.post('/language')
+    async def language(request: Request):
+        if request.headers.get('origin') not in (None, settings.base_url):
+            raise HTTPException(403)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 4096:
+                raise HTTPException(400)
+        form = parse_qs(body.decode('utf-8', errors='replace'))
+        supplied = form.get('csrf', [''])[0]
+        expected = request.session.get('csrf', '')
+        if not expected or not secrets.compare_digest(supplied, expected):
+            raise HTTPException(403)
+        selected = form.get('language', ['de'])[0]
+        if selected not in LANGUAGES:
+            raise HTTPException(400)
+        request.session['language'] = selected
+        target = form.get('next', ['/'])[0]
+        parsed = urlsplit(target)
+        if parsed.scheme or parsed.netloc or not parsed.path.startswith('/'):
+            target = '/'
+        return RedirectResponse(target, status_code=303)
 
     @app.get('/')
     async def home(request: Request):
@@ -114,7 +163,7 @@ def create_app(settings=None, repository=None, steam_client=None):
         except DataUnavailable:
             logger.warning('Server dashboard database unavailable')
             statuses = [server_status(key, None) for key in SERVERS]
-            error = 'Die Serverdaten sind gerade nicht erreichbar. Bitte versuche es in Kürze erneut.'
+            error = translate(request.session.get('language', 'de'), 'error_db')
         live = [s for s in statuses if s['fresh']]
         return render(request, 'home.html', statuses=statuses, error=error,
                       online_players=sum(s['players'] for s in live) if live else None,
@@ -135,8 +184,7 @@ def create_app(settings=None, repository=None, steam_client=None):
         try:
             state, url = await steam.begin()
         except LoginError:
-            return render(request, 'error.html', status=429, title='Anmeldung ausgelastet',
-                          message='Bitte warte einen Moment und starte die Anmeldung erneut.')
+            return render(request, 'error.html', status=429, title_key='error_busy_title', message_key='error_busy')
         request.session['login_state'] = state
         return RedirectResponse(url, status_code=303)
 
@@ -147,8 +195,7 @@ def create_app(settings=None, repository=None, steam_client=None):
             steam_id = await steam.verify(request.query_params.multi_items(), state)
         except (LoginError, httpx.HTTPError):
             logger.info('Steam login rejected or provider unavailable')
-            return render(request, 'error.html', status=400, title='Anmeldung nicht abgeschlossen',
-                          message='Die Steam-Anmeldung wurde abgebrochen, ist abgelaufen oder konnte nicht bestätigt werden. Bitte melde dich erneut an.')
+            return render(request, 'error.html', status=400, title_key='error_login_title', message_key='error_login')
         try:
             summary = await steam.summary(steam_id)
         except (httpx.HTTPError, ValueError, TypeError, AttributeError):
@@ -204,17 +251,14 @@ def create_app(settings=None, repository=None, steam_client=None):
     @app.exception_handler(DataUnavailable)
     async def database_error(request, exc):
         logger.warning('Portal database unavailable')
-        return render(request, 'error.html', status=503, title='Daten kurzzeitig nicht verfügbar',
-                      message='Deine Daten konnten gerade nicht geladen werden. Bitte versuche es in Kürze erneut.')
+        return render(request, 'error.html', status=503, title_key='error_db_title', message_key='error_db')
 
     @app.exception_handler(RequestValidationError)
     async def invalid_filter(request, exc):
-        return render(request, 'error.html', status=400, title='Ungültige Auswahl',
-                      message='Bitte wähle Server, Zeitraum und Sortierung über die Filter im Leaderboard.')
+        return render(request, 'error.html', status=400, title_key='error_filter_title', message_key='error_filter')
 
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
-        return render(request, 'error.html', status=exc.status_code, title='Seite nicht verfügbar',
-                      message='Diese Seite wurde nicht gefunden oder der Zugriff ist nicht erlaubt.')
+        return render(request, 'error.html', status=exc.status_code, title_key='error_page_title', message_key='error_page')
 
     return app

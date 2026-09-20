@@ -1,3 +1,3 @@
 {% extends 'base.html' %}
-{% block title %}{{ title }} · Das Kartell{% endblock %}
-{% block content %}<section class="page-heading error-page" role="alert"><h1>{{ title }}</h1><p>{{ message }}</p><div class="actions"><a class="button" href="/">Zur Startseite ↗</a><a class="text-link" href="/auth/steam">Mit Steam anmelden ↗</a></div></section>{% endblock %}
+{% block title %}{{ t(title_key) }} · Das Kartell{% endblock %}
+{% block content %}<section class="page-heading error-page" role="alert"><h1>{{ t(title_key) }}</h1><p>{{ t(message_key) }}</p><div class="actions"><a class="button" href="/">{{ t('home') }} ↗</a><a class="text-link" href="/auth/steam">{{ t('login') }} ↗</a></div></section>{% endblock %}
