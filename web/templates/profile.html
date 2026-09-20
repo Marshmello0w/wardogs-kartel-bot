@@ -7,7 +7,7 @@
 </section>
 {% if not profile.has_data %}<div class="empty"><h2>Dein erstes Match fehlt noch.</h2><p>Für deine Steam-ID sind noch keine Spielerdaten gespeichert. Nach deinem nächsten Besuch auf unseren Servern erscheinen sie hier.</p><a class="text-link" href="/">Server ansehen ↗</a></div>{% endif %}
 <dl class="totals"><div><dt>Spielzeit gesamt</dt><dd>{{ profile.totals.playtime_seconds | duration }}</dd></div><div><dt>Kills</dt><dd>{{ profile.totals.lifetime_kills | number }}</dd></div><div><dt>K/D</dt><dd>{{ profile.totals.kd | number(2) }}</dd></div><div><dt>Cash · USD</dt><dd>{{ profile.totals.lifetime_cash | number }}</dd></div></dl>
-<section class="quest-summary" aria-labelledby="quest-summary-title"><div><span class="privacy-note">Dein Fortschritt</span><h2 id="quest-summary-title">{{ profile.quest_points | number }} Quest-Punkte</h2><p>Quest-Zeit zählt nur in einer laufenden Runde und nie in Team <strong>White</strong>.</p></div><a class="button" href="/quests">Quests ansehen <span aria-hidden="true">↗</span></a></section>
+<section class="quest-summary" aria-labelledby="quest-summary-title"><div><span class="privacy-note">Dein Fortschritt</span><h2 id="quest-summary-title">{{ profile.quest_points | number }} Quest-Punkte</h2></div><a class="button" href="/quests">Quests ansehen <span aria-hidden="true">↗</span></a></section>
 {% if profile.names %}<section class="known-names"><h2>Bekannte Namen</h2><p>{{ profile.names | join(' · ') }}</p></section>{% endif %}
 <section aria-labelledby="stats-title"><div class="section-heading"><h2 id="stats-title">Deine Server-Bilanz</h2><span>Zeiten in Europe/Berlin</span></div>
 {% for server in profile.servers %}
@@ -21,7 +21,7 @@
   <h4>Fraktionsbeitritte</h4><dl class="factions">{% for faction in server.factions %}<div><dt>{{ faction.faction }}</dt><dd>{{ faction.times_seen | number }} erkannte Beitritte</dd></div>{% else %}<div><dt>Noch keine Fraktionsbeitritte erfasst.</dt></div>{% endfor %}</dl>
 {% else %}<p class="muted">Auf diesem Server sind noch keine Stats für dich gespeichert.</p>{% endif %}
 </article>{% endfor %}
-<p class="footnote">Fraktionsbeitritte werden beim Serverbeitritt oder Fraktionswechsel erkannt, nicht bei jeder Minuten-Abfrage. Wechsel zwischen zwei Abfragen können technisch nicht erkannt werden. Die zuletzt erfasste Runde kann bereits beendet sein. 7-/30-Tage-Werte beziehen sich auf UTC-Kalendertage.</p></section>
+</section>
 <section aria-labelledby="bans-title" class="ban-section"><div class="section-heading"><h2 id="bans-title">Deine Ban-Historie</h2><span>{{ profile.bans | length }} Einträge · privat</span></div>
 {% for ban in profile.bans %}<article class="ban-entry"><div class="section-heading"><h3>{{ {'active': 'Aktiv', 'expired': 'Abgelaufen', 'revoked': 'Aufgehoben'}.get(ban.status, ban.status) }}</h3><span>{{ ban.issued_at | when }}</span></div><p class="ban-reason">{{ ban.reason }}</p><dl class="inline-stats"><div><dt>Dauer</dt><dd>{{ ban.duration_str }}</dd></div><div><dt>Ablaufdatum</dt><dd>{{ ban.expires_at | when if ban.expires_at else 'Unbefristet' }}</dd></div></dl></article>{% else %}<div class="empty compact"><h3>Keine Bans gespeichert</h3><p>Für deine Steam-ID gibt es keine Einträge in der Ban-Historie.</p></div>{% endfor %}</section>
 {% endblock %}

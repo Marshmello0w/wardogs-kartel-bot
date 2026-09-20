@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="overview">
-  <div><h1>Das nächste Match<br>wartet auf dich.</h1><p>Finde deinen Server. Verfolge die Runde.<br>Deine Stats bleiben bei dir.</p><a class="text-link" href="/leaderboard">Zum Leaderboard <span aria-hidden="true">↗</span></a></div>
+  <div><h1>Das nächste Match<br>wartet auf dich.</h1><a class="text-link" href="/leaderboard">Zum Leaderboard <span aria-hidden="true">↗</span></a></div>
   <div class="live-total"><span class="large-number" data-live-total>{{ online_players | number }}</span><h2>Spieler gerade online</h2><p><span class="signal" aria-hidden="true"></span> <span data-live-servers>{{ live_servers }}</span> von 3 Servern mit aktuellen Daten</p></div>
 </section>
 {% if error %}<div class="notice" role="status">{{ error }} <a href="/">Erneut laden</a></div>{% endif %}
@@ -18,5 +18,4 @@
   {% endfor %}
   </div>
 </section>
-<section class="profile-callout"><div><h2>Deine Runden. Deine Bilanz.</h2><p>Spielzeit, Kills, Fraktionen und deine Historie – über alle drei Server.</p></div><a class="button" href="/me">{{ 'Profil öffnen' if user else 'Meine Stats ansehen' }} <span aria-hidden="true">↗</span></a></section>
 {% endblock %}

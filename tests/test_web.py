@@ -263,7 +263,7 @@ class RouteTests(unittest.TestCase):
         quests = self.client.get('/quests')
         self.assertEqual(quests.status_code, 200)
         self.assertIn('17', quests.text)
-        self.assertIn('White', quests.text)
+        self.assertNotIn('White', quests.text)
         self.assertIn('no-store', result.headers['cache-control'])
         csrf = re.search(r'name="csrf" value="([^"]+)"', result.text).group(1)
         self.assertEqual(result.headers['referrer-policy'], 'strict-origin')
