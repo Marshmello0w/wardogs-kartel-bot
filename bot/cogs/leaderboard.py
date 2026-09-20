@@ -133,10 +133,12 @@ class Leaderboard(commands.Cog):
         if not rows:
             embed.description = 'Noch keine gewerteten Spielerdaten vorhanden.'
         tracker = self.bot.get_cog('RoundTracker')
+        updated_at = discord.utils.utcnow()
         if not tracker or not tracker.current(server_id):
-            embed.set_footer(text='Erfassung momentan unterbrochen – gespeicherte Werte')
+            embed.set_footer(text=f'Erfassung unterbrochen · <t:{int(updated_at.timestamp())}:R>')
         else:
-            embed.set_footer(text='Kalendertage in UTC · Erfassung durch Polling')
+            embed.set_footer(text=f'Letzte Aktualisierung: <t:{int(updated_at.timestamp())}:R>')
+        embed.timestamp = updated_at
         return embed
 
     async def sample(self, srv):

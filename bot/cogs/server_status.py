@@ -78,8 +78,9 @@ class ServerStatus(commands.Cog):
                 region = await self.region(srv)
                 text += f"\n**Region:** {region}\n**Server-Verfügbarkeit:** {uptime}"
                 embed.add_field(name=str((data or {}).get('serverName', srv.title))[:256], value=text[:1024], inline=False)
-            embed.set_footer(text='Server-Verfügbarkeit wird über die RCON-Erreichbarkeit gemessen.')
-            embed.timestamp = discord.utils.utcnow()
+            updated_at = discord.utils.utcnow()
+            embed.set_footer(text=f'Letzte Aktualisierung: <t:{int(updated_at.timestamp())}:R>')
+            embed.timestamp = updated_at
             channel = self.bot.get_channel(int(config.SERVER_STATUS_CHANNEL_ID)) or await self.bot.fetch_channel(int(config.SERVER_STATUS_CHANNEL_ID))
             saved = read_state(config.MESSAGE_ID_FILE, {})
             message = None
