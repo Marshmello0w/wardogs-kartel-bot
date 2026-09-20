@@ -54,4 +54,9 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # AMP stops the process with SIGINT. asyncio turns that into a cancelled
+        # WebSocket receive followed by KeyboardInterrupt; neither is a bot error.
+        logging.info('Bot wurde beendet.')
