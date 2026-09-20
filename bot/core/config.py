@@ -74,6 +74,22 @@ ENGLISH_BROADCAST_MESSAGES = [
     "Enjoying the server? Leave us some feedback on our Discord: https://discord.gg/bakuranikartell"
 ]
 
+# Automatisches Rundenende bei dauerhaft zu geringer Spielerzahl.
+LOW_POPULATION_THRESHOLD = 20
+LOW_POPULATION_GRACE_SECONDS = 5 * 60
+LOW_POPULATION_COUNTDOWN_SECONDS = 2 * 60
+LOW_POPULATION_ENGLISH_DELAY_SECONDS = 10
+LOW_POPULATION_WARNING_DE = (
+    "⚠️ Aufgrund der geringen Spielerzahl wird die Runde in 2 Minuten beendet, "
+    "um unfaire Vorteile zu vermeiden."
+)
+LOW_POPULATION_WARNING_EN = (
+    "⚠️ Due to the low player count, this round will end in 2 minutes "
+    "to prevent unfair advantages."
+)
+LOW_POPULATION_RECOVERED_DE = "✅ Die Spielerzahl ist wieder ausreichend. Die Runde wird fortgesetzt."
+LOW_POPULATION_ENDING_DE = "⏱️ Die Runde wird jetzt aufgrund der geringen Spielerzahl beendet."
+
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
