@@ -115,9 +115,10 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
                        jobs=[dict(server_id='server1', action='ban', status='pending', attempts=2,
                                   next_attempt=datetime(2026, 1, 2), last_error='HTTP 503')])
         pages = PlayerLookupCog.pages(cog, profile)
-        self.assertEqual(len(pages), 4)
-        self.assertIn('Ban-Historie', pages[2].title)
-        self.assertIn('Admin-Aufträge', pages[3].title)
+        self.assertEqual(len(pages), 1)
+        field_names = [field.name for field in pages[0].fields]
+        self.assertIn('🛡️ Ban-Historie', field_names)
+        self.assertIn('⚙️ Admin-Aufträge', field_names)
 
     def test_live_status_formats_team_scores(self):
         self.assertEqual(format_scores({'factionScores': [

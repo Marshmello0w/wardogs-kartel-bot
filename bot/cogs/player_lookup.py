@@ -47,6 +47,28 @@ def chunks(values, size):
         yield values[offset:offset + size]
 
 
+def text_fields(title, entries):
+    """Combine list entries into as few Discord fields as their limits permit."""
+    fields, current = [], []
+    current_length = 0
+    for entry in entries:
+        entry = entry[:1000]
+        extra = len(entry) + (2 if current else 0)
+        if current and current_length + extra > 1024:
+            fields.append((title if not fields else f'{title} (Fortsetzung)', '\n\n'.join(current)))
+            current, current_length = [], 0
+        current.append(entry)
+        current_length += len(entry) + (2 if len(current) > 1 else 0)
+    if current:
+        fields.append((title if not fields else f'{title} (Fortsetzung)', '\n\n'.join(current)))
+    return fields
+
+
+def embed_size(embed):
+    return len(embed.title or '') + len(embed.description or '') + sum(
+        len(field.name) + len(field.value) for field in embed.fields)
+
+
 class PlayerLookupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -118,9 +140,10 @@ class PlayerLookupCog(commands.Cog):
     def pages(self, profile):
         steam_id, servers = profile['steam_id'], profile['servers']
         name = profile['names'][0] if profile['names'] else 'Unbekannter Spieler'
-        pages = []
         overview = discord.Embed(title=f'🔍 Spielerprofil: {name}', color=discord.Color.blue())
-        overview.description = f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {len(profile["names"])}'
+        all_names = ' · '.join(profile['names']) or '—'
+        shown_names = all_names if len(all_names) <= 1000 else all_names[:990] + ' …'
+        overview.description = f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {shown_names}'
         if profile['target']:
             target = profile['target']
             overview.add_field(name='Aktuelles Admin-Ziel', value=(
@@ -132,63 +155,54 @@ class PlayerLookupCog(commands.Cog):
         overview.add_field(name='Gespeicherte Einträge', value=(
             f"Server: {len(servers)} · Ban-Historie: {len(profile['bans'])} · "
             f"Admin-Aufträge: {len(profile['jobs'])}"), inline=False)
-        pages.append(overview)
 
-        for name_group in chunks(profile['names'], 20):
-            embed = discord.Embed(title=f'🪪 Bekannte Namen: {name}', color=discord.Color.blue())
-            embed.description = '\n'.join(name_group) or '—'
-            pages.append(embed)
+        detail_fields = []
+        if len(all_names) > 1000:
+            detail_fields.extend(text_fields('🪪 Bekannte Namen', profile['names']))
 
-        for server_id, values in servers.items():
+        for server_id, values in sorted(servers.items()):
             board, play, daily = values.get('leaderboard', {}), values.get('playtime', {}), values.get('daily', {})
             current, ping = values.get('counter', {}), values.get('ping', {})
-            stats = discord.Embed(title=f'📊 {name} – {title_for(server_id)}', color=discord.Color.blue())
-            stats.add_field(name='Spielzeit / letzter Kontakt', value=(
-                f"{duration(play.get('playtime_seconds'))}\n{when(play.get('last_seen') or board.get('last_seen'))}"), inline=True)
             kills, deaths, cash = board.get('lifetime_kills', 0), board.get('lifetime_deaths', 0), board.get('lifetime_cash', 0)
-            stats.add_field(name='All-Time', value=f'K: {kills} · T: {deaths}\nK/D: {kills / max(1, deaths):.2f}\nCash: {cash}', inline=True)
-            stats.add_field(name='Aktuelle Runde', value=(
-                f"K: {current.get('kills', board.get('current_match_kills', 0))} · "
-                f"T: {current.get('deaths', board.get('current_match_deaths', 0))}\n"
-                f"Cash: {current.get('cash', board.get('current_match_cash', 0))}\n"
-                f"Qualität: {current.get('quality', '—')}"), inline=True)
-            stats.add_field(name='Letzte 7 Tage', value=(
-                f"K: {daily.get('kills_7d', 0)} · T: {daily.get('deaths_7d', 0)}\nCash: {daily.get('cash_7d', 0)}"), inline=True)
-            stats.add_field(name='Letzte 30 Tage', value=(
-                f"K: {daily.get('kills_30d', 0)} · T: {daily.get('deaths_30d', 0)}\nCash: {daily.get('cash_30d', 0)}"), inline=True)
             average_ping = (int(ping['total_ping']) / int(ping['ping_samples'])) if ping.get('ping_samples') else None
-            stats.add_field(name='Ping / Server-Ban', value=(
-                f"Ø Ping: {average_ping:.0f} ms" if average_ping is not None else 'Ø Ping: —') +
-                ('\nServer-Ban beobachtet' if values.get('observed_ban') else '\nKein Server-Ban beobachtet'), inline=True)
             factions = values.get('factions', [])
-            stats.add_field(name='Fraktionen', value=(
-                '\n'.join(f"{item['faction']}: {item['times_seen']}×" for item in factions[:20]) if factions else 'Keine Daten'), inline=False)
-            pages.append(stats)
-            for faction_group in list(chunks(factions, 20))[1:]:
-                embed = discord.Embed(title=f'🏴 Fraktionen: {name} – {title_for(server_id)}', color=discord.Color.blue())
-                embed.description = '\n'.join(f"{item['faction']}: {item['times_seen']}×" for item in faction_group)
-                pages.append(embed)
+            faction_text = ' · '.join(f"{item['faction']}: {item['times_seen']}×" for item in factions) or 'Keine Daten'
+            faction_summary = faction_text if len(faction_text) <= 280 else faction_text[:270] + ' … (vollständig auf Folgeseite)'
+            ping_text = f'{average_ping:.0f} ms' if average_ping is not None else '—'
+            server_text = (
+                f"**Spielzeit:** {duration(play.get('playtime_seconds'))} · **Zuletzt:** {when(play.get('last_seen') or board.get('last_seen'))}\n"
+                f"**All-Time:** K {kills} · T {deaths} · K/D {kills / max(1, deaths):.2f} · Cash {cash}\n"
+                f"**Runde:** K {current.get('kills', board.get('current_match_kills', 0))} · "
+                f"T {current.get('deaths', board.get('current_match_deaths', 0))} · Cash {current.get('cash', board.get('current_match_cash', 0))} · "
+                f"Qualität {current.get('quality', '—')}\n"
+                f"**7/30 Tage:** K {daily.get('kills_7d', 0)}/{daily.get('kills_30d', 0)} · "
+                f"T {daily.get('deaths_7d', 0)}/{daily.get('deaths_30d', 0)} · Cash {daily.get('cash_7d', 0)}/{daily.get('cash_30d', 0)}\n"
+                f"**Ping:** {ping_text} · **Server-Ban:** {'ja' if values.get('observed_ban') else 'nein'}\n"
+                f"**Fraktionen:** {faction_summary}")
+            overview.add_field(name=f'📊 {title_for(server_id)}', value=server_text, inline=False)
+            if len(faction_text) > 280:
+                detail_fields.extend(text_fields(f'🏴 Fraktionen – {title_for(server_id)}',
+                                                 [f"{item['faction']}: {item['times_seen']}×" for item in factions]))
 
-        for offset in range(0, len(profile['bans']), 4):
-            embed = discord.Embed(title=f'🛡️ Ban-Historie: {name}', color=discord.Color.orange())
-            for ban in profile['bans'][offset:offset + 4]:
-                embed.add_field(name=f"{when(ban['issued_at'])} · {ban['status']}", value=(
-                    f"**Admin:** {ban['admin_mention']}\n**Dauer:** {ban['duration_str']}\n"
-                    f"**Bis:** {when(ban['expires_at'])}\n**Grund:** {ban['reason'][:650]}"), inline=False)
-            pages.append(embed)
+        ban_entries = [
+            f"**{when(ban['issued_at'])} · {ban['status']}**\nAdmin: {ban['admin_mention']} · Dauer: {ban['duration_str']} · Bis: {when(ban['expires_at'])}\nGrund: {ban['reason'][:650]}"
+            for ban in profile['bans']]
+        job_entries = [
+            f"**{title_for(job['server_id'])} · {job['action']} · {job['status']}**\n"
+            f"Versuche: {job['attempts']} · Nächster Versuch: {when(job['next_attempt'])}\n"
+            f"Letzter Fehler: {job['last_error'] or '—'}"
+            for job in profile['jobs']]
+        detail_fields.extend(text_fields('🛡️ Ban-Historie', ban_entries or ['Keine Einträge.']))
+        detail_fields.extend(text_fields('⚙️ Admin-Aufträge', job_entries or ['Keine Einträge.']))
 
-        for offset in range(0, len(profile['jobs']), 5):
-            embed = discord.Embed(title=f'⚙️ Admin-Aufträge: {name}', color=discord.Color.dark_teal())
-            for job in profile['jobs'][offset:offset + 5]:
-                embed.add_field(name=f"{title_for(job['server_id'])} · {job['action']} · {job['status']}", value=(
-                    f"Versuche: {job['attempts']}\nNächster Versuch: {when(job['next_attempt'])}\n"
-                    f"Letzter Fehler: {job['last_error'] or '—'}"), inline=False)
-            pages.append(embed)
-
-        if not profile['bans']:
-            pages[0].add_field(name='Ban-Historie', value='Keine Einträge.', inline=False)
-        if not profile['jobs']:
-            pages[0].add_field(name='Admin-Aufträge', value='Keine Einträge.', inline=False)
+        # Start with the overview and only create another page once Discord's field or
+        # 6,000-character embed limits are reached.
+        pages, current = [overview], overview
+        for field_name, field_value in detail_fields:
+            if len(current.fields) >= 25 or embed_size(current) + len(field_name) + len(field_value) > 5700:
+                current = discord.Embed(title=f'📚 Weitere Profildaten: {name}', color=discord.Color.blue())
+                pages.append(current)
+            current.add_field(name=field_name, value=field_value, inline=False)
         for index, embed in enumerate(pages, start=1):
             embed.set_footer(text=f'Steam64: {steam_id} · Seite {index}/{len(pages)}')
             embed.timestamp = discord.utils.utcnow()
