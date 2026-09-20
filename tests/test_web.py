@@ -169,9 +169,10 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         result = await Repository(FixtureDatabase()).quests(STEAM_ID)
         self.assertEqual(result['points'], 17)
         self.assertEqual(result['cash_remaining'], 50_000)
-        self.assertEqual(result['teams'][0]['team'], 'Valkyra')
-        self.assertTrue(result['teams'][0]['two_hours_done'])
-        self.assertFalse(result['teams'][0]['four_hours_done'])
+        self.assertEqual([team['team'] for team in result['teams']], ['Lonestar', 'Valkyra', 'Manticore'])
+        self.assertEqual(result['teams'][0]['seconds'], 0)
+        self.assertTrue(result['teams'][1]['two_hours_done'])
+        self.assertFalse(result['teams'][1]['four_hours_done'])
         self.assertEqual(result['history'][0]['kind'], 'weekly_team')
 
     async def test_unknown_user_empty(self):

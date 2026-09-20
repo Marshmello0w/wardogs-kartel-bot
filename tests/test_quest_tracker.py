@@ -7,7 +7,7 @@ import unittest
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 
-from cogs.quest_tracker import berlin_week_start, split_week_seconds, valid_team
+from cogs.quest_tracker import berlin_week_start, round_is_active_for_quests, split_week_seconds, valid_team
 
 
 class QuestTimeTests(unittest.TestCase):
@@ -26,6 +26,16 @@ class QuestTimeTests(unittest.TestCase):
         end = datetime(2026, 9, 20, 22, 0, 30, tzinfo=timezone.utc)     # 00:00:30 CEST
         parts = list(split_week_seconds(start, end))
         self.assertEqual(parts, [(berlin_week_start(start), 30), (berlin_week_start(end), 30)])
+
+    def test_quest_time_requires_an_active_round(self):
+        def state(score, players, ended=False):
+            return {'ended': ended, 'snapshot': {'highest': score, 'players': {'current': players}}}
+
+        self.assertTrue(round_is_active_for_quests(state(1, 1)))
+        self.assertTrue(round_is_active_for_quests(state(0, 21)))
+        self.assertFalse(round_is_active_for_quests(state(0, 20)))
+        self.assertFalse(round_is_active_for_quests(state(0, 19)))
+        self.assertFalse(round_is_active_for_quests(state(10, 100, ended=True)))
 
 
 if __name__ == '__main__':

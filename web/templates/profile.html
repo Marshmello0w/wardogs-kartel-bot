@@ -7,7 +7,7 @@
 </section>
 {% if not profile.has_data %}<div class="empty"><h2>Dein erstes Match fehlt noch.</h2><p>Für deine Steam-ID sind noch keine Spielerdaten gespeichert. Nach deinem nächsten Besuch auf unseren Servern erscheinen sie hier.</p><a class="text-link" href="/">Server ansehen ↗</a></div>{% endif %}
 <dl class="totals"><div><dt>Spielzeit gesamt</dt><dd>{{ profile.totals.playtime_seconds | duration }}</dd></div><div><dt>Kills</dt><dd>{{ profile.totals.lifetime_kills | number }}</dd></div><div><dt>K/D</dt><dd>{{ profile.totals.kd | number(2) }}</dd></div><div><dt>Cash · USD</dt><dd>{{ profile.totals.lifetime_cash | number }}</dd></div></dl>
-<section class="quest-summary" aria-labelledby="quest-summary-title"><div><span class="privacy-note">Dein Fortschritt</span><h2 id="quest-summary-title">{{ profile.quest_points | number }} Quest-Punkte</h2><p>Spielzeit im Auswahlmenü oder Team <strong>White</strong> zählt nicht für Quests.</p></div><a class="button" href="/quests">Quests ansehen <span aria-hidden="true">↗</span></a></section>
+<section class="quest-summary" aria-labelledby="quest-summary-title"><div><span class="privacy-note">Dein Fortschritt</span><h2 id="quest-summary-title">{{ profile.quest_points | number }} Quest-Punkte</h2><p>Quest-Zeit zählt nur in einer laufenden Runde und nie in Team <strong>White</strong>.</p></div><a class="button" href="/quests">Quests ansehen <span aria-hidden="true">↗</span></a></section>
 {% if profile.names %}<section class="known-names"><h2>Bekannte Namen</h2><p>{{ profile.names | join(' · ') }}</p></section>{% endif %}
 <section aria-labelledby="stats-title"><div class="section-heading"><h2 id="stats-title">Deine Server-Bilanz</h2><span>Zeiten in Europe/Berlin</span></div>
 {% for server in profile.servers %}

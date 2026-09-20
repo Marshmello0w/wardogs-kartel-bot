@@ -95,6 +95,9 @@ LOW_POPULATION_ENDING_DE = "Die Runde wird jetzt aufgrund der geringen Spielerza
 QUEST_PLAYTIME_SECONDS_PER_POINT = 60 * 60
 QUEST_CASH_PER_POINT = 100_000
 QUEST_TEAM_MILESTONES = ((2 * 60 * 60, 5), (4 * 60 * 60, 5))
+# Diese drei Fraktionen stehen in WarDogs zur Auswahl. White ist bewusst nicht
+# enthalten: Dort befindet sich ein Spieler noch im Auswahlmenü.
+QUEST_TEAMS = ('Lonestar', 'Valkyra', 'Manticore')
 QUEST_SAMPLE_DELAY_SECONDS = 15
 QUEST_MAX_OBSERVATION_GAP_SECONDS = 90
 QUEST_PERMANENT_SYNC_SECONDS = 5 * 60

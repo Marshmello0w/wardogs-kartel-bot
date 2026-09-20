@@ -30,6 +30,26 @@ def valid_team(value):
     return team if team and team.casefold() not in NON_TEAM_FACTIONS else None
 
 
+def round_is_active_for_quests(state):
+    """Return whether a fresh round snapshot represents actual match play.
+
+    A faction point is the definitive signal.  A populated server can also be
+    considered active before the first point arrives, but exactly 20 players is
+    deliberately not enough: the configured rule says *more than* 20.
+    """
+    if not isinstance(state, dict) or state.get('ended'):
+        return False
+    snapshot = state.get('snapshot')
+    if not isinstance(snapshot, dict):
+        return False
+    highest = snapshot.get('highest')
+    players = snapshot.get('players')
+    count = players.get('current') if isinstance(players, dict) else None
+    has_score = (not isinstance(highest, bool) and isinstance(highest, (int, float)) and highest >= 1)
+    has_population = (not isinstance(count, bool) and isinstance(count, int) and count > 20)
+    return has_score or has_population
+
+
 def berlin_week_start(value=None):
     stamp = as_utc(value) if value else datetime.now(UTC)
     local = stamp.astimezone(BERLIN)
@@ -74,9 +94,10 @@ class QuestTracker(commands.Cog):
         """Append one idempotent ledger entry and atomically update the balance."""
         if not amount:
             return False
-        await cur.execute("""INSERT IGNORE INTO quest_point_ledger
+        await cur.execute("""INSERT INTO quest_point_ledger
             (steam_id,amount,kind,reference_key,reason,admin_user_id,admin_mention)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            ON DUPLICATE KEY UPDATE id=id""",
             (steam_id, amount, kind, reference_key, reason, admin_user_id, admin_mention))
         if not cur.rowcount:
             return False
@@ -107,6 +128,16 @@ class QuestTracker(commands.Cog):
             await cur.execute("""SELECT server_id,steam_id,faction,last_seen FROM player_faction_state
                 WHERE last_seen >= %s""", (cutoff,))
             return await cur.fetchall()
+
+    def active_round_servers(self):
+        """Use RoundTracker's fresh status only; this does not add RCON polls."""
+        tracker = self.bot.get_cog('RoundTracker')
+        if tracker is None:
+            return set()
+        return {
+            srv.id for srv in config.servers() if srv.enabled
+            and round_is_active_for_quests(tracker.current(srv.id))
+        }
 
     async def apply_team_seconds(self, additions):
         """Persist valid team time and weekly tier rewards in one transaction.
@@ -147,11 +178,12 @@ class QuestTracker(commands.Cog):
     async def sample_team_time(self):
         await self._record_week()
         rows = await self._fresh_faction_states()
+        active_servers = self.active_round_servers()
         fresh_keys, additions = set(), defaultdict(int)
         for row in rows:
             server_id, steam_id = str(row['server_id']), str(row['steam_id'])
             observed_at = as_utc(row['last_seen'])
-            if not valid_steam_id(steam_id) or observed_at is None:
+            if server_id not in active_servers or not valid_steam_id(steam_id) or observed_at is None:
                 continue
             key = (server_id, steam_id)
             fresh_keys.add(key)
@@ -164,7 +196,8 @@ class QuestTracker(commands.Cog):
                         additions[(week, steam_id, team)] += seconds
             self.observations[key] = {'team': team, 'observed_at': observed_at}
 
-        # A player absent from fresh tracker state must start a new observed interval.
+        # A player absent from a fresh *active-round* state starts a new interval.
+        # This prevents a later active snapshot from crediting lobby or post-round time.
         self.observations = {key: value for key, value in self.observations.items() if key in fresh_keys}
         await self.apply_team_seconds(additions)
 
@@ -184,7 +217,8 @@ class QuestTracker(commands.Cog):
                 steam_id = str(player['steam_id'])
                 if not valid_steam_id(steam_id):
                     continue
-                await cur.execute("INSERT IGNORE INTO quest_progress(steam_id) VALUES (%s)", (steam_id,))
+                await cur.execute("""INSERT INTO quest_progress(steam_id) VALUES (%s)
+                    ON DUPLICATE KEY UPDATE steam_id=steam_id""", (steam_id,))
                 await cur.execute("SELECT * FROM quest_progress WHERE steam_id=%s FOR UPDATE", (steam_id,))
                 progress = await cur.fetchone()
 
@@ -222,7 +256,8 @@ class QuestTracker(commands.Cog):
             raise ValueError('Bitte einen Grund angeben')
 
         async with database.transaction() as cur:
-            await cur.execute("INSERT IGNORE INTO quest_points(steam_id) VALUES (%s)", (steam_id,))
+            await cur.execute("""INSERT INTO quest_points(steam_id) VALUES (%s)
+                ON DUPLICATE KEY UPDATE steam_id=steam_id""", (steam_id,))
             await cur.execute("SELECT points FROM quest_points WHERE steam_id=%s FOR UPDATE", (steam_id,))
             row = await cur.fetchone()
             previous = int(row['points'])

@@ -17,6 +17,7 @@ BERLIN = ZoneInfo('Europe/Berlin')
 QUEST_PLAYTIME_SECONDS_PER_POINT = 60 * 60
 QUEST_CASH_PER_POINT = 100_000
 QUEST_TEAM_MILESTONES = ((2 * 60 * 60, 5), (4 * 60 * 60, 5))
+QUEST_TEAMS = ('Lonestar', 'Valkyra', 'Manticore')
 
 
 class DataUnavailable(RuntimeError):
@@ -229,11 +230,15 @@ class Repository:
         eligible_seconds = int(progress[0]['eligible_playtime_seconds']) if progress else 0
         lifetime_cash = int(cash[0]['lifetime_cash']) if cash else 0
         cash_remainder = lifetime_cash % QUEST_CASH_PER_POINT
+        team_seconds = {
+            str(row['team']).strip().casefold(): max(0, int(row['playtime_seconds']))
+            for row in teams
+        }
         team_quests = []
-        for row in teams:
-            seconds = max(0, int(row['playtime_seconds']))
+        for team in QUEST_TEAMS:
+            seconds = team_seconds.get(team.casefold(), 0)
             team_quests.append({
-                'team': row['team'], 'seconds': seconds,
+                'team': team, 'seconds': seconds,
                 'percent': min(100, round(seconds / QUEST_TEAM_MILESTONES[-1][0] * 100)),
                 'two_hours_done': seconds >= QUEST_TEAM_MILESTONES[0][0],
                 'four_hours_done': seconds >= QUEST_TEAM_MILESTONES[1][0],
