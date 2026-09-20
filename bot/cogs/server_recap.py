@@ -90,6 +90,13 @@ def previous_day_window(now):
     return end - timedelta(days=1), end
 
 
+def current_day_window(now):
+    """Return today's Berlin day: query only through now, graph over all 24 hours."""
+    local_now = now.astimezone(BERLIN)
+    start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start, local_now, start + timedelta(days=1)
+
+
 def _axis_limit(peak):
     return max(10, int(math.ceil(max(0, peak) / 10.0)) * 10)
 
@@ -147,11 +154,13 @@ class ServerRecapCog(commands.Cog):
         self.bot = bot
         self.sample_players.start()
         self.initial_recap.start()
+        self.refresh_recap.start()
         self.daily_recap.start()
 
     def cog_unload(self):
         self.sample_players.cancel()
         self.initial_recap.cancel()
+        self.refresh_recap.cancel()
         self.daily_recap.cancel()
 
     @tasks.loop(minutes=1)
@@ -209,13 +218,13 @@ class ServerRecapCog(commands.Cog):
         return dict(summary=summary, top_map=top_map, wins=wins, samples=samples,
                     availability=(online / total * 100) if total else None)
 
-    def embed(self, srv, data, start_local, end_local):
+    def embed(self, srv, data, start_local, query_end_local):
         summary, samples = data['summary'], data['samples']
         peak = max((int(row['player_count']) for row in samples), default=0)
         average_players = (sum(int(row['player_count']) for row in samples) / len(samples)) if samples else None
         embed = discord.Embed(
             title=f'📈 {srv.title} – Tagesrückblick',
-            description=(f"{start_local:%d.%m.%Y} · 00:00–00:00 Uhr (Europe/Berlin)\n"
+            description=(f"{start_local:%d.%m.%Y} · 00:00–{query_end_local:%H:%M} Uhr (Europe/Berlin)\n"
                          'Spielerzahl im Tagesverlauf.'),
             color=discord.Color.blue())
         embed.add_field(name='Runden', value=str(int(summary['rounds'] or 0)), inline=True)
@@ -239,16 +248,18 @@ class ServerRecapCog(commands.Cog):
         embed.timestamp = discord.utils.utcnow()
         return embed, filename
 
-    async def publish_recap(self, log_title):
-        start_local, end_local = previous_day_window(datetime.now(BERLIN))
+    async def publish_recap(self, log_title=None):
+        start_local, query_end_local, graph_end_local = current_day_window(datetime.now(BERLIN))
         start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
-        end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+        query_end = query_end_local.astimezone(timezone.utc).replace(tzinfo=None)
+        graph_end = graph_end_local.astimezone(timezone.utc).replace(tzinfo=None)
         for srv in config.servers():
-            data = await self.recap_data(srv, start, end)
-            embed, filename = self.embed(srv, data, start_local, end_local)
-            self.bot.dispatch('server_recap', srv.id, embed, player_graph(data['samples'], start, end), filename)
-        self.bot.dispatch('bot_log', log_title,
-                          f'Tagesrückblick für {start_local:%d.%m.%Y} aktualisiert.', discord.Color.blue())
+            data = await self.recap_data(srv, start, query_end)
+            embed, filename = self.embed(srv, data, start_local, query_end_local)
+            self.bot.dispatch('server_recap', srv.id, embed, player_graph(data['samples'], start, graph_end), filename)
+        if log_title:
+            self.bot.dispatch('bot_log', log_title,
+                              f'Tagesrückblick für {start_local:%d.%m.%Y} aktualisiert.', discord.Color.blue())
         self.bot.health.ok('Server-Rückblick')
 
     @tasks.loop(count=1)
@@ -261,6 +272,20 @@ class ServerRecapCog(commands.Cog):
 
     @initial_recap.before_loop
     async def before_initial_recap(self):
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(minutes=5)
+    async def refresh_recap(self):
+        """Keep the existing daily messages current without producing log spam."""
+        if not config.SERVER_RECAP_CHANNEL_ID:
+            return
+        try:
+            await self.publish_recap()
+        except Exception as exc:
+            self.bot.health.error('Server-Rückblick', exc)
+
+    @refresh_recap.before_loop
+    async def before_refresh_recap(self):
         await self.bot.wait_until_ready()
 
     @tasks.loop(time=clock_time(hour=0, minute=0, tzinfo=BERLIN))

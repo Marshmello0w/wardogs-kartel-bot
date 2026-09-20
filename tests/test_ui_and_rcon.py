@@ -17,7 +17,7 @@ from cogs.leaderboard import PublicLeaderboardDropdown
 from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
 from cogs.player_lookup import PlayerLookupCog, unique_matches
-from cogs.server_recap import player_graph, previous_day_window
+from cogs.server_recap import current_day_window, player_graph, previous_day_window
 from cogs.server_status import format_scores
 from core.runtime import Health
 from services.rcon import RconClient, RconError, Reply
@@ -135,6 +135,13 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
             {'timestamp': start + timedelta(hours=2), 'player_count': 18}], start, end)
         self.assertTrue(image.startswith(b'\x89PNG\r\n\x1a\n'))
         self.assertEqual((start_local.hour, end_local.hour), (0, 0))
+
+    def test_current_day_window_queries_until_now_and_graphs_full_day(self):
+        now = datetime(2026, 9, 20, 14, 30, tzinfo=ZoneInfo('Europe/Berlin'))
+        start, query_end, graph_end = current_day_window(now)
+        self.assertEqual((start.hour, query_end.hour, graph_end.hour), (0, 14, 0))
+        self.assertEqual((query_end - start).total_seconds(), 14.5 * 3600)
+        self.assertEqual((graph_end - start).total_seconds(), 24 * 3600)
 
     async def test_fetched_component_ids_do_not_refresh_unchanged_voting_panel(self):
         embed = discord.Embed(title='Map Voting')
