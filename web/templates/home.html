@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="overview">
+  <div><h1>Das nächste Match<br>wartet auf dich.</h1><p>Finde deinen Server. Verfolge die Runde.<br>Deine Stats bleiben bei dir.</p><a class="text-link" href="/leaderboard">Zum Leaderboard <span aria-hidden="true">↗</span></a></div>
+  <div class="live-total"><span class="large-number" data-live-total>{{ online_players | number }}</span><h2>Spieler gerade online</h2><p><span class="signal" aria-hidden="true"></span> <span data-live-servers>{{ live_servers }}</span> von 3 Servern mit aktuellen Daten</p></div>
+</section>
+{% if error %}<div class="notice" role="status">{{ error }} <a href="/">Erneut laden</a></div>{% endif %}
+<section aria-labelledby="servers-title">
+  <div class="section-heading"><h2 id="servers-title">Unsere Server</h2><span>Aktualisiert sich alle 30 Sekunden</span></div>
+  <div class="server-list">
+  {% for server in statuses %}
+    <article class="server-row{% if not server.fresh %} stale{% endif %}" data-fresh="{{ 'true' if server.fresh else 'false' }}" data-players="{{ server.players if server.players is not none else '' }}">
+      <div class="server-identity"><span class="server-index" aria-hidden="true">0{{ loop.index }}</span><div><h3>{{ server.title }}</h3><span class="state{% if server.fresh %} online{% endif %}">{{ server.label }}</span></div></div>
+      <div class="server-map"><span class="field-label">Karte / Modus</span><strong>{{ server.map }}</strong><span class="mode">{{ server.mode }}</span>{% if server.ended %}<span class="muted">Runde beendet</span>{% endif %}</div>
+      <div class="score-list"><span class="field-label">Punktestand</span>{% for score in server.scores %}<div><span>{{ score.name }}</span><strong>{{ score.score | number }}</strong></div>{% else %}<span class="muted">Noch kein Punktestand</span>{% endfor %}</div>
+      <div class="server-players"><span class="field-label">Spieler{% if not server.fresh %} · zuletzt{% endif %}</span><strong>{{ server.players | number }}{% if server.capacity %}<small> / {{ server.capacity | number }}</small>{% endif %}</strong>{% if server.observed_at %}<time datetime="{{ server.observed_at | iso }}" data-relative>{{ server.observed_at | when }}</time>{% else %}<span class="muted">Noch nicht erfasst</span>{% endif %}</div>
+    </article>
+  {% endfor %}
+  </div>
+</section>
+<section class="profile-callout"><div><h2>Deine Runden. Deine Bilanz.</h2><p>Spielzeit, Kills, Fraktionen und deine Historie – über alle drei Server.</p></div><a class="button" href="/me">{{ 'Profil öffnen' if user else 'Meine Stats ansehen' }} <span aria-hidden="true">↗</span></a></section>
+{% endblock %}

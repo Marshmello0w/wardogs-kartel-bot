@@ -1,0 +1,10 @@
+{
+  "date": "2026-09-20",
+  "scope": "web",
+  "existing_frontend": false,
+  "framework": "FastAPI + Jinja2",
+  "fonts": ["Barlow Condensed", "IBM Plex Sans"],
+  "palette": "custom black and orange",
+  "motion": "functional button press only",
+  "spacing": "4pt"
+}
