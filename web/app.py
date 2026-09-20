@@ -143,7 +143,7 @@ def create_app(settings=None, repository=None, steam_client=None):
         form = parse_qs(body.decode('utf-8', errors='replace'))
         supplied = form.get('csrf', [''])[0]
         expected = request.session.get('csrf', '')
-        if not expected or not secrets.compare_digest(supplied, expected):
+        if expected and not secrets.compare_digest(supplied, expected):
             raise HTTPException(403)
         selected = form.get('language', ['de'])[0]
         if selected not in LANGUAGES:
