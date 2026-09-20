@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import json
 import time
 import aiohttp
-import config
+from core import config
 
 
 class RconError(RuntimeError):

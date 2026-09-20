@@ -7,8 +7,8 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
-import database
-from runtime import write_state
+from core.runtime import write_state
+from infrastructure import database
 
 
 async def run(args):

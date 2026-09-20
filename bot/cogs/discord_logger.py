@@ -2,7 +2,7 @@ import logging
 import discord
 from discord.ext import commands
 
-import config
+from core import config
 
 class DiscordLogger(commands.Cog):
     def __init__(self, bot):

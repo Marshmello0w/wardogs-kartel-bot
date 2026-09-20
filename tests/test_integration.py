@@ -17,16 +17,15 @@ from io import StringIO
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 import pymysql
-import config
-import database
-import storage
-import stats
-from ban_service import BanService
+from core import config
+from core.runtime import Health
+from domain import stats
+from domain.rounds import advance
+from infrastructure import database, storage
+from services.ban_service import BanService
 from cogs.round_tracker import RoundTracker
 from cogs.map_vote import MapVoteCog
-from rcon import RconError, Reply
-from rounds import advance
-from runtime import Health
+from services.rcon import RconError, Reply
 
 STEAM = '76561190000000001'
 OTHER = '76561190000000002'
@@ -71,7 +70,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.pool)
         self.bot = SimpleNamespace(rcon=FakeRcon(), dispatch=Mock())
         self.bot.health = Health(self.bot)
-        self.legacy_patch = patch('ban_service.read_state', return_value=[])
+        self.legacy_patch = patch('services.ban_service.read_state', return_value=[])
         self.legacy_patch.start()
         self.service = BanService(self.bot)
 
@@ -157,7 +156,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_legacy_unlinked_ban_requires_review(self):
         action = dict(action='ban', server_id='server1', steam_id=STEAM, reason='unknown')
-        with patch('ban_service.read_state', return_value=[action]):
+        with patch('services.ban_service.read_state', return_value=[action]):
             await self.service.initialize()
             await BanService(self.bot).initialize()
         self.assertEqual(len(await self.rows('SELECT * FROM legacy_admin_import')), 1)
@@ -254,7 +253,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone((await storage.get_state('voting','server2'))['change'])
 
     async def test_winning_vote_retries_then_restores_original_rotation(self):
-        from rotation import entries
+        from domain.rotation import entries
         text = '[Other]\nX=1\n[/Script/WDGame.WDServerMapRotationSettings]\n!RotationEntries=ClearArray\n.RotationEntries=Old\n'
         document = {'text': text, 'revision': '1'}
         self.bot.rcon.get = AsyncMock(side_effect=lambda *args: dict(document))

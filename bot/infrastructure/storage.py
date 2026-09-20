@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-import database
+from infrastructure import database
 
 
 def utcnow():

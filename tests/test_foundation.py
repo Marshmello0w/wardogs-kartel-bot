@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, patch
 
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
-import config
-import database
-from permissions import is_admin, valid_steam_id
+from core import config
+from core.permissions import is_admin, valid_steam_id
+from infrastructure import database
 
 
 class PermissionsTests(unittest.TestCase):

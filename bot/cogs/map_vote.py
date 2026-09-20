@@ -4,11 +4,11 @@ from copy import deepcopy
 import discord
 from discord.ext import tasks, commands
 from discord import app_commands
-import config
-import storage
-from permissions import require_admin
-from rotation import entries, replace_entries, format_entry, RotationConflict
-from runtime import read_state
+from core import config
+from core.permissions import require_admin
+from core.runtime import read_state
+from domain.rotation import entries, replace_entries, format_entry, RotationConflict
+from infrastructure import storage
 
 
 class MapVoteButton(discord.ui.Button):

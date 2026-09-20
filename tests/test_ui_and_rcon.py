@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, Mock, patch
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 import discord
-import config
+from core import config
 from cogs.admin_panel import AdminPanelCog
 from cogs.leaderboard import PublicLeaderboardDropdown
 from cogs.map_vote import MapVoteCog
 from cogs.round_tracker import RoundTracker
-from rcon import RconClient, RconError, Reply
-from runtime import Health
+from core.runtime import Health
+from services.rcon import RconClient, RconError, Reply
 from start import KartelBot
 
 

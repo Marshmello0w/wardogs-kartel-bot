@@ -2,10 +2,10 @@ import asyncio
 import time
 import discord
 from discord.ext import commands, tasks
-import config
-import stats
-from permissions import valid_steam_id
-from runtime import read_state, write_state
+from core import config
+from core.permissions import valid_steam_id
+from core.runtime import read_state, write_state
+from domain import stats
 
 
 class EphemeralTimeframeDropdown(discord.ui.Select):

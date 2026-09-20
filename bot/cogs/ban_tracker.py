@@ -1,10 +1,9 @@
 import asyncio
 import discord
 from discord.ext import commands, tasks
-import config
-import database
-import storage
-from rcon import RconError
+from core import config
+from infrastructure import database, storage
+from services.rcon import RconError
 
 
 class BanTracker(commands.Cog):

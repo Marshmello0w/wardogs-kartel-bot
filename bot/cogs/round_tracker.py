@@ -4,10 +4,9 @@ from datetime import datetime
 import json
 import discord
 from discord.ext import commands, tasks
-import config
-import database
-import storage
-from rounds import advance
+from core import config
+from domain.rounds import advance
+from infrastructure import database, storage
 
 
 class RoundTracker(commands.Cog):

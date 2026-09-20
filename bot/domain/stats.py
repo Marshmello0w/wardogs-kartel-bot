@@ -1,9 +1,9 @@
 """Transactional round-aware counters and a single ranking definition."""
 import asyncio
 from collections import defaultdict
-import database
-from permissions import valid_steam_id
-from rounds import counter_delta
+from core.permissions import valid_steam_id
+from domain.rounds import counter_delta
+from infrastructure import database
 
 _locks = defaultdict(asyncio.Lock)
 

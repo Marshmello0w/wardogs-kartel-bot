@@ -23,6 +23,24 @@ Start immer aus dem vorgesehenen Arbeitsverzeichnis. Auf AMP kann das direkt
 `/AMP/python-app-runner/` sein, wenn die Python-Dateien dort liegen. Zustandsdateien
 verwenden absichtlich keinen fest eingebauten `bot/`-Präfix.
 
+## Projektstruktur
+
+Die Discord-Schicht bleibt von gemeinsam genutzter Logik getrennt:
+
+```text
+bot/
+├── cogs/             Discord-Commands, Events und Hintergrundtasks
+├── core/             Konfiguration, Berechtigungen und Laufzeithilfen
+├── domain/           Runden-, Rotations- und Statistiklogik
+├── services/         Ban-Dienst und gemeinsamer RCON-Client
+├── infrastructure/   Datenbank, Migrationen und dauerhafter Zustand
+├── maintenance.py    Offline-Wartungswerkzeug
+└── start.py           Bot-Einstiegspunkt
+```
+
+Nur Module in `cogs/` werden als Discord-Erweiterungen geladen. Die übrigen Pakete
+sind normale Python-Module und können von mehreren Cogs gemeinsam verwendet werden.
+
 ## Verhalten
 
 - Eine zentrale Serverliste und ein gemeinsamer HTTP-Client versorgen die Cogs.

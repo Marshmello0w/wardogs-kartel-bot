@@ -1,9 +1,9 @@
 import asyncio
 from time import monotonic
 from discord.ext import commands, tasks
-import config
-import database
-from permissions import valid_steam_id
+from core import config
+from core.permissions import valid_steam_id
+from infrastructure import database
 
 
 class StatsTracker(commands.Cog):

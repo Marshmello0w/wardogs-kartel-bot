@@ -1,9 +1,9 @@
 import time
 import discord
 from discord.ext import commands, tasks
-import config
-import database
-from runtime import read_state, write_state
+from core import config
+from core.runtime import read_state, write_state
+from infrastructure import database
 
 
 class ServerStatus(commands.Cog):

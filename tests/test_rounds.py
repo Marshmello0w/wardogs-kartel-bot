@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
-from rounds import advance, counter_delta
+from domain.rounds import advance, counter_delta
 
 
 def status(score, map_name='Bakurani', cap=100):

@@ -2,10 +2,10 @@ import asyncio
 import logging
 import discord
 from discord.ext import commands
-import config
-import database
-from rcon import RconClient
-from runtime import Health
+from core import config
+from core.runtime import Health
+from infrastructure import database
+from services.rcon import RconClient
 
 logging.basicConfig(level=logging.INFO)
 

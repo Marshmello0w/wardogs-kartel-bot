@@ -4,8 +4,8 @@ from pathlib import Path
 import unittest
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
-from ban_service import config_banned_ids, remove_config_ban
-from rotation import entries, replace_entries, RotationConflict
+from domain.rotation import entries, replace_entries, RotationConflict
+from services.ban_service import config_banned_ids, remove_config_ban
 
 
 class RotationTests(unittest.TestCase):

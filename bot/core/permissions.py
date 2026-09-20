@@ -1,6 +1,6 @@
 """Shared, fail-closed checks for commands, components and modals."""
 import re
-import config
+from core import config
 
 
 def is_admin(member):

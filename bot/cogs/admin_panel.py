@@ -1,11 +1,11 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import config
-import database
-from ban_service import BanService
-from permissions import require_admin, valid_steam_id
-from runtime import read_state, write_state
+from core import config
+from core.permissions import require_admin, valid_steam_id
+from core.runtime import read_state, write_state
+from infrastructure import database
+from services.ban_service import BanService
 
 
 class HistoryView(discord.ui.View):

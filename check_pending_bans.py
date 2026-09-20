@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv("bot/.env")
 sys.path.append("bot")
-import database
+from infrastructure import database
 
 async def main():
     pool = await database.get_db_pool()

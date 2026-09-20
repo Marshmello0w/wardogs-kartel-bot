@@ -3,7 +3,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse, unquote
 import aiomysql
-import config
+from core import config
 
 _global_pool = None
 _pool_lock = asyncio.Lock()
@@ -176,7 +176,7 @@ async def init_db(pool):
                     PRIMARY KEY (server_id, map_name)
                 )
             ''')
-    from migrations import migrate
+    from infrastructure.migrations import migrate
     await migrate(pool)
     logging.info("Database initialized.")
 
