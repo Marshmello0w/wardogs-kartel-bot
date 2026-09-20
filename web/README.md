@@ -100,7 +100,8 @@ MySQL 8 bzw. eine MariaDB-Version mit `ROW_NUMBER()` wie beim bestehenden Bot ve
   Lifetime-Counter. 50 Einträge je Seite; Cache 20 Sekunden.
 - `/me`: nur die ID aus der verifizierten Steam-Sitzung. Parameter mit anderen Steam-IDs
   werden ignoriert. Bekannte Namen umfassen die gespeicherten Tagesnamen. Die zuletzt
-  gemessenen Rundenwerte sind nicht automatisch eine aktuell laufende Runde.
+  gemessenen Rundenwerte sind nicht automatisch eine aktuell laufende Runde. Fraktionswerte
+  zählen erkannte Serverbeitritte beziehungsweise Fraktionswechsel, nicht Polling-Messungen.
 - Ban-Gründe und Ablaufdaten sind nur privat sichtbar. Keine Admin-Nennungen oder Aufträge.
 - `/health`: HTTP 200 bei erreichbarer DB, HTTP 503 bei Ausfall; keine Verbindungsdetails.
 - Öffentliche Datencaches enthalten keine Profile. HTML wird mit `private, no-store` ausgeliefert.

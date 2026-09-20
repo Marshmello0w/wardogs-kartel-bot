@@ -1,6 +1,7 @@
 param(
     [string]$MariaDbBin = 'C:\Program Files\MariaDB 12.1\bin',
-    [string]$Python = ''
+    [string]$Python = '',
+    [string]$Test = 'tests.test_integration'
 )
 $ErrorActionPreference = 'Stop'
 $taskRepo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -33,7 +34,9 @@ try {
     $env:PYTHONWARNINGS = 'ignore::Warning'
     Push-Location $taskRepo
     try {
-        & $Python -B -m unittest discover -s tests -v
+        # The portal has its own virtual environment; this runner validates only
+        # the opt-in bot integration suite against the disposable MariaDB.
+        & $Python -B -m unittest $Test -v
         $taskResult = $LASTEXITCODE
     } finally { Pop-Location }
 } finally {

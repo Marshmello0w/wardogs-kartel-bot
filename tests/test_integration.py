@@ -91,7 +91,18 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
         await database.init_db(self.pool)
         self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)
-        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 1)
+        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 2)
+
+    async def test_faction_counter_migration_removes_legacy_poll_samples_once(self):
+        await self.rows("""INSERT INTO player_faction_stats(server_id,steam_id,faction,times_seen)
+            VALUES (%s,%s,%s,%s)""", ('server1', STEAM, 'Valkyra', 39))
+        # Simulate a deployed v1 database that has not yet received the correction.
+        await self.rows('DELETE FROM schema_migrations WHERE version=2')
+        await database.init_db(self.pool)
+        self.assertFalse(await self.rows('SELECT * FROM player_faction_stats'))
+        self.assertEqual(len(await self.rows('SELECT * FROM player_faction_state')), 0)
+        await database.init_db(self.pool)
+        self.assertFalse(await self.rows('SELECT * FROM player_faction_stats'))
 
     async def test_expired_offline_ban_never_posts(self):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
@@ -220,6 +231,24 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
             await cog.sample(config.server('server1'))
         row = (await self.rows('SELECT * FROM player_playtime'))[0]
         self.assertEqual(row['playtime_seconds'], 62)
+
+    async def test_faction_entries_ignore_repeated_polls_and_count_changes(self):
+        from cogs.stats_tracker import StatsTracker
+        cog = StatsTracker.__new__(StatsTracker)
+        cog.bot, cog.last_online, cog.last_observed = self.bot, {}, {}
+        self.bot.rcon.players = AsyncMock(return_value=[dict(steamId=STEAM,name='Player',faction='A',pingMs=20)])
+        with patch('cogs.stats_tracker.monotonic', return_value=100):
+            await cog.sample(config.server('server1'))
+        with patch('cogs.stats_tracker.monotonic', return_value=160):
+            await cog.sample(config.server('server1'))
+        self.bot.rcon.players = AsyncMock(return_value=[dict(steamId=STEAM,name='Player',faction='B',pingMs=20)])
+        with patch('cogs.stats_tracker.monotonic', return_value=220):
+            await cog.sample(config.server('server1'))
+        await self.rows("UPDATE player_faction_state SET last_seen=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 91 SECOND)")
+        with patch('cogs.stats_tracker.monotonic', return_value=280):
+            await cog.sample(config.server('server1'))
+        rows = await self.rows('SELECT faction,times_seen FROM player_faction_stats ORDER BY faction')
+        self.assertEqual(rows, [dict(faction='A', times_seen=1), dict(faction='B', times_seen=2)])
 
     async def test_round_events_and_results_survive_reload_without_duplicates(self):
         tracker = RoundTracker.__new__(RoundTracker)

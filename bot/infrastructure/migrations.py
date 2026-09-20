@@ -1,4 +1,4 @@
-"""Additive migrations. Existing histories and aggregate statistics are preserved."""
+"""Schema migrations, including one correction for legacy faction sample counts."""
 
 TABLES = (
     """CREATE TABLE IF NOT EXISTS durable_state (
@@ -36,6 +36,24 @@ TABLES = (
         ) ENGINE=InnoDB""",
 )
 
+# ``times_seen`` is a legacy column name. Starting with migration 2, it counts
+# detected faction entries rather than the number of polling samples.
+FACTION_ENTRY_CORRECTION = (
+    """CREATE TABLE IF NOT EXISTS player_faction_state (
+        server_id VARCHAR(50) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        faction VARCHAR(50) NOT NULL, last_seen DATETIME NOT NULL,
+        PRIMARY KEY(server_id, steam_id), INDEX(server_id, last_seen)
+        ) ENGINE=InnoDB""",
+    # The old values cannot be converted: a value of 39 only says that 39
+    # polling samples saw a faction. Keeping it would present false history.
+    "DELETE FROM player_faction_stats",
+)
+
+MIGRATIONS = (
+    (1, TABLES),
+    (2, FACTION_ENTRY_CORRECTION),
+)
+
 
 async def migrate(pool):
     async with pool.acquire() as conn:
@@ -43,10 +61,13 @@ async def migrate(pool):
             await cur.execute("""CREATE TABLE IF NOT EXISTS schema_migrations (
                 version INT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB""")
-            await cur.execute("SELECT version FROM schema_migrations WHERE version = 1")
-            if await cur.fetchone():
-                return
             # MySQL DDL commits implicitly; each statement is restart-safe.
-            for statement in TABLES:
-                await cur.execute(statement)
-            await cur.execute("INSERT IGNORE INTO schema_migrations(version) VALUES (1)")
+            # Apply each version independently so already-running installations
+            # also receive newer schema corrections.
+            for version, statements in MIGRATIONS:
+                await cur.execute("SELECT 1 FROM schema_migrations WHERE version=%s", (version,))
+                if await cur.fetchone():
+                    continue
+                for statement in statements:
+                    await cur.execute(statement)
+                await cur.execute("INSERT IGNORE INTO schema_migrations(version) VALUES (%s)", (version,))

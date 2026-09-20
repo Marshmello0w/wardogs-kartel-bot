@@ -166,7 +166,7 @@ class PlayerLookupCog(commands.Cog):
             kills, deaths, cash = board.get('lifetime_kills', 0), board.get('lifetime_deaths', 0), board.get('lifetime_cash', 0)
             average_ping = (int(ping['total_ping']) / int(ping['ping_samples'])) if ping.get('ping_samples') else None
             factions = values.get('factions', [])
-            faction_text = ' · '.join(f"{item['faction']}: {item['times_seen']}×" for item in factions) or 'Keine Daten'
+            faction_text = ' · '.join(f"{item['faction']}: {item['times_seen']} Beitritte" for item in factions) or 'Keine Daten'
             faction_summary = faction_text if len(faction_text) <= 280 else faction_text[:270] + ' … (vollständig auf Folgeseite)'
             ping_text = f'{average_ping:.0f} ms' if average_ping is not None else '—'
             server_text = (
@@ -178,11 +178,11 @@ class PlayerLookupCog(commands.Cog):
                 f"**7/30 Tage:** K {daily.get('kills_7d', 0)}/{daily.get('kills_30d', 0)} · "
                 f"T {daily.get('deaths_7d', 0)}/{daily.get('deaths_30d', 0)} · Cash {daily.get('cash_7d', 0)}/{daily.get('cash_30d', 0)}\n"
                 f"**Ping:** {ping_text} · **Server-Ban:** {'ja' if values.get('observed_ban') else 'nein'}\n"
-                f"**Fraktionen:** {faction_summary}")
+                f"**Fraktionsbeitritte:** {faction_summary}")
             overview.add_field(name=f'📊 {title_for(server_id)}', value=server_text, inline=False)
             if len(faction_text) > 280:
-                detail_fields.extend(text_fields(f'🏴 Fraktionen – {title_for(server_id)}',
-                                                 [f"{item['faction']}: {item['times_seen']}×" for item in factions]))
+                detail_fields.extend(text_fields(f'🏴 Fraktionsbeitritte – {title_for(server_id)}',
+                                                 [f"{item['faction']}: {item['times_seen']} Beitritte" for item in factions]))
 
         ban_entries = [
             f"**{when(ban['issued_at'])} · {ban['status']}**\nAdmin: {ban['admin_mention']} · Dauer: {ban['duration_str']} · Bis: {when(ban['expires_at'])}\nGrund: {ban['reason'][:650]}"
