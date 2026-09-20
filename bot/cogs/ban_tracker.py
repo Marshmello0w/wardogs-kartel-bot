@@ -25,9 +25,22 @@ class BanTracker(commands.Cog):
                 previous = {r['steam_id']: r['announced'] for r in await cur.fetchall()}
                 for removed in set(previous) - current:
                     await cur.execute('DELETE FROM banned_players WHERE server_id=%s AND steam_id=%s', (srv.id, removed))
+                    await cur.execute("""UPDATE global_bans SET status='external_removed'
+                        WHERE steam_id=%s AND status='external' AND admin_mention=%s""",
+                        (removed, f'{srv.title} (beobachtet)'))
                 for steam_id in current - set(previous):
                     await cur.execute('INSERT INTO banned_players(server_id,steam_id,announced) VALUES (%s,%s,%s)',
                                       (srv.id, steam_id, not initialized))
+                    await cur.execute("""SELECT steam_id FROM admin_targets WHERE steam_id=%s AND desired='ban'
+                        AND (expires_at IS NULL OR expires_at>UTC_TIMESTAMP())""", (steam_id,))
+                    if not await cur.fetchone():
+                        # Keep the audit history without turning an observation into
+                        # an authoritative permanent global admin decision.
+                        await cur.execute("""INSERT INTO global_bans
+                            (steam_id,reason,admin_mention,duration_str,status)
+                            VALUES (%s,%s,%s,%s,'external')""",
+                            (steam_id, 'Server-Ban beobachtet; Vergabezeit und Dauer unbekannt.',
+                             f'{srv.title} (beobachtet)', 'Extern (Dauer unbekannt)'))
                 await storage.put_state(cur, 'ban_initialized', srv.id, True)
                 await cur.execute('SELECT steam_id FROM banned_players WHERE server_id=%s AND announced=FALSE', (srv.id,))
                 announce = [r['steam_id'] for r in await cur.fetchall()]

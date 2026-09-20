@@ -9,6 +9,10 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
+import tempfile
+import json
+from contextlib import redirect_stdout
+from io import StringIO
 
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
@@ -301,4 +305,21 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         self.bot.rcon.list[srv.id].add(STEAM)
         await cog.poll_server(srv)
         self.assertEqual(self.bot.rcon.request.await_count, 2)
+        history = await self.rows('SELECT status FROM global_bans ORDER BY id')
+        self.assertEqual([r['status'] for r in history], ['external_removed','external'])
+        await self.service.initialize()
         self.assertFalse(await self.rows('SELECT * FROM admin_targets'))
+
+    async def test_maintenance_export_uses_current_jobs_and_preserves_history(self):
+        import maintenance
+        await self.service.decide(STEAM, 'ban', 'old', 'admin')
+        await self.service.decide(STEAM, 'unban', '', 'admin')
+        with tempfile.TemporaryDirectory(prefix='kartelbot-export-test-') as folder:
+            target = Path(folder) / 'export'
+            with redirect_stdout(StringIO()):
+                await maintenance.run(SimpleNamespace(command='export-state', output=str(target)))
+            pending = json.loads((target / 'pending_admin_actions.json').read_text(encoding='utf-8'))
+            self.assertEqual(len(pending), 3)
+            self.assertTrue(all(action['action'] == 'unban' for action in pending))
+            self.assertTrue((target / 'round_state.json').exists())
+        self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)

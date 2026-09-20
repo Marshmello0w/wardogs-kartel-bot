@@ -17,6 +17,8 @@ class HistoryView(discord.ui.View):
         embed = discord.Embed(title=f'🔍 Ban-Historie: {self.steam_id}', color=discord.Color.blue())
         for row in self.rows[self.page * 4:(self.page + 1) * 4]:
             expiry = str(row['expires_at']) + ' UTC' if row['expires_at'] else 'Nie'
+            if row['status'].startswith('external'):
+                expiry = 'Unbekannt (externer Server-Ban)'
             text = (f"**Admin:** {row['admin_mention']}\n**Dauer:** {row['duration_str']}\n"
                     f"**Bis:** {expiry}\n**Status:** {row['status']}\n**Grund:** {row['reason'][:600]}")
             embed.add_field(name=f"Ban am {row['issued_at']} UTC", value=text[:1024], inline=False)

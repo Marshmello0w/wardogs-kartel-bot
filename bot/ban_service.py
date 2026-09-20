@@ -42,7 +42,8 @@ class BanService:
             # Import only the most recent legacy decision. Never manufacture new bans
             # from a temporarily stale gameserver list.
             await cur.execute("""SELECT b.* FROM global_bans b JOIN
-                (SELECT steam_id, MAX(id) id FROM global_bans GROUP BY steam_id) latest ON b.id=latest.id""")
+                (SELECT steam_id, MAX(id) id FROM global_bans WHERE status IN ('active','revoked','expired')
+                 GROUP BY steam_id) latest ON b.id=latest.id""")
             for row in await cur.fetchall():
                 await cur.execute("""INSERT IGNORE INTO admin_targets
                     (steam_id,version,desired,reason,admin_mention,expires_at,ban_id)
