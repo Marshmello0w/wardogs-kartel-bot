@@ -1,81 +1,55 @@
-import discord
+from datetime import datetime
 import random
-import logging
-import aiohttp
-from discord.ext import tasks, commands
-
+import discord
+from discord.ext import commands, tasks
 import config
+import database
+import storage
+from rcon import RconError
+
 
 class MatchEvents(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Track whether the end-of-match broadcast was sent for a server
-        self.broadcast_sent = {"server1": False, "server2": False}
         self.check_match_events.start()
 
     def cog_unload(self):
         self.check_match_events.cancel()
 
-    async def fetch_status(self, session, rcon_url, rcon_pass):
-        headers = {"Authorization": f"Bearer {rcon_pass}"}
-        url = f"{rcon_url.rstrip('/')}/v1/status"
-        try:
-            async with session.get(url, headers=headers, timeout=5) as response:
-                if response.status == 200:
-                    return await response.json()
-        except:
-            pass
-        return None
-
-    async def send_broadcast(self, session, rcon_url, rcon_pass, text):
-        headers = {"Authorization": f"Bearer {rcon_pass}"}
-        url = f"{rcon_url.rstrip('/')}/v1/broadcast"
-        try:
-            async with session.post(url, headers=headers, json={"message": text}, timeout=5) as response:
-                if response.status == 200:
-                    logging.info(f"Broadcast sent successfully: {text}")
-                else:
-                    logging.warning(f"Failed to send broadcast, HTTP {response.status}")
-        except Exception as e:
-            logging.error(f"Error sending broadcast: {e}")
-
     @tasks.loop(seconds=5)
     async def check_match_events(self):
-        servers = [
-            {"id": "server1", "rcon_url": config.SERVER1_RCON_URL, "rcon_pass": config.SERVER1_RCON_PASS},
-            {"id": "server2", "rcon_url": config.SERVER2_RCON_URL, "rcon_pass": config.SERVER2_RCON_PASS},
-            {"id": "server3", "title": "Server 3", "rcon_url": config.SERVER3_RCON_URL, "rcon_pass": config.SERVER3_RCON_PASS}
-        ]
-        
-        async with aiohttp.ClientSession() as session:
-            for srv in servers:
-                if not srv["rcon_url"] or not srv["rcon_pass"]:
+        try:
+            events = await storage.pending_events('broadcast', ('round_ended',))
+            for event in events:
+                data = event['data']
+                age = (storage.utcnow() - datetime.fromisoformat(data['ended_at'])).total_seconds()
+                if not data.get('winner') or age > 90:
+                    await storage.acknowledge(event['id'], 'broadcast', 'skipped')
                     continue
-                    
-                status_data = await self.fetch_status(session, srv["rcon_url"], srv["rcon_pass"])
-                if status_data and "factionScores" in status_data:
-                    highest_score = 0
-                    for faction in status_data["factionScores"]:
-                        score = faction.get("score", 0)
-                        if score > highest_score:
-                            highest_score = score
-                            
-                    # Match is ending / has ended
-                    if highest_score >= 100:
-                        if not self.broadcast_sent.get(srv["id"], False):
-                            msg = random.choice(config.BROADCAST_MESSAGES)
-                            await self.send_broadcast(session, srv["rcon_url"], srv["rcon_pass"], msg)
-                            self.broadcast_sent[srv["id"]] = True
-                            
-                            self.bot.dispatch("bot_log", "🏁 Runden-Ende Broadcast", f"Auf **{srv['id']}** endete eine Runde.\nGesendet:\n```{msg}```", discord.Color.gold())
-                            
-                    # Match restarted
-                    elif highest_score < 50:
-                        self.broadcast_sent[srv["id"]] = False
+                # Reserve before POST: a crash/timeout must not cause a blind repeat.
+                await storage.acknowledge(event['id'], 'broadcast', 'uncertain')
+                message = random.choice(config.BROADCAST_MESSAGES)
+                try:
+                    reply = await self.bot.rcon.request(event['server_id'], 'POST', '/v1/broadcast', payload={'message': message})
+                    if reply.status == 202:
+                        raise RconError(202, uncertain=True)
+                except RconError as exc:
+                    if not exc.uncertain:
+                        async with database.transaction() as cur:
+                            await cur.execute("DELETE FROM event_deliveries WHERE event_id=%s AND consumer='broadcast'", (event['id'],))
+                    self.bot.health.error(f"Runden-Broadcast {event['server_id']}", exc)
+                    continue
+                await storage.acknowledge(event['id'], 'broadcast')
+                self.bot.dispatch('bot_log', '🏁 Runden-Ende Broadcast',
+                                  f"{config.server(event['server_id']).title}: {message}", discord.Color.blue())
+                self.bot.health.ok(f"Runden-Broadcast {event['server_id']}")
+        except Exception as exc:
+            self.bot.health.error('Runden-Broadcast-Verarbeitung', exc)
 
     @check_match_events.before_loop
-    async def before_check_match_events(self):
+    async def ready(self):
         await self.bot.wait_until_ready()
+
 
 async def setup(bot):
     await bot.add_cog(MatchEvents(bot))

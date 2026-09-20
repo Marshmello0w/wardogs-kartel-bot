@@ -1,7 +1,6 @@
 import logging
 import discord
 from discord.ext import commands
-import time
 
 import config
 
@@ -28,11 +27,11 @@ class DiscordLogger(commands.Cog):
                 return
 
         embed = discord.Embed(
-            title=title,
-            description=description,
+            title=title[:256],
+            description=description[:4096],
             color=color
         )
-        embed.set_footer(text=f"Event Timestamp")
+        embed.set_footer(text="Event Timestamp")
         embed.timestamp = discord.utils.utcnow()
 
         try:

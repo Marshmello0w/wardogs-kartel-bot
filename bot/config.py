@@ -68,8 +68,14 @@ class Server:
 
     @property
     def enabled(self):
-        parsed = urlparse(self.url)
-        return bool(parsed.scheme in ("http", "https") and parsed.hostname and self.password)
+        try:
+            parsed = urlparse(self.url)
+            port = parsed.port
+            return bool(parsed.scheme in ("http", "https") and parsed.hostname and self.password
+                        and not parsed.username and not parsed.password and not parsed.query
+                        and not parsed.fragment and (port is None or port > 0))
+        except ValueError:
+            return False
 
 
 def servers():

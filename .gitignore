@@ -5,3 +5,9 @@ __pycache__/
 message_id.json
 openapi.json
 server1.json
+leaderboard_state.json
+map_vote_state.json
+admin_panel_msg_id.json
+pending_admin_actions.json
+*.json.*.tmp
+.pytest_cache/

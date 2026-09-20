@@ -1,68 +1,56 @@
-import logging
 import asyncio
+import logging
 import discord
 from discord.ext import commands
-
 import config
+import database
+from rcon import RconClient
+from runtime import Health
 
 logging.basicConfig(level=logging.INFO)
 
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
 
-async def load_cogs():
-    await bot.load_extension("cogs.server_status")
-    await bot.load_extension("cogs.leaderboard")
-    await bot.load_extension("cogs.match_events")
-    await bot.load_extension("cogs.ban_tracker")
-    await bot.load_extension("cogs.discord_logger")
-    await bot.load_extension("cogs.map_vote")
-    await bot.load_extension("cogs.admin_panel")
-    await bot.load_extension("cogs.stats_tracker")
+class KartelBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix='!', intents=discord.Intents.default(),
+                         allowed_mentions=discord.AllowedMentions.none())
+        self.rcon = RconClient()
+        self.health = Health(self)
 
-bot.setup_hook = load_cogs
+    async def setup_hook(self):
+        for name in ('discord_logger', 'round_tracker', 'server_status', 'leaderboard',
+                     'match_events', 'ban_tracker', 'map_vote', 'admin_panel', 'stats_tracker'):
+            await self.load_extension(f'cogs.{name}')
+        try:
+            if config.GUILD_ID:
+                guild = discord.Object(id=int(config.GUILD_ID))
+                self.tree.copy_global_to(guild=guild)
+                await self.tree.sync(guild=guild)
+                self.tree.clear_commands(guild=None)
+                await self.tree.sync()
+            else:
+                await self.tree.sync()
+        except discord.HTTPException as exc:
+            logging.error('Command sync failed: %s', type(exc).__name__)
 
-# Füge den View zur setup_hook hinzu, damit die Buttons nach Neustart funktionieren
-async def setup_persistent_views():
-    from cogs.admin_panel import AdminPanelView
-    bot.add_view(AdminPanelView(bot))
+    async def on_ready(self):
+        logging.info('Logged in as %s', self.user)
 
-original_load_cogs = bot.setup_hook
-async def new_setup_hook():
-    await original_load_cogs()
-    await setup_persistent_views()
-bot.setup_hook = new_setup_hook
+    async def close(self):
+        for name in list(self.extensions):
+            await self.unload_extension(name)
+        await super().close()
+        await self.rcon.close()
+        await database.close_pool()
 
-@bot.event
-async def on_ready():
-    logging.info(f"Logged in as {bot.user.name} ({bot.user.id})")
-    try:
-        if config.GUILD_ID:
-            guild = discord.Object(id=int(config.GUILD_ID))
-            
-            # 1. Copy global commands (from our Cogs) to the specific guild
-            bot.tree.copy_global_to(guild=guild)
-            
-            # 2. Sync the guild commands to Discord API
-            synced = await bot.tree.sync(guild=guild)
-            logging.info(f"Synced {len(synced)} command(s) to guild {config.GUILD_ID}")
-            
-            # 3. Wipe the global commands from the bot's memory and sync to delete them globally from Discord
-            bot.tree.clear_commands(guild=None)
-            await bot.tree.sync(guild=None)
-        else:
-            synced = await bot.tree.sync()
-            logging.info(f"Synced {len(synced)} command(s) globally")
-    except Exception as e:
-        logging.error(f"Failed to sync commands: {e}")
 
 async def main():
-    if not config.DISCORD_BOT_TOKEN:
-        logging.error("DISCORD_BOT_TOKEN is missing in .env")
+    if not config.validate():
+        logging.error('DISCORD_BOT_TOKEN is missing')
         return
-        
-    async with bot:
+    async with KartelBot() as bot:
         await bot.start(config.DISCORD_BOT_TOKEN)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     asyncio.run(main())
