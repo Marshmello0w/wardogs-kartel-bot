@@ -45,9 +45,10 @@ class BanService:
                 (SELECT steam_id, MAX(id) id FROM global_bans WHERE status IN ('active','revoked','expired')
                  GROUP BY steam_id) latest ON b.id=latest.id""")
             for row in await cur.fetchall():
-                await cur.execute("""INSERT IGNORE INTO admin_targets
+                await cur.execute("""INSERT INTO admin_targets
                     (steam_id,version,desired,reason,admin_mention,expires_at,ban_id)
-                    VALUES (%s,1,%s,%s,%s,%s,%s)""",
+                    VALUES (%s,1,%s,%s,%s,%s,%s)
+                    ON DUPLICATE KEY UPDATE steam_id=VALUES(steam_id)""",
                     (row['steam_id'], 'ban' if row['status'] == 'active' else 'unban',
                      row['reason'], row['admin_mention'], row['expires_at'], row['id']))
         actions = read_state('pending_admin_actions.json', [])
@@ -95,8 +96,9 @@ class BanService:
         await self.initialize()
         async with self.locks[steam_id]:
             async with database.transaction() as cur:
-                await cur.execute("""INSERT IGNORE INTO admin_targets
-                    (steam_id,version,desired,reason,admin_mention) VALUES (%s,0,'unban','',%s)""", (steam_id, admin))
+                await cur.execute("""INSERT INTO admin_targets
+                    (steam_id,version,desired,reason,admin_mention) VALUES (%s,0,'unban','',%s)
+                    ON DUPLICATE KEY UPDATE steam_id=VALUES(steam_id)""", (steam_id, admin))
                 await cur.execute('SELECT * FROM admin_targets WHERE steam_id=%s FOR UPDATE', (steam_id,))
                 target = await cur.fetchone()
                 version = target['version'] + 1
