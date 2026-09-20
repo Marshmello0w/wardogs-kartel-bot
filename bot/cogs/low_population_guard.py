@@ -24,6 +24,7 @@ class LowPopulationGuardCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.states = {}
+        self.followup_tasks = set()
         self.monitor.start()
 
     def cog_unload(self):
@@ -31,6 +32,8 @@ class LowPopulationGuardCog(commands.Cog):
         for state in self.states.values():
             if state.english_task:
                 state.english_task.cancel()
+        for task in self.followup_tasks:
+            task.cancel()
 
     def clear(self, server_id):
         state = self.states.pop(server_id, None)
@@ -79,6 +82,25 @@ class LowPopulationGuardCog(commands.Cog):
         except Exception as exc:
             self.bot.health.error(f'Niedrige Spielerzahl {srv.title}', exc)
 
+    def schedule_recovery_english_followup(self, srv):
+        task = asyncio.create_task(self.send_recovery_english_followup(srv))
+        self.followup_tasks.add(task)
+        task.add_done_callback(self.followup_tasks.discard)
+
+    async def send_recovery_english_followup(self, srv):
+        try:
+            await asyncio.sleep(config.LOW_POPULATION_ENGLISH_DELAY_SECONDS)
+            await self.broadcast(srv.id, config.LOW_POPULATION_RECOVERED_EN)
+            self.bot.dispatch('bot_log', '🌐 Niedrige Spielerzahl – englische Entwarnung',
+                              f'{srv.title}: {config.LOW_POPULATION_RECOVERED_EN}', discord.Color.green())
+            self.bot.health.ok(f'Niedrige Spielerzahl {srv.title}')
+        except asyncio.CancelledError:
+            raise
+        except RconError as exc:
+            self.bot.health.error(f'Niedrige Spielerzahl {srv.title}', exc)
+        except Exception as exc:
+            self.bot.health.error(f'Niedrige Spielerzahl {srv.title}', exc)
+
     async def warn(self, srv, state, now):
         try:
             await self.broadcast(srv.id, config.LOW_POPULATION_WARNING_DE)
@@ -98,6 +120,7 @@ class LowPopulationGuardCog(commands.Cog):
             await self.broadcast(srv.id, config.LOW_POPULATION_RECOVERED_DE)
             self.bot.dispatch('bot_log', '✅ Niedrige Spielerzahl – Countdown abgebrochen',
                               f'{srv.title}: Spielerzahl ist wieder ausreichend.', discord.Color.green())
+            self.schedule_recovery_english_followup(srv)
             self.bot.health.ok(f'Niedrige Spielerzahl {srv.title}')
         except RconError as exc:
             self.bot.health.error(f'Niedrige Spielerzahl {srv.title}', exc)

@@ -80,15 +80,16 @@ LOW_POPULATION_GRACE_SECONDS = 5 * 60
 LOW_POPULATION_COUNTDOWN_SECONDS = 2 * 60
 LOW_POPULATION_ENGLISH_DELAY_SECONDS = 10
 LOW_POPULATION_WARNING_DE = (
-    "⚠️ Aufgrund der geringen Spielerzahl wird die Runde in 2 Minuten beendet, "
-    "um unfaire Vorteile zu vermeiden."
+    "Aufgrund der geringen Spielerzahl wird die Runde in 2 Minuten beendet, "
+    "um unfaire Vorteile zu vermeiden. Euer Admin-Team."
 )
 LOW_POPULATION_WARNING_EN = (
-    "⚠️ Due to the low player count, this round will end in 2 minutes "
-    "to prevent unfair advantages."
+    "Due to the low player count, this round will end in 2 minutes "
+    "to prevent unfair advantages. Your Admin Team."
 )
-LOW_POPULATION_RECOVERED_DE = "✅ Die Spielerzahl ist wieder ausreichend. Die Runde wird fortgesetzt."
-LOW_POPULATION_ENDING_DE = "⏱️ Die Runde wird jetzt aufgrund der geringen Spielerzahl beendet."
+LOW_POPULATION_RECOVERED_DE = "Die Spielerzahl ist wieder ausreichend. Die Runde wird fortgesetzt. Euer Admin-Team."
+LOW_POPULATION_RECOVERED_EN = "The player count is sufficient again. The round will continue. Your Admin Team."
+LOW_POPULATION_ENDING_DE = "Die Runde wird jetzt aufgrund der geringen Spielerzahl beendet. Euer Admin-Team."
 
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {

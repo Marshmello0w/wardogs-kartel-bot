@@ -73,6 +73,7 @@ class LowPopulationGuardTests(unittest.IsolatedAsyncioTestCase):
         cog = LowPopulationGuardCog.__new__(LowPopulationGuardCog)
         cog.bot = FakeBot(state, results)
         cog.states = {}
+        cog.followup_tasks = set()
         return cog
 
     async def test_warns_after_five_minutes_and_sends_english_after_ten_seconds(self):
@@ -109,6 +110,18 @@ class LowPopulationGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(english_task.cancelled())
         messages = [call[3]['message'] for call in cog.bot.rcon.calls]
         self.assertEqual(messages, [config.LOW_POPULATION_WARNING_DE, config.LOW_POPULATION_RECOVERED_DE])
+
+    async def test_recovery_sends_an_english_followup(self):
+        cog = self.cog(round_state())
+        with patch.object(config, 'LOW_POPULATION_ENGLISH_DELAY_SECONDS', 0):
+            await cog.tick_server(self.server, now=0)
+            await cog.tick_server(self.server, now=300)
+            cog.bot.tracker.state = round_state(players=20)
+            await cog.tick_server(self.server, now=301)
+            recovery_task = next(iter(cog.followup_tasks))
+            await recovery_task
+        messages = [call[3]['message'] for call in cog.bot.rcon.calls]
+        self.assertEqual(messages[-2:], [config.LOW_POPULATION_RECOVERED_DE, config.LOW_POPULATION_RECOVERED_EN])
 
     async def test_force_end_after_the_countdown(self):
         cog = self.cog(round_state())
