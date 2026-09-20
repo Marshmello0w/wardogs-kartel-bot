@@ -23,6 +23,7 @@
       <a href="/"{% if path == '/' %} aria-current="page"{% endif %}>Serverstatus</a>
       <a href="/leaderboard"{% if path == '/leaderboard' %} aria-current="page"{% endif %}>Leaderboard</a>
       <a href="/me"{% if path == '/me' %} aria-current="page"{% endif %}>Mein Profil{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
+      <a href="/quests"{% if path == '/quests' %} aria-current="page"{% endif %}>Quests{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
     </nav>
     <main id="content">{% block content %}{% endblock %}</main>
     <footer class="footer"><span>Das Kartell <span class="muted">/ Mehr als nur ein Spiel.</span></span><span>WarDogs · Community-Portal</span></footer>

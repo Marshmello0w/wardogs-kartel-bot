@@ -195,8 +195,8 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
         async with bot:
             for name in ('discord_logger','round_tracker','server_status','leaderboard','match_events',
                          'ban_tracker','map_vote','admin_panel','stats_tracker','server_recap','player_lookup',
-                         'low_population_guard'):
+                         'quest_tracker','low_population_guard'):
                 await bot.load_extension('cogs.' + name)
-            self.assertEqual(len(bot.cogs), 12)
+            self.assertEqual(len(bot.cogs), 13)
             self.assertEqual({c.name for c in bot.tree.get_commands()}, {'voting','forcemap','adminpanel','ban_lookup','lookup'})
             self.assertEqual(len(bot.persistent_views), 5)

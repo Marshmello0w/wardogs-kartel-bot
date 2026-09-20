@@ -168,6 +168,15 @@ def create_app(settings=None, repository=None, steam_client=None):
         return render(request, 'profile.html', profile=data,
                       display_name=user.get('name') or (data['names'][0] if data['names'] else 'Dein Profil'))
 
+    @app.get('/quests')
+    async def quests(request: Request):
+        user = request.session.get('user')
+        if not user:
+            return RedirectResponse('/auth/steam', status_code=303)
+        data = await repo.quests(user['steam_id'])
+        return render(request, 'quests.html', quests=data,
+                      display_name=user.get('name') or 'Deine Quests')
+
     @app.post('/logout')
     async def logout(request: Request):
         if request.headers.get('origin') not in (None, settings.base_url):

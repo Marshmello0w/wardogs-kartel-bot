@@ -91,6 +91,14 @@ LOW_POPULATION_RECOVERED_DE = "Die Spielerzahl ist wieder ausreichend. Die Runde
 LOW_POPULATION_RECOVERED_EN = "The player count is sufficient again. The round will continue. Your Admin Team."
 LOW_POPULATION_ENDING_DE = "Die Runde wird jetzt aufgrund der geringen Spielerzahl beendet. Euer Admin-Team."
 
+# Quest-System: dauerhafte Punkte sowie wöchentliche Fraktions-Meilensteine.
+QUEST_PLAYTIME_SECONDS_PER_POINT = 60 * 60
+QUEST_CASH_PER_POINT = 100_000
+QUEST_TEAM_MILESTONES = ((2 * 60 * 60, 5), (4 * 60 * 60, 5))
+QUEST_SAMPLE_DELAY_SECONDS = 15
+QUEST_MAX_OBSERVATION_GAP_SECONDS = 90
+QUEST_PERMANENT_SYNC_SECONDS = 5 * 60
+
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},

@@ -53,6 +53,16 @@ class FixtureDatabase:
                     {'item_key': 'server2', 'payload': state_snapshot(age=300)}]
         if 'ROW_NUMBER' in sql:
             return [{'player_rank': 1, 'name': '<script>alert(1)</script>', 'kills': 12, 'deaths': 3, 'cash': 500, 'kd': 4}]
+        if 'FROM quest_points' in sql:
+            return [{'points': 17}] if args and args[0] == STEAM_ID else []
+        if 'FROM quest_progress' in sql:
+            return [{'eligible_playtime_seconds': 5_400, 'awarded_eligible_hours': 1, 'awarded_cash_blocks': 0}] if args and args[0] == STEAM_ID else []
+        if 'COALESCE(SUM(lifetime_cash)' in sql:
+            return [{'lifetime_cash': 250_000}] if args and args[0] == STEAM_ID else []
+        if 'FROM quest_team_playtime' in sql:
+            return [{'team': 'Valkyra', 'playtime_seconds': 7_200}] if args and args[0] == STEAM_ID else []
+        if 'FROM quest_point_ledger' in sql:
+            return [{'amount': 5, 'kind': 'weekly_team', 'created_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
         if args != (STEAM_ID,):
             return []
         if 'FROM leaderboard' in sql:
@@ -149,10 +159,20 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Old name', result['names'])
         self.assertEqual(len(result['bans']), 1)
         self.assertEqual(result['servers'][2]['kills_7d'], 5)
+        self.assertEqual(result['quest_points'], 17)
         for sql, args in db.calls:
             self.assertEqual(args, (STEAM_ID,))
             self.assertNotIn('admin_mention', sql)
             self.assertNotIn('admin_jobs', sql)
+
+    async def test_quests_show_only_player_data_and_team_progress(self):
+        result = await Repository(FixtureDatabase()).quests(STEAM_ID)
+        self.assertEqual(result['points'], 17)
+        self.assertEqual(result['cash_remaining'], 50_000)
+        self.assertEqual(result['teams'][0]['team'], 'Valkyra')
+        self.assertTrue(result['teams'][0]['two_hours_done'])
+        self.assertFalse(result['teams'][0]['four_hours_done'])
+        self.assertEqual(result['history'][0]['kind'], 'weekly_team')
 
     async def test_unknown_user_empty(self):
         result = await Repository(FixtureDatabase()).profile(OTHER_ID)
@@ -225,6 +245,7 @@ class RouteTests(unittest.TestCase):
         result = self.client.get('/me?steam_id=' + OTHER_ID, follow_redirects=False)
         self.assertEqual(result.status_code, 303)
         self.assertEqual(result.headers['location'], '/auth/steam')
+        self.assertEqual(self.client.get('/quests', follow_redirects=False).headers['location'], '/auth/steam')
         self.assertEqual(self.client.get('/auth/steam/callback', params=assertion('fake')).status_code, 400)
 
     def test_login_secure_cookie_own_profile_only_and_logout(self):
@@ -238,6 +259,10 @@ class RouteTests(unittest.TestCase):
         self.assertNotIn(OTHER_ID, result.text)
         self.assertIn('&lt;script&gt;secret&lt;/script&gt;', result.text)
         self.assertNotIn('<script>secret</script>', result.text)
+        quests = self.client.get('/quests')
+        self.assertEqual(quests.status_code, 200)
+        self.assertIn('17', quests.text)
+        self.assertIn('White', quests.text)
         self.assertIn('no-store', result.headers['cache-control'])
         csrf = re.search(r'name="csrf" value="([^"]+)"', result.text).group(1)
         self.assertEqual(result.headers['referrer-policy'], 'strict-origin')

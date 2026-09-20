@@ -1,15 +1,22 @@
 """Read-only queries. No imports from the bot, no migrations, no RCON access."""
 import asyncio
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import math
 import time
 from urllib.parse import unquote, urlsplit
+from zoneinfo import ZoneInfo
 
 import aiomysql
 
 from .settings import SERVERS
+
+
+BERLIN = ZoneInfo('Europe/Berlin')
+QUEST_PLAYTIME_SECONDS_PER_POINT = 60 * 60
+QUEST_CASH_PER_POINT = 100_000
+QUEST_TEAM_MILESTONES = ((2 * 60 * 60, 5), (4 * 60 * 60, 5))
 
 
 class DataUnavailable(RuntimeError):
@@ -79,6 +86,12 @@ def parse_time(value):
         return None
     stamp = value if isinstance(value, datetime) else datetime.fromisoformat(value)
     return stamp.replace(tzinfo=timezone.utc) if stamp.tzinfo is None else stamp.astimezone(timezone.utc)
+
+
+def berlin_week_start(value=None):
+    stamp = parse_time(value) if value else datetime.now(timezone.utc)
+    local = stamp.astimezone(BERLIN)
+    return local.date() - timedelta(days=local.weekday())
 
 
 def server_status(server_id, payload, now=None):
@@ -169,6 +182,7 @@ class Repository:
         pings = await self.db.query('SELECT server_id,total_ping,ping_samples FROM player_ping_stats WHERE steam_id=%s', args)
         bans = await self.db.query('''SELECT reason,duration_str,issued_at,expires_at,status
             FROM global_bans WHERE steam_id=%s ORDER BY issued_at DESC,id DESC''', args)
+        quest_points = await self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', args)
         servers = {key: {'id': key, 'title': title, 'factions': [], 'ping': None,
                          'playtime_seconds': 0, 'last_seen': None, 'has_data': False} for key, title in SERVERS.items()}
         known_names = {r['name'] for r in names if r['name']}
@@ -194,4 +208,46 @@ class Repository:
         totals['kd'] = totals['lifetime_kills'] / (totals['lifetime_deaths'] or 1)
         return {'steam_id': steam_id, 'names': sorted(known_names, key=str.casefold),
                 'servers': list(servers.values()), 'totals': totals, 'bans': bans,
-                'has_data': any(s['has_data'] for s in servers.values()) or bool(bans)}
+                'quest_points': int(quest_points[0]['points']) if quest_points else 0,
+                'has_data': any(s['has_data'] for s in servers.values()) or bool(bans) or bool(quest_points)}
+
+    async def quests(self, steam_id):
+        """Return only the authenticated player's read-only quest state."""
+        args = (steam_id,)
+        week_start = berlin_week_start()
+        points, progress, cash, teams, history = await asyncio.gather(
+            self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', args),
+            self.db.query('''SELECT eligible_playtime_seconds,awarded_eligible_hours,awarded_cash_blocks
+                FROM quest_progress WHERE steam_id=%s''', args),
+            self.db.query('''SELECT COALESCE(SUM(lifetime_cash),0) AS lifetime_cash
+                FROM leaderboard WHERE steam_id=%s''', args),
+            self.db.query('''SELECT team,playtime_seconds FROM quest_team_playtime
+                WHERE steam_id=%s AND week_start=%s ORDER BY team''', (steam_id, week_start)),
+            self.db.query('''SELECT amount,kind,created_at FROM quest_point_ledger
+                WHERE steam_id=%s ORDER BY created_at DESC,id DESC LIMIT 12''', args),
+        )
+        eligible_seconds = int(progress[0]['eligible_playtime_seconds']) if progress else 0
+        lifetime_cash = int(cash[0]['lifetime_cash']) if cash else 0
+        cash_remainder = lifetime_cash % QUEST_CASH_PER_POINT
+        team_quests = []
+        for row in teams:
+            seconds = max(0, int(row['playtime_seconds']))
+            team_quests.append({
+                'team': row['team'], 'seconds': seconds,
+                'percent': min(100, round(seconds / QUEST_TEAM_MILESTONES[-1][0] * 100)),
+                'two_hours_done': seconds >= QUEST_TEAM_MILESTONES[0][0],
+                'four_hours_done': seconds >= QUEST_TEAM_MILESTONES[1][0],
+            })
+        return {
+            'points': int(points[0]['points']) if points else 0,
+            'eligible_seconds': eligible_seconds,
+            'eligible_remainder': eligible_seconds % QUEST_PLAYTIME_SECONDS_PER_POINT,
+            'eligible_remaining': QUEST_PLAYTIME_SECONDS_PER_POINT - (eligible_seconds % QUEST_PLAYTIME_SECONDS_PER_POINT),
+            'lifetime_cash': lifetime_cash,
+            'cash_remainder': cash_remainder,
+            'cash_remaining': QUEST_CASH_PER_POINT - cash_remainder,
+            'week_start': week_start,
+            'week_end': week_start + timedelta(days=7),
+            'teams': team_quests,
+            'history': history,
+        }

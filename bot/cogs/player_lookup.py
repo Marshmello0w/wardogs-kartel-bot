@@ -114,6 +114,8 @@ class PlayerLookupCog(commands.Cog):
             target = await cur.fetchone()
             await cur.execute('SELECT * FROM admin_jobs WHERE steam_id=%s ORDER BY id DESC', (steam_id,))
             jobs = await cur.fetchall()
+            await cur.execute('SELECT points FROM quest_points WHERE steam_id=%s', (steam_id,))
+            quest_points = await cur.fetchone()
 
         servers = {}
         names = set()
@@ -135,7 +137,8 @@ class PlayerLookupCog(commands.Cog):
             servers.setdefault(row['server_id'], {}).update(observed_ban=row)
         return dict(steam_id=steam_id, names=sorted(names), servers=servers, bans=bans,
                     target=target, jobs=jobs,
-                    exists=bool(servers or bans or target or jobs))
+                    points=int(quest_points['points']) if quest_points else 0,
+                    exists=bool(servers or bans or target or jobs or quest_points))
 
     def pages(self, profile):
         steam_id, servers = profile['steam_id'], profile['servers']
@@ -143,7 +146,9 @@ class PlayerLookupCog(commands.Cog):
         overview = discord.Embed(title=f'🔍 Spielerprofil: {name}', color=discord.Color.blue())
         all_names = ' · '.join(profile['names']) or '—'
         shown_names = all_names if len(all_names) <= 1000 else all_names[:990] + ' …'
-        overview.description = f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {shown_names}'
+        overview.description = (
+            f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {shown_names}\n'
+            f'**Quest-Punkte:** {profile.get("points", 0)}')
         if profile['target']:
             target = profile['target']
             overview.add_field(name='Aktuelles Admin-Ziel', value=(
@@ -264,6 +269,46 @@ class LookupMatchView(discord.ui.View):
         return interaction.user.id == self.owner and await require_admin(interaction)
 
 
+class SetQuestPointsModal(discord.ui.Modal, title='Quest-Punkte setzen'):
+    def __init__(self, cog, steam_id):
+        super().__init__()
+        self.cog, self.steam_id = cog, steam_id
+        self.total = discord.ui.TextInput(label='Neuer Gesamtstand', placeholder='z. B. 250', max_length=10)
+        self.reason = discord.ui.TextInput(label='Grund', style=discord.TextStyle.paragraph,
+                                           placeholder='Warum wird der Punktestand geändert?', max_length=255)
+        self.add_item(self.total)
+        self.add_item(self.reason)
+
+    async def on_submit(self, interaction):
+        if not await require_admin(interaction):
+            return
+        raw_total = self.total.value.strip()
+        if not raw_total.isdecimal():
+            await interaction.response.send_message('Bitte einen nicht-negativen, ganzen Punktestand eingeben.', ephemeral=True)
+            return
+        tracker = self.cog.bot.get_cog('QuestTracker')
+        if tracker is None:
+            await interaction.response.send_message('Das Quest-System ist momentan nicht verfügbar.', ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            previous, delta = await tracker.set_points(
+                self.steam_id, int(raw_total), admin_user_id=interaction.user.id,
+                admin_mention=interaction.user.mention, reason=self.reason.value)
+        except ValueError as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        except Exception as exc:
+            self.cog.bot.health.error('Quest-Punkte setzen', exc)
+            await interaction.followup.send('Der Punktestand konnte nicht gespeichert werden.', ephemeral=True)
+            return
+        if not delta:
+            await interaction.followup.send(f'Der Punktestand beträgt bereits **{previous}**.', ephemeral=True)
+            return
+        await interaction.followup.send(
+            f'Punktestand geändert: **{previous} → {previous + delta}** ({delta:+d}).', ephemeral=True)
+
+
 class PrivateLookupView(discord.ui.View):
     def __init__(self, cog, owner, profile, pages, page=0):
         super().__init__(timeout=300)
@@ -287,6 +332,10 @@ class PrivateLookupView(discord.ui.View):
         self.previous.disabled = False
         self.next.disabled = self.page >= len(self.pages) - 1
         await interaction.response.edit_message(embed=self.pages[self.page], view=self)
+
+    @discord.ui.button(label='Punkte setzen', style=discord.ButtonStyle.secondary, emoji='🎯')
+    async def set_points(self, interaction, button):
+        await interaction.response.send_modal(SetQuestPointsModal(self.cog, self.profile['steam_id']))
 
     @discord.ui.button(label='Öffentlich machen', style=discord.ButtonStyle.primary, emoji='📢')
     async def publish(self, interaction, button):

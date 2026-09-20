@@ -55,10 +55,39 @@ IGNORED_FACTION_CORRECTION = (
     "DELETE FROM player_faction_state WHERE LOWER(TRIM(faction))='white'",
 )
 
+QUEST_SYSTEM = (
+    """CREATE TABLE IF NOT EXISTS quest_points (
+        steam_id VARCHAR(50) PRIMARY KEY, points BIGINT NOT NULL DEFAULT 0,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS quest_progress (
+        steam_id VARCHAR(50) PRIMARY KEY,
+        legacy_playtime_imported TINYINT(1) NOT NULL DEFAULT 0,
+        eligible_playtime_seconds BIGINT NOT NULL DEFAULT 0,
+        awarded_eligible_hours BIGINT NOT NULL DEFAULT 0,
+        awarded_cash_blocks BIGINT NOT NULL DEFAULT 0,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS quest_team_playtime (
+        week_start DATE NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        team VARCHAR(50) NOT NULL, playtime_seconds BIGINT NOT NULL DEFAULT 0,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY(week_start, steam_id, team), INDEX(steam_id, week_start)
+        ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS quest_point_ledger (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY, steam_id VARCHAR(50) NOT NULL,
+        amount BIGINT NOT NULL, kind VARCHAR(40) NOT NULL, reference_key VARCHAR(120) NOT NULL,
+        reason VARCHAR(255) NULL, admin_user_id VARCHAR(50) NULL, admin_mention VARCHAR(100) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY quest_reward_once(steam_id, kind, reference_key), INDEX(steam_id, created_at)
+        ) ENGINE=InnoDB""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
     (3, IGNORED_FACTION_CORRECTION),
+    (4, QUEST_SYSTEM),
 )
 
 

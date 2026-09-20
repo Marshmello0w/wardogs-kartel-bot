@@ -25,6 +25,7 @@ from infrastructure import database, storage
 from services.ban_service import BanService
 from cogs.round_tracker import RoundTracker
 from cogs.map_vote import MapVoteCog
+from cogs.quest_tracker import QuestTracker, berlin_week_start
 from services.rcon import RconError, Reply
 
 STEAM = '76561190000000001'
@@ -91,7 +92,35 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
         await database.init_db(self.pool)
         self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)
-        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 3)
+        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 4)
+
+    async def test_quest_imports_once_and_ignores_white_team_time(self):
+        await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
+            VALUES (%s,%s,%s,%s)""", ('server1', STEAM, 'Player', 7200))
+        await self.rows("""INSERT INTO leaderboard(server_id,steam_id,name,lifetime_cash)
+            VALUES (%s,%s,%s,%s)""", ('server1', STEAM, 'Player', 200_001))
+        quest = QuestTracker.__new__(QuestTracker)
+        quest.bot = SimpleNamespace(dispatch=Mock())
+
+        await quest.sync_permanent()
+        self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 4)
+        await quest.sync_permanent()
+        self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 4)
+
+        week = berlin_week_start()
+        await quest.apply_team_seconds({(week, STEAM, 'White'): 7200})
+        self.assertFalse(await self.rows("SELECT * FROM quest_team_playtime WHERE LOWER(team)='white'"))
+        self.assertEqual((await self.rows('SELECT eligible_playtime_seconds FROM quest_progress WHERE steam_id=%s', (STEAM,)))[0]['eligible_playtime_seconds'], 0)
+
+        await quest.apply_team_seconds({(week, STEAM, 'Valkyra'): 14_400})
+        self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 14)
+        await quest.sync_permanent()
+        self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 18)
+        previous, delta = await quest.set_points(STEAM, 25, admin_user_id='123', admin_mention='<@123>', reason='Event')
+        self.assertEqual((previous, delta), (18, 7))
+        self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 25)
+        with self.assertRaises(ValueError):
+            await quest.set_points(STEAM, -1, admin_user_id='123', admin_mention='<@123>', reason='Event')
 
     async def test_faction_counter_migration_removes_legacy_poll_samples_once(self):
         await self.rows("""INSERT INTO player_faction_stats(server_id,steam_id,faction,times_seen)
