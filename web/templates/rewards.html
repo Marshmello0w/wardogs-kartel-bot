@@ -7,11 +7,18 @@
 <section class="reward-grid" aria-label="{{ t('rewards_title') }}">
   <article class="reward-card">
     <span class="field-label">20 {{ t('quest_points') }}</span><h2>{{ t('faction_change') }}</h2><p>{{ t('faction_change_copy') }}</p><p class="reward-warning">{{ t('faction_warning') }}</p>
-    <form action="/rewards/faction" method="post" class="reward-form"><input type="hidden" name="csrf" value="{{ csrf }}"><label>{{ t('server') }}<select name="server" required>{% for id,title in servers.items() %}<option value="{{ id }}">{{ title }}</option>{% endfor %}</select></label><label>{{ t('target_faction') }}<select name="faction" required><option value="Lonestar">Lonestar</option><option value="Valkyra">Valkyra</option><option value="Manticore">Manticore</option></select></label><button class="button" type="submit">{{ t('redeem_for', points=20) }}</button></form>
+    <form action="/rewards/faction" method="post" class="reward-form" data-reward-form="faction" data-availability='{{ rewards.faction.targets | tojson }}'>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="reward-current-server">{% if rewards.faction.server_id %}{{ t('current_server') }} <strong>{{ servers[rewards.faction.server_id] }}</strong>{% else %}{{ t('not_on_server') }}{% endif %}</p>
+      <label>{{ t('target_faction') }}<select name="faction" required><option value="Lonestar">Lonestar</option><option value="Valkyra">Valkyra</option><option value="Manticore">Manticore</option></select></label>
+      <p class="reward-availability" role="status" aria-live="polite"></p><button class="button" type="submit">{{ t('redeem_for', points=20) }}</button>
+    </form>
   </article>
   <article class="reward-card">
     <span class="field-label">VIP</span><h2>{{ t('vip') }}</h2><p>{{ t('vip_copy') }}</p>
-    <form action="/rewards/vip" method="post" class="reward-form"><input type="hidden" name="csrf" value="{{ csrf }}"><label>{{ t('server') }}<select name="server" required>{% for id,title in servers.items() %}<option value="{{ id }}">{{ title }}</option>{% endfor %}</select></label><label>{{ t('duration') }}<select name="duration" required><option value="week">{{ t('one_week') }} · 150 {{ t('quest_points') }}</option><option value="month">{{ t('one_month') }} · 550 {{ t('quest_points') }}</option></select></label><button class="button" type="submit">{{ t('redeem') }}</button></form>
+    <form action="/rewards/vip" method="post" class="reward-form" data-reward-form="vip" data-availability='{{ rewards.vip_options | tojson }}'>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><label>{{ t('server') }}<select name="server" required>{% for id,title in servers.items() %}<option value="{{ id }}">{{ title }}</option>{% endfor %}</select></label><label>{{ t('duration') }}<select name="duration" required><option value="week">{{ t('one_week') }} · 150 {{ t('quest_points') }}</option><option value="month">{{ t('one_month') }} · 550 {{ t('quest_points') }}</option></select></label><p class="reward-availability" role="status" aria-live="polite"></p><button class="button" type="submit">{{ t('redeem') }}</button>
+    </form>
   </article>
 </section>
 

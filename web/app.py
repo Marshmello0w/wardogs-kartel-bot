@@ -268,10 +268,16 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         if not user:
             return RedirectResponse('/auth/steam', status_code=303)
         form = await protected_form(request)
-        server = form.get('server', [''])[0]
         faction = form.get('faction', [''])[0]
-        if server not in SERVERS or faction not in ('Lonestar', 'Valkyra', 'Manticore'):
+        if faction not in ('Lonestar', 'Valkyra', 'Manticore'):
             raise HTTPException(400)
+        state = await repo.rewards(user['steam_id'])
+        server = state['faction']['server_id']
+        option = state['faction']['targets'].get(faction, {})
+        # The server is derived exclusively from the most recent bot player
+        # poll.  A forged form can never select a different server.
+        if not server or not option.get('available'):
+            raise HTTPException(409)
         await reward_db.create_request(user['steam_id'], 'faction', server, faction=faction)
         return RedirectResponse('/rewards', status_code=303)
 
@@ -285,6 +291,10 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         duration = form.get('duration', [''])[0]
         if server not in SERVERS or duration not in ('week', 'month'):
             raise HTTPException(400)
+        state = await repo.rewards(user['steam_id'])
+        option = state['vip_options'].get(server, {}).get(duration, {})
+        if not option.get('available'):
+            raise HTTPException(409)
         await reward_db.create_request(user['steam_id'], 'vip', server, duration_kind=duration)
         return RedirectResponse('/rewards', status_code=303)
 

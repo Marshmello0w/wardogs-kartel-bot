@@ -139,6 +139,10 @@ dt { color: var(--color-muted); font-size: var(--text-sm); }
 .reward-form { display: grid; gap: var(--space-md); margin-block-start: var(--space-lg); }
 .reward-form label { display: grid; gap: var(--space-xs); color: var(--color-muted); font-size: var(--text-sm); }
 .reward-form .button { justify-self: start; }
+.reward-current-server { font-size: var(--text-sm); }
+.reward-availability { width: 100%; margin: 0; padding: var(--space-sm) var(--space-md); border-inline-start: 3px solid; font-size: var(--text-sm); font-weight: 600; }
+.reward-availability.available { border-color: #31824d; background: #e3f4e7; color: #155c2d; }
+.reward-availability.unavailable { border-color: #b2382f; background: #f9e2df; color: #842018; }
 .vip-status small, .request-reason { display: block; color: var(--color-muted); margin-block-start: var(--space-xs); }
 .quest-card, .team-quest { padding: var(--space-lg); background: var(--color-paper-2); color: var(--color-ink); }
 .quest-card h2, .team-quest h3 { margin-block-start: var(--space-xs); }

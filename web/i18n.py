@@ -30,8 +30,26 @@ TEXT = {
 }
 
 # Kept separately so the main concise catalogue remains easy to scan.
-TEXT['de'].update({'redeem': 'Einlösen', 'vip_slots': 'VIP-Plätze belegt'})
-TEXT['en'].update({'redeem': 'Redeem', 'vip_slots': 'VIP slots occupied'})
+TEXT['de'].update({
+    'redeem': 'Einlösen', 'vip_slots': 'VIP-Plätze belegt',
+    'current_server': 'Aktueller Server:', 'not_on_server': 'Du bist auf keinem aktuellen Server erkannt.',
+    'reward_ready': 'Einlösung möglich', 'not_enough_points': 'Nicht genügend Quest-Punkte.',
+    'not_online': 'Du musst auf einem Server online sein.',
+    'same_faction': 'Du bist bereits in dieser Fraktion.',
+    'balance_limit': 'Nicht möglich: Die Team-Balance würde mehr als vier Spieler abweichen.',
+    'no_vip_slots': 'Auf diesem Server sind keine VIP-Plätze frei.',
+    'vip_exists': 'Du hast auf diesem Server bereits einen reservierten oder aktiven VIP.',
+})
+TEXT['en'].update({
+    'redeem': 'Redeem', 'vip_slots': 'VIP slots occupied',
+    'current_server': 'Current server:', 'not_on_server': 'You are not detected on a current server.',
+    'reward_ready': 'Redemption available', 'not_enough_points': 'Not enough quest points.',
+    'not_online': 'You must be online on a server.',
+    'same_faction': 'You are already in this faction.',
+    'balance_limit': 'Not available: team balance would differ by more than four players.',
+    'no_vip_slots': 'There are no VIP slots available on this server.',
+    'vip_exists': 'You already have a reserved or active VIP on this server.',
+})
 
 
 def translate(language: str, key: str, **values) -> str:

@@ -43,6 +43,7 @@ def assertion(state, **overrides):
 class FixtureDatabase:
     def __init__(self):
         self.calls = []
+        self.points = 17
 
     async def query(self, sql, args=()):
         self.calls.append((sql, args))
@@ -54,7 +55,7 @@ class FixtureDatabase:
         if 'ROW_NUMBER' in sql:
             return [{'player_rank': 1, 'name': '<script>alert(1)</script>', 'kills': 12, 'deaths': 3, 'cash': 500, 'kd': 4}]
         if 'FROM quest_points' in sql:
-            return [{'points': 17}] if args and args[0] == STEAM_ID else []
+            return [{'points': self.points}] if args and args[0] == STEAM_ID else []
         if 'FROM quest_progress' in sql:
             return [{'eligible_playtime_seconds': 5_400, 'awarded_eligible_hours': 1, 'awarded_cash_blocks': 0}] if args and args[0] == STEAM_ID else []
         if 'COALESCE(SUM(lifetime_cash)' in sql:
@@ -71,6 +72,11 @@ class FixtureDatabase:
             return [{'id': 'safe-id', 'kind': 'faction', 'server_id': 'server1', 'faction': 'Valkyra',
                      'duration_kind': None, 'status': 'success', 'reason': None,
                      'created_at': datetime(2026, 9, 20, 10), 'completed_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
+        if 'COUNT(*) AS players FROM player_faction_state' in sql:
+            return [{'server_id': 'server1', 'faction': team, 'players': 10}
+                    for team in ('Lonestar', 'Valkyra', 'Manticore')]
+        if 'FROM player_faction_state' in sql:
+            return [{'server_id': 'server1', 'faction': 'Valkyra', 'last_seen': datetime.now(timezone.utc)}] if args and args[0] == STEAM_ID else []
         if args != (STEAM_ID,):
             return []
         if 'FROM leaderboard' in sql:
@@ -188,6 +194,15 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result['has_data'])
         self.assertEqual(result['bans'], [])
 
+    async def test_rewards_use_live_server_and_do_not_offer_unavailable_actions(self):
+        db = FixtureDatabase()
+        db.points = 50
+        result = await Repository(db).rewards(STEAM_ID)
+        self.assertEqual(result['faction']['server_id'], 'server1')
+        self.assertFalse(result['faction']['targets']['Valkyra']['available'])
+        self.assertTrue(result['faction']['targets']['Manticore']['available'])
+        self.assertFalse(result['vip_options']['server1']['week']['available'])
+
     async def test_public_cache_and_status_age(self):
         db = FixtureDatabase()
         repo = Repository(db)
@@ -295,16 +310,26 @@ class RouteTests(unittest.TestCase):
 
     def test_rewards_use_only_session_steam_id_and_csrf(self):
         self.login()
+        self.db.points = 50
         result = self.client.get('/rewards')
         self.assertEqual(result.status_code, 200)
         self.assertIn('Valkyra', result.text)
         csrf = re.search(r'name="csrf" value="([^"]+)"', result.text).group(1)
-        self.assertEqual(self.client.post('/rewards/faction', data={'csrf': 'wrong', 'server': 'server1', 'faction': 'Valkyra'}).status_code, 403)
-        result = self.client.post('/rewards/faction', data={'csrf': csrf, 'server': 'server1', 'faction': 'Valkyra'},
+        self.assertEqual(self.client.post('/rewards/faction', data={'csrf': 'wrong', 'server': 'server3', 'faction': 'Manticore'}).status_code, 403)
+        result = self.client.post('/rewards/faction', data={'csrf': csrf, 'server': 'server3', 'faction': 'Manticore'},
                                   headers={'origin': SETTINGS.base_url}, follow_redirects=False)
         self.assertEqual(result.status_code, 303)
-        self.submissions.create_request.assert_awaited_once_with(STEAM_ID, 'faction', 'server1', faction='Valkyra')
+        self.submissions.create_request.assert_awaited_once_with(STEAM_ID, 'faction', 'server1', faction='Manticore')
         self.assertEqual(self.client.post('/rewards/vip', data={'csrf': csrf, 'server': 'server1', 'duration': 'forever'}).status_code, 400)
+
+    def test_reward_request_is_not_created_when_red(self):
+        self.login()
+        result = self.client.get('/rewards')
+        csrf = re.search(r'name="csrf" value="([^"]+)"', result.text).group(1)
+        result = self.client.post('/rewards/faction', data={'csrf': csrf, 'faction': 'Manticore'},
+                                  headers={'origin': SETTINGS.base_url}, follow_redirects=False)
+        self.assertEqual(result.status_code, 409)
+        self.submissions.create_request.assert_not_awaited()
 
     def test_public_pages_escape_names_and_validate_filters(self):
         self.assertEqual(self.client.get('/').status_code, 200)

@@ -67,3 +67,29 @@ window.addEventListener('pageshow', () => {
     button.removeAttribute('aria-busy'); button.disabled = false;
   });
 });
+
+const rewardCopy = language === 'en'
+  ? {ready: 'Redemption available', not_enough_points: 'Not enough quest points.', not_online: 'You must be online on a server.', same_faction: 'You are already in this faction.', balance_limit: 'Not available: team balance would differ by more than four players.', no_vip_slots: 'There are no VIP slots available on this server.', vip_exists: 'You already have a reserved or active VIP on this server.'}
+  : {ready: 'Einlösung möglich', not_enough_points: 'Nicht genügend Quest-Punkte.', not_online: 'Du musst auf einem Server online sein.', same_faction: 'Du bist bereits in dieser Fraktion.', balance_limit: 'Nicht möglich: Die Team-Balance würde mehr als vier Spieler abweichen.', no_vip_slots: 'Auf diesem Server sind keine VIP-Plätze frei.', vip_exists: 'Du hast auf diesem Server bereits einen reservierten oder aktiven VIP.'};
+
+document.querySelectorAll('[data-reward-form]').forEach(form => {
+  let availability;
+  try { availability = JSON.parse(form.dataset.availability || '{}'); } catch { availability = {}; }
+  const bar = form.querySelector('.reward-availability');
+  const button = form.querySelector('button[type="submit"]');
+  const updateRewardAvailability = () => {
+    const type = form.dataset.rewardForm;
+    const option = type === 'faction'
+      ? availability[form.elements.faction?.value]
+      : availability[form.elements.server?.value]?.[form.elements.duration?.value];
+    const enabled = Boolean(option?.available);
+    if (bar) {
+      bar.classList.toggle('available', enabled);
+      bar.classList.toggle('unavailable', !enabled);
+      bar.textContent = rewardCopy[option?.reason] || rewardCopy.not_online;
+    }
+    if (button) button.disabled = !enabled;
+  };
+  form.querySelectorAll('select').forEach(select => select.addEventListener('change', updateRewardAvailability));
+  updateRewardAvailability();
+});
