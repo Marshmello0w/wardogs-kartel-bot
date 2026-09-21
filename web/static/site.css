@@ -130,7 +130,7 @@ dt { color: var(--color-muted); font-size: var(--text-sm); }
 .quest-summary .button { align-self: flex-start; }
 .seed-notices { display: grid; gap: var(--space-sm); margin-block: var(--space-xl); }
 .seed-section { padding-block: var(--space-xl); border-block-start: var(--rule-thin) solid var(--color-rule); }
-.seed-explanation { max-width: 72ch; color: var(--color-muted); }
+.seed-explanation { max-width: 72ch; margin-block: var(--space-lg); padding: var(--space-md) var(--space-lg); border-inline-start: 3px solid var(--color-accent); background: var(--color-paper-2); color: var(--color-muted); }
 .seed-notice { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: baseline; padding: var(--space-md) var(--space-lg); border-inline-start: 3px solid var(--color-accent); background: var(--color-paper-2); color: var(--color-ink); }
 .seed-notice strong { font-family: var(--font-display); }
 .seed-notice span { color: var(--color-muted); }
