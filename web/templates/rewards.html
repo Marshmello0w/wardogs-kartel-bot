@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}{{ t('rewards_title') }} · Das Kartell{% endblock %}
+{% block content %}
+<section class="page-heading"><span class="privacy-note">{{ t('private') }}</span><h1>{{ t('rewards_heading') }}</h1><p>{{ t('rewards_copy') }}</p></section>
+<section class="quest-hero reward-points" aria-labelledby="reward-points"><div><span class="field-label">{{ t('your_score') }}</span><strong id="reward-points" class="large-number">{{ rewards.points | number }}</strong><p>{{ t('quest_points') }}</p></div></section>
+
+<section class="reward-grid" aria-label="{{ t('rewards_title') }}">
+  <article class="reward-card">
+    <span class="field-label">20 {{ t('quest_points') }}</span><h2>{{ t('faction_change') }}</h2><p>{{ t('faction_change_copy') }}</p><p class="reward-warning">{{ t('faction_warning') }}</p>
+    <form action="/rewards/faction" method="post" class="reward-form"><input type="hidden" name="csrf" value="{{ csrf }}"><label>{{ t('server') }}<select name="server" required>{% for id,title in servers.items() %}<option value="{{ id }}">{{ title }}</option>{% endfor %}</select></label><label>{{ t('target_faction') }}<select name="faction" required><option value="Lonestar">Lonestar</option><option value="Valkyra">Valkyra</option><option value="Manticore">Manticore</option></select></label><button class="button" type="submit">{{ t('redeem_for', points=20) }}</button></form>
+  </article>
+  <article class="reward-card">
+    <span class="field-label">VIP</span><h2>{{ t('vip') }}</h2><p>{{ t('vip_copy') }}</p>
+    <form action="/rewards/vip" method="post" class="reward-form"><input type="hidden" name="csrf" value="{{ csrf }}"><label>{{ t('server') }}<select name="server" required>{% for id,title in servers.items() %}<option value="{{ id }}">{{ title }}</option>{% endfor %}</select></label><label>{{ t('duration') }}<select name="duration" required><option value="week">{{ t('one_week') }} · 150 {{ t('quest_points') }}</option><option value="month">{{ t('one_month') }} · 550 {{ t('quest_points') }}</option></select></label><button class="button" type="submit">{{ t('redeem') }}</button></form>
+  </article>
+</section>
+
+<section class="quest-section" aria-labelledby="vip-status"><div class="section-heading"><h2 id="vip-status">{{ t('vip_status') }}</h2><span>{{ t('slots_note') }}</span></div><div class="vip-status-grid">{% for id,title in servers.items() %}{% set vip = rewards.memberships[id] %}<article class="vip-status"><h3>{{ title }}</h3><span class="field-label">{{ rewards.slots[id] }}/20 {{ t('vip_slots') }}</span>{% if not vip %}<strong class="positive">{{ t('free') }}</strong>{% elif vip.status == 'pending_activation' %}<strong>{{ t('pending_activation') }}</strong>{% elif vip.status == 'active' %}<strong class="positive">{{ t('active_vip') }}</strong><small>{{ t('expires_in') }} {{ vip.expires_at | when }}</small>{% elif vip.status == 'expired_pending_removal' %}<strong>{{ t('removal_pending') }}</strong>{% else %}<strong>{{ t('removed_vip') }}</strong>{% endif %}</article>{% endfor %}</div></section>
+
+<section class="quest-section" aria-labelledby="shop-history"><div class="section-heading"><h2 id="shop-history">{{ t('shop_requests') }}</h2><span>{{ t('private') }}</span></div><table class="quest-history"><caption class="sr-only">{{ t('shop_requests') }}</caption><thead><tr><th scope="col">{{ t('timestamp') }}</th><th scope="col">{{ t('source') }}</th><th scope="col">{{ t('server') }}</th><th scope="col">{{ t('status_online') }}</th></tr></thead><tbody>{% for item in rewards.requests %}<tr><th scope="row">{{ item.created_at | when }}</th><td data-label="{{ t('source') }}">{{ t('request_faction' if item.kind == 'faction' else 'request_vip') }}{% if item.faction %} · {{ item.faction }}{% endif %}{% if item.duration_kind %} · {{ t('one_week' if item.duration_kind == 'week' else 'one_month') }}{% endif %}</td><td data-label="{{ t('server') }}">{{ servers.get(item.server_id, item.server_id) }}</td><td data-label="{{ t('status_online') }}">{{ t('request_' ~ item.status) }}{% if item.reason %}<small class="request-reason">{{ item.reason }}</small>{% endif %}</td></tr>{% else %}<tr><td colspan="4">{{ t('no_shop_requests') }}</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

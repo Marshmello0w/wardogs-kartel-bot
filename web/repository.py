@@ -6,6 +6,7 @@ import json
 import math
 import time
 from urllib.parse import unquote, urlsplit
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import aiomysql
@@ -54,6 +55,52 @@ class ReadDatabase:
                         return await cur.fetchall()
         except (TimeoutError, aiomysql.Error, ValueError, OSError) as exc:
             raise DataUnavailable('Database query failed') from exc
+
+    async def close(self):
+        if self.pool:
+            self.pool.close()
+            await self.pool.wait_closed()
+
+
+class RewardSubmissionDatabase:
+    """The portal may only create a short-lived, bot-owned reward request.
+
+    This intentionally has no generic query method.  Its database account gets
+    INSERT on reward_requests only; point balances and VIP states remain bot
+    owned.
+    """
+    def __init__(self, url):
+        self.url, self.pool = url, None
+        self.lock = asyncio.Lock()
+
+    async def connect(self):
+        async with self.lock:
+            if self.pool is None or self.pool.closed:
+                parsed = urlsplit(self.url)
+                if parsed.scheme != 'mysql' or not parsed.hostname or not parsed.path.strip('/'):
+                    raise DataUnavailable('Missing reward submission database configuration')
+                self.pool = await aiomysql.create_pool(
+                    host=parsed.hostname, port=parsed.port or 3306,
+                    user=unquote(parsed.username or ''), password=unquote(parsed.password or ''),
+                    db=unquote(parsed.path.lstrip('/')), charset='utf8mb4', autocommit=True,
+                    minsize=1, maxsize=2, connect_timeout=5, pool_recycle=120,
+                    init_command="SET time_zone = '+00:00'")
+        return self.pool
+
+    async def create_request(self, steam_id, kind, server_id, *, faction=None, duration_kind=None):
+        request_id = str(uuid4())
+        try:
+            async with asyncio.timeout(8):
+                pool = await self.connect()
+                async with pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute('''INSERT INTO reward_requests
+                            (id,steam_id,kind,server_id,faction,duration_kind,status)
+                            VALUES (%s,%s,%s,%s,%s,%s,'pending')''',
+                                          (request_id, steam_id, kind, server_id, faction, duration_kind))
+        except (TimeoutError, aiomysql.Error, ValueError, OSError) as exc:
+            raise DataUnavailable('Reward request unavailable') from exc
+        return request_id
 
     async def close(self):
         if self.pool:
@@ -266,3 +313,26 @@ class Repository:
             'teams': team_quests,
             'history': history,
         }
+
+    async def rewards(self, steam_id):
+        """Read only the signed-in player's shop state and own requests."""
+        points, memberships, slots, requests = await asyncio.gather(
+            self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', (steam_id,)),
+            self.db.query('''SELECT server_id,duration_kind,status,ordered_at,activated_at,expires_at,removed_at
+                FROM vip_memberships WHERE steam_id=%s
+                AND status IN ('pending_activation','active','expired_pending_removal')
+                ORDER BY ordered_at DESC,id DESC''', (steam_id,)),
+            self.db.query('''SELECT server_id,COUNT(*) AS occupied FROM vip_memberships
+                WHERE status IN ('pending_activation','active','expired_pending_removal')
+                GROUP BY server_id'''),
+            self.db.query('''SELECT id,kind,server_id,faction,duration_kind,status,reason,created_at,completed_at
+                FROM reward_requests WHERE steam_id=%s ORDER BY created_at DESC LIMIT 8''', (steam_id,)),
+        )
+        current = {key: None for key in SERVERS}
+        for row in memberships:
+            if row.get('server_id') in current and current[row['server_id']] is None:
+                current[row['server_id']] = row
+        used = {str(row['server_id']): int(row['occupied']) for row in slots}
+        return {'points': int(points[0]['points']) if points else 0,
+                'memberships': current, 'slots': {key: used.get(key, 0) for key in SERVERS},
+                'requests': requests}

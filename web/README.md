@@ -19,10 +19,12 @@ Paketinstallation auf **Requirements.txt file** und Download-Typ auf **None** st
 Dadurch installiert AMP `web/requirements.txt`. Dateien per SFTP in `web/` hochladen,
 anschließend nur diese Webinstanz aktualisieren und starten.
 
-`web/.env.example` als `web/.env` anlegen und die vier Werte ausfüllen:
+`web/.env.example` als `web/.env` anlegen und die fünf Werte ausfüllen:
 
 - `PUBLIC_BASE_URL=https://kartell.marshmello0w.de`
 - `WEB_DB_CONNECTION_URL=mysql://kartell_web:URL_ENCODED_PASSWORD@HOST:PORT/DATABASE`
+- `WEB_REWARD_DB_CONNECTION_URL=mysql://kartell_rewards_submit:URL_ENCODED_PASSWORD@HOST:PORT/DATABASE`:
+  separater Zugang, der ausschließlich Shop-Anfragen einfügt.
 - `STEAM_WEB_API_KEY`: Steam-Web-API-Key für Namen und Avatar.
 - `WEB_SESSION_SECRET`: mindestens 32 zufällige Zeichen, zum Beispiel mit
   `python -c "import secrets; print(secrets.token_urlsafe(48))"` generieren.
@@ -83,11 +85,25 @@ GRANT SELECT (steam_id, desired, expires_at) ON `DATABASE_NAME`.`admin_targets` 
 GRANT SELECT (id, steam_id, reason, duration_str, issued_at, expires_at, status)
   ON `DATABASE_NAME`.`global_bans` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`durable_state` TO 'kartell_web'@'WEB_HOST';
+GRANT SELECT ON `DATABASE_NAME`.`quest_points` TO 'kartell_web'@'WEB_HOST';
+GRANT SELECT ON `DATABASE_NAME`.`vip_memberships` TO 'kartell_web'@'WEB_HOST';
+GRANT SELECT ON `DATABASE_NAME`.`reward_requests` TO 'kartell_web'@'WEB_HOST';
 ```
 
 Keine `INSERT`, `UPDATE`, `DELETE`, DDL- oder Admin-Auftragsrechte vergeben.
 Zusätzlich setzt die App jede DB-Sitzung auf `READ ONLY`. Sie führt keine Migrationen aus.
 MySQL 8 bzw. eine MariaDB-Version mit `ROW_NUMBER()` wie beim bestehenden Bot verwenden.
+
+Für Einlösungen wird ein zweiter, strikt begrenzter Nutzer verwendet. Er erhält keinerlei
+Lese- oder Änderungsrechte für Punktestände, VIPs oder Spielerdaten:
+
+```sql
+CREATE USER 'kartell_rewards_submit'@'WEB_HOST' IDENTIFIED BY 'GENERATED_SECRET';
+GRANT INSERT ON `DATABASE_NAME`.`reward_requests` TO 'kartell_rewards_submit'@'WEB_HOST';
+```
+
+Der Bot verarbeitet die Anfrage innerhalb weniger Sekunden, prüft Punkte, VIP-Slots und
+bei einem Fraktionswechsel den Live-RCON-Status und ist der einzige Prozess, der Werte ändert.
 
 ## Daten und Sichtbarkeit
 
@@ -103,6 +119,9 @@ MySQL 8 bzw. eine MariaDB-Version mit `ROW_NUMBER()` wie beim bestehenden Bot ve
   gemessenen Rundenwerte sind nicht automatisch eine aktuell laufende Runde. Fraktionswerte
   zählen erkannte Serverbeitritte beziehungsweise Fraktionswechsel, nicht Polling-Messungen.
 - Ban-Gründe und Ablaufdaten sind nur privat sichtbar. Keine Admin-Nennungen oder Aufträge.
+- `/rewards`: nur mit Steam-Anmeldung. Das Portal kann lediglich eine kurzlebige Anfrage für
+  die eigene Steam-ID erzeugen; VIP-Aktivierung, Stornierung und externe Entfernung bestätigt
+  das Admin-Team im Discord-VIP-Channel.
 - `/health`: HTTP 200 bei erreichbarer DB, HTTP 503 bei Ausfall; keine Verbindungsdetails.
 - Öffentliche Datencaches enthalten keine Profile. HTML wird mit `private, no-store` ausgeliefert.
 - Spielerdaten werden nicht neu erhoben; bei fehlenden Daten zeigt die Oberfläche einen Leerzustand.

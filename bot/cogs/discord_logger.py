@@ -79,6 +79,79 @@ class DiscordLogger(commands.Cog):
         except Exception as exc:
             logging.error("Konnte öffentlichen Spieler-Lookup nicht senden: %s", type(exc).__name__)
 
+    async def _vip_channel(self):
+        if not config.VIP_CHANNEL_ID:
+            return None
+        channel = self.bot.get_channel(int(config.VIP_CHANNEL_ID))
+        return channel if channel is not None else await self.bot.fetch_channel(int(config.VIP_CHANNEL_ID))
+
+    @commands.Cog.listener()
+    async def on_vip_order(self, membership_id: int):
+        """Central sender for new VIP administration posts."""
+        try:
+            shop = self.bot.get_cog('RewardShopCog')
+            row = await shop.membership(membership_id) if shop else None
+            if not row or row.get('discord_message_id'):
+                return
+            channel = await self._vip_channel()
+            if channel is None:
+                return
+            view = None
+            if row['status'] == 'pending_activation':
+                from cogs.reward_shop import VipPendingView
+                view = VipPendingView(shop)
+            message = await channel.send(embed=shop.vip_embed(row), view=view)
+            await shop.delivered(row['id'], message.id)
+        except Exception as exc:
+            logging.error('Konnte VIP-Auftrag nicht in Discord senden: %s', type(exc).__name__)
+
+    @commands.Cog.listener()
+    async def on_vip_update(self, membership_id: int):
+        try:
+            shop = self.bot.get_cog('RewardShopCog')
+            row = await shop.membership(membership_id) if shop else None
+            if not row or not row.get('discord_message_id'):
+                return
+            channel = await self._vip_channel()
+            message = await channel.fetch_message(int(row['discord_message_id']))
+            await message.edit(embed=shop.vip_embed(row), view=None)
+        except Exception as exc:
+            logging.error('Konnte VIP-Auftrag nicht aktualisieren: %s', type(exc).__name__)
+
+    @commands.Cog.listener()
+    async def on_vip_expired(self, membership_id: int):
+        try:
+            shop = self.bot.get_cog('RewardShopCog')
+            row = await shop.membership(membership_id) if shop else None
+            if not row or row.get('expiry_message_id'):
+                return
+            channel = await self._vip_channel()
+            if channel is None:
+                return
+            from cogs.reward_shop import VipExpiryView
+            embed = discord.Embed(title='⚠️ VIP abgelaufen – Entfernung erforderlich', color=discord.Color.orange(),
+                                  description=f"**Spieler:** {row.get('player_name') or 'Unbekannt'}\n**Steam64-ID:** `{row['steam_id']}`\n**Server:** {config.server(row['server_id']).title}\nVIP muss jetzt extern entfernt werden.")
+            embed.set_footer(text=f'VIP-Auftrag {row["id"]}')
+            message = await channel.send(embed=embed, view=VipExpiryView(shop))
+            await shop.delivered(row['id'], message.id, expiry=True)
+        except Exception as exc:
+            logging.error('Konnte VIP-Ablauf nicht in Discord senden: %s', type(exc).__name__)
+
+    @commands.Cog.listener()
+    async def on_vip_expiry_update(self, membership_id: int):
+        try:
+            shop = self.bot.get_cog('RewardShopCog')
+            row = await shop.membership(membership_id) if shop else None
+            if not row or not row.get('expiry_message_id'):
+                return
+            channel = await self._vip_channel()
+            message = await channel.fetch_message(int(row['expiry_message_id']))
+            embed = discord.Embed(title='✅ VIP extern entfernt', color=discord.Color.green(),
+                                  description=f"**Spieler:** {row.get('player_name') or 'Unbekannt'}\n**Steam64-ID:** `{row['steam_id']}`\n**Server:** {config.server(row['server_id']).title}\nDer VIP-Slot ist wieder frei.")
+            await message.edit(embed=embed, view=None)
+        except Exception as exc:
+            logging.error('Konnte VIP-Entfernung nicht aktualisieren: %s', type(exc).__name__)
+
 
 async def setup(bot):
     await bot.add_cog(DiscordLogger(bot))

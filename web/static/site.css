@@ -131,6 +131,15 @@ dt { color: var(--color-muted); font-size: var(--text-sm); }
 .quest-hero { margin-block-start: 0; }
 .quest-hero .large-number { color: var(--color-accent); font-size: clamp(3.5rem, 9vw, 6rem); }
 .quest-grid { display: grid; gap: var(--space-md); margin-block: var(--space-xl); }
+.reward-grid, .vip-status-grid { display: grid; gap: var(--space-md); margin-block: var(--space-xl); }
+.reward-card, .vip-status { padding: var(--space-lg); background: var(--color-paper-2); color: var(--color-ink); }
+.reward-card h2, .vip-status h3 { margin-block-start: var(--space-xs); }
+.reward-card p { color: var(--color-muted); margin-block-start: var(--space-sm); }
+.reward-card .reward-warning { color: var(--color-accent); font-weight: 600; }
+.reward-form { display: grid; gap: var(--space-md); margin-block-start: var(--space-lg); }
+.reward-form label { display: grid; gap: var(--space-xs); color: var(--color-muted); font-size: var(--text-sm); }
+.reward-form .button { justify-self: start; }
+.vip-status small, .request-reason { display: block; color: var(--color-muted); margin-block-start: var(--space-xs); }
 .quest-card, .team-quest { padding: var(--space-lg); background: var(--color-paper-2); color: var(--color-ink); }
 .quest-card h2, .team-quest h3 { margin-block-start: var(--space-xs); }
 .quest-card > strong { display: block; font-family: var(--font-display); font-size: var(--text-lg); margin-block: var(--space-lg) var(--space-sm); font-variant-numeric: tabular-nums; }
@@ -180,6 +189,8 @@ progress::-moz-progress-bar { background: var(--color-accent); }
   .quest-summary, .quest-hero { flex-direction: row; align-items: center; }
   .quest-summary .button { align-self: center; }
   .quest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reward-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vip-status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .team-quest { grid-template-columns: minmax(0, 1fr) minmax(18rem, 1.5fr); align-items: center; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } .button:active, .button:hover { transform: none; } }

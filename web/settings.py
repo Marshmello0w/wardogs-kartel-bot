@@ -13,6 +13,7 @@ SERVERS = {f'server{i}': f'Server {i}' for i in range(1, 4)}
 class Settings:
     base_url: str = 'https://kartell.marshmello0w.de'
     db_url: str = field(default='', repr=False)
+    reward_db_url: str = field(default='', repr=False)
     steam_key: str = field(default='', repr=False)
     session_secret: str = field(default='', repr=False)
 
@@ -41,5 +42,6 @@ class Settings:
         values = {**dotenv_values(ROOT / '.env'), **os.environ}
         return cls(base_url=values.get('PUBLIC_BASE_URL', cls.base_url),
                    db_url=values.get('WEB_DB_CONNECTION_URL', ''),
+                   reward_db_url=values.get('WEB_REWARD_DB_CONNECTION_URL', ''),
                    steam_key=values.get('STEAM_WEB_API_KEY', ''),
                    session_secret=values.get('WEB_SESSION_SECRET', ''))

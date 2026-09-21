@@ -63,6 +63,14 @@ class FixtureDatabase:
             return [{'team': 'Valkyra', 'playtime_seconds': 7_200}] if args and args[0] == STEAM_ID else []
         if 'FROM quest_point_ledger' in sql:
             return [{'amount': 5, 'kind': 'weekly_team', 'created_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
+        if 'FROM vip_memberships' in sql:
+            return [{'server_id': 'server1', 'duration_kind': 'week', 'status': 'active',
+                     'ordered_at': datetime(2026, 9, 20, 10), 'activated_at': datetime(2026, 9, 20, 10),
+                     'expires_at': datetime(2026, 9, 27, 10), 'removed_at': None}] if args and args[0] == STEAM_ID else []
+        if 'FROM reward_requests' in sql:
+            return [{'id': 'safe-id', 'kind': 'faction', 'server_id': 'server1', 'faction': 'Valkyra',
+                     'duration_kind': None, 'status': 'success', 'reason': None,
+                     'created_at': datetime(2026, 9, 20, 10), 'completed_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
         if args != (STEAM_ID,):
             return []
         if 'FROM leaderboard' in sql:
@@ -239,7 +247,8 @@ class RouteTests(unittest.TestCase):
         self.db = FixtureDatabase()
         self.repo = Repository(self.db)
         self.steam_client = httpx.AsyncClient(transport=httpx.MockTransport(steam_response))
-        self.app = create_app(SETTINGS, self.repo, self.steam_client)
+        self.submissions = AsyncMock()
+        self.app = create_app(SETTINGS, self.repo, self.steam_client, self.submissions)
         self.client = TestClient(self.app, base_url=SETTINGS.base_url)
         self.client.__enter__()
 
@@ -257,6 +266,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(result.status_code, 303)
         self.assertEqual(result.headers['location'], '/auth/steam')
         self.assertEqual(self.client.get('/quests', follow_redirects=False).headers['location'], '/auth/steam')
+        self.assertEqual(self.client.get('/rewards', follow_redirects=False).headers['location'], '/auth/steam')
         self.assertEqual(self.client.get('/auth/steam/callback', params=assertion('fake')).status_code, 400)
 
     def test_login_secure_cookie_own_profile_only_and_logout(self):
@@ -282,6 +292,19 @@ class RouteTests(unittest.TestCase):
         result = self.client.post('/logout', data={'csrf': csrf}, headers={'origin': 'https://kartell.marshmello0w.de'}, follow_redirects=False)
         self.assertEqual(result.status_code, 303)
         self.assertEqual(self.client.get('/me', follow_redirects=False).headers['location'], '/auth/steam')
+
+    def test_rewards_use_only_session_steam_id_and_csrf(self):
+        self.login()
+        result = self.client.get('/rewards')
+        self.assertEqual(result.status_code, 200)
+        self.assertIn('Valkyra', result.text)
+        csrf = re.search(r'name="csrf" value="([^"]+)"', result.text).group(1)
+        self.assertEqual(self.client.post('/rewards/faction', data={'csrf': 'wrong', 'server': 'server1', 'faction': 'Valkyra'}).status_code, 403)
+        result = self.client.post('/rewards/faction', data={'csrf': csrf, 'server': 'server1', 'faction': 'Valkyra'},
+                                  headers={'origin': SETTINGS.base_url}, follow_redirects=False)
+        self.assertEqual(result.status_code, 303)
+        self.submissions.create_request.assert_awaited_once_with(STEAM_ID, 'faction', 'server1', faction='Valkyra')
+        self.assertEqual(self.client.post('/rewards/vip', data={'csrf': csrf, 'server': 'server1', 'duration': 'forever'}).status_code, 400)
 
     def test_public_pages_escape_names_and_validate_filters(self):
         self.assertEqual(self.client.get('/').status_code, 200)

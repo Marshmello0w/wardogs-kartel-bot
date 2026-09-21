@@ -18,7 +18,8 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from .repository import DataUnavailable, ReadDatabase, Repository, parse_time, server_status
+from .repository import (DataUnavailable, ReadDatabase, Repository,
+                         RewardSubmissionDatabase, parse_time, server_status)
 from .settings import ROOT, SERVERS, Settings
 from .steam import LoginError, SteamLogin
 from .i18n import LANGUAGES, translate
@@ -67,9 +68,10 @@ def iso(value):
     return stamp.isoformat() if stamp else ''
 
 
-def create_app(settings=None, repository=None, steam_client=None):
+def create_app(settings=None, repository=None, steam_client=None, reward_submission=None):
     settings = settings or Settings.from_env()
     db = ReadDatabase(settings.db_url)
+    reward_db = reward_submission or RewardSubmissionDatabase(settings.reward_db_url)
     repo = repository or Repository(db)
     # API keys and OpenID signatures must not appear in request logs.
     logging.getLogger('httpx').setLevel(logging.WARNING)
@@ -80,11 +82,13 @@ def create_app(settings=None, repository=None, steam_client=None):
     async def lifespan(app):
         yield
         await db.close()
+        if reward_submission is None:
+            await reward_db.close()
         if steam_client is None:
             await client.aclose()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.repo, app.state.steam = repo, steam
+    app.state.repo, app.state.steam, app.state.reward_db = repo, steam, reward_db
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
                        session_cookie='kartell_session', max_age=43200,
                        same_site='lax', https_only=settings.secure)
@@ -130,6 +134,22 @@ def create_app(settings=None, repository=None, steam_client=None):
                      'periods': PERIODS[language], 'path': request.url.path, 'language': language,
                      'languages': LANGUAGES, 'next_path': next_path,
                      't': lambda key, **values: translate(language, key, **values), **context})
+
+    async def protected_form(request):
+        """Read a small same-origin form and validate its session CSRF token."""
+        if request.headers.get('origin') not in (None, settings.base_url):
+            raise HTTPException(403)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 4096:
+                raise HTTPException(400)
+        form = parse_qs(body.decode('utf-8', errors='replace'))
+        supplied = form.get('csrf', [''])[0]
+        expected = request.session.get('csrf', '')
+        if not expected or not secrets.compare_digest(supplied, expected):
+            raise HTTPException(403)
+        return form
 
     @app.post('/language')
     async def language(request: Request):
@@ -233,19 +253,44 @@ def create_app(settings=None, repository=None, steam_client=None):
         return render(request, 'quests.html', quests=data,
                       display_name=user.get('name') or 'Deine Quests')
 
+    @app.get('/rewards')
+    async def rewards(request: Request):
+        user = request.session.get('user')
+        if not user:
+            return RedirectResponse('/auth/steam', status_code=303)
+        data = await repo.rewards(user['steam_id'])
+        pending = any(row['status'] in ('pending', 'processing') for row in data['requests'])
+        return render(request, 'rewards.html', rewards=data, refresh=pending)
+
+    @app.post('/rewards/faction')
+    async def redeem_faction(request: Request):
+        user = request.session.get('user')
+        if not user:
+            return RedirectResponse('/auth/steam', status_code=303)
+        form = await protected_form(request)
+        server = form.get('server', [''])[0]
+        faction = form.get('faction', [''])[0]
+        if server not in SERVERS or faction not in ('Lonestar', 'Valkyra', 'Manticore'):
+            raise HTTPException(400)
+        await reward_db.create_request(user['steam_id'], 'faction', server, faction=faction)
+        return RedirectResponse('/rewards', status_code=303)
+
+    @app.post('/rewards/vip')
+    async def redeem_vip(request: Request):
+        user = request.session.get('user')
+        if not user:
+            return RedirectResponse('/auth/steam', status_code=303)
+        form = await protected_form(request)
+        server = form.get('server', [''])[0]
+        duration = form.get('duration', [''])[0]
+        if server not in SERVERS or duration not in ('week', 'month'):
+            raise HTTPException(400)
+        await reward_db.create_request(user['steam_id'], 'vip', server, duration_kind=duration)
+        return RedirectResponse('/rewards', status_code=303)
+
     @app.post('/logout')
     async def logout(request: Request):
-        if request.headers.get('origin') not in (None, settings.base_url):
-            raise HTTPException(403)
-        body = bytearray()
-        async for chunk in request.stream():
-            body.extend(chunk)
-            if len(body) > 4096:
-                raise HTTPException(400)
-        supplied = parse_qs(body.decode('utf-8', errors='replace')).get('csrf', [''])[0]
-        expected = request.session.get('csrf', '')
-        if not expected or not secrets.compare_digest(supplied, expected):
-            raise HTTPException(403)
+        await protected_form(request)
         request.session.clear()
         return RedirectResponse('/', status_code=303)
 

@@ -22,6 +22,7 @@
       <a href="/leaderboard"{% if path == '/leaderboard' %} aria-current="page"{% endif %}>{{ t('nav_leaderboard') }}</a>
       <a href="/me"{% if path == '/me' %} aria-current="page"{% endif %}>{{ t('nav_profile') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
       <a href="/quests"{% if path == '/quests' %} aria-current="page"{% endif %}>{{ t('nav_quests') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
+      <a href="/rewards"{% if path == '/rewards' %} aria-current="page"{% endif %}>{{ t('nav_rewards') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
     </nav>
     <main id="content">{% block content %}{% endblock %}</main>
     <footer class="footer"><span>Das Kartell <span class="muted">/ {{ t('footer_tagline') }}</span></span><span>{{ t('footer_portal') }}</span></footer>

@@ -14,6 +14,7 @@ SERVER_STATUS_CHANNEL_ID = os.getenv("SERVER_STATUS_CHANNEL_ID")
 SERVER_RECAP_CHANNEL_ID = os.getenv("SERVER_RECAP_CHANNEL_ID")
 SERVER_RECAP_MESSAGE_IDS_FILE = "server_recap_message_ids.json"
 DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
+VIP_CHANNEL_ID = os.getenv("VIP_CHANNEL_ID", "1550791504455532554")
 
 
 def _bounded_int(name, default, minimum, maximum):
@@ -102,6 +103,13 @@ QUEST_SAMPLE_DELAY_SECONDS = 15
 QUEST_MAX_OBSERVATION_GAP_SECONDS = 90
 QUEST_PERMANENT_SYNC_SECONDS = 5 * 60
 
+# Belohnungsshop
+REWARD_FACTION_COST = 20
+VIP_WEEK_COST = 150
+VIP_MONTH_COST = 550
+VIP_SLOT_LIMIT = 20
+VIP_EXPIRY_CHECK_SECONDS = 60
+
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
@@ -146,7 +154,7 @@ def server(server_id):
 def validate():
     """Disable only the misconfigured surface; never print credentials."""
     for key in ("GUILD_ID", "SERVER_STATUS_CHANNEL_ID", "SERVER_RECAP_CHANNEL_ID", "DISCORD_LOG_CHANNEL_ID",
-                "LEADERBOARD_CHANNEL_ID", "ADMIN_PANEL_CHANNEL_ID",
+                "LEADERBOARD_CHANNEL_ID", "ADMIN_PANEL_CHANNEL_ID", "VIP_CHANNEL_ID",
                 "SERVER2_VOTE_CHANNEL_ID", "SERVER3_VOTE_CHANNEL_ID"):
         value = globals()[key]
         if value and (not str(value).isascii() or not str(value).isdigit() or int(value) <= 0):

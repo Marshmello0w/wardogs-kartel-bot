@@ -83,11 +83,32 @@ QUEST_SYSTEM = (
         ) ENGINE=InnoDB""",
 )
 
+REWARD_SHOP = (
+    """CREATE TABLE IF NOT EXISTS reward_requests (
+        id CHAR(36) PRIMARY KEY, steam_id VARCHAR(50) NOT NULL, kind VARCHAR(30) NOT NULL,
+        server_id VARCHAR(50) NOT NULL, faction VARCHAR(50) NULL, duration_kind VARCHAR(12) NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending', reason VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at DATETIME NULL,
+        INDEX(status, created_at), INDEX(steam_id, created_at)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS vip_memberships (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY, steam_id VARCHAR(50) NOT NULL, server_id VARCHAR(50) NOT NULL,
+        duration_kind VARCHAR(12) NOT NULL, points_cost INT NOT NULL DEFAULT 0,
+        status VARCHAR(32) NOT NULL, source VARCHAR(20) NOT NULL DEFAULT 'shop',
+        ordered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, activated_at DATETIME NULL,
+        expires_at DATETIME NULL, removed_at DATETIME NULL,
+        discord_message_id BIGINT NULL, expiry_message_id BIGINT NULL,
+        admin_user_id VARCHAR(50) NULL, admin_mention VARCHAR(100) NULL,
+        INDEX(server_id, status), INDEX(steam_id, server_id, status), INDEX(status, expires_at)
+    ) ENGINE=InnoDB""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
     (3, IGNORED_FACTION_CORRECTION),
     (4, QUEST_SYSTEM),
+    (5, REWARD_SHOP),
 )
 
 
