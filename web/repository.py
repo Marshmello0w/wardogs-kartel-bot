@@ -325,7 +325,7 @@ class Repository:
         poll, never a web-side RCON request.  The bot still repeats every live
         check immediately before executing a submitted change.
         """
-        points, memberships, slots, requests, presence = await asyncio.gather(
+        points, memberships, slots, requests = await asyncio.gather(
             self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', (steam_id,)),
             self.db.query('''SELECT server_id,duration_kind,status,ordered_at,activated_at,expires_at,removed_at
                 FROM vip_memberships WHERE steam_id=%s
@@ -337,10 +337,16 @@ class Repository:
             self.db.query('''SELECT id,kind,server_id,faction,duration_kind,status,reason,created_at,completed_at
                 FROM reward_requests WHERE steam_id=%s AND status IN ('pending','processing','success')
                 ORDER BY created_at DESC LIMIT 8''', (steam_id,)),
-            self.db.query('''SELECT server_id,last_seen FROM player_playtime
-                WHERE steam_id=%s AND last_seen>=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 90 SECOND)
-                ORDER BY last_seen DESC LIMIT 1''', (steam_id,)),
         )
+        # A temporary availability failure must not hide the whole shop.  The
+        # player merely sees the safe red "not online" state until the next
+        # successful bot sample; VIP state and the point balance stay visible.
+        try:
+            presence = await self.db.query('''SELECT server_id,last_seen FROM player_playtime
+                WHERE steam_id=%s AND last_seen>=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 90 SECOND)
+                ORDER BY last_seen DESC LIMIT 1''', (steam_id,))
+        except DataUnavailable:
+            presence = []
         memberships_by_server = {key: None for key in SERVERS}
         for row in memberships:
             if row.get('server_id') in memberships_by_server and memberships_by_server[row['server_id']] is None:
