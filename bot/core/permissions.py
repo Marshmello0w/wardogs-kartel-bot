@@ -17,7 +17,11 @@ def valid_steam_id(value):
 
 
 async def require_admin(interaction):
-    if interaction.guild is not None and is_admin(interaction.user):
+    configured_guild = str(config.GUILD_ID or '')
+    interaction_guild = getattr(interaction, 'guild_id', None)
+    if interaction_guild is None and getattr(interaction, 'guild', None) is not None:
+        interaction_guild = getattr(interaction.guild, 'id', None)
+    if configured_guild and str(interaction_guild or '') == configured_guild and is_admin(interaction.user):
         return True
     message = "❌ Du hast keine Berechtigung für diese Aktion."
     if interaction.response.is_done():

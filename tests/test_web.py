@@ -139,7 +139,7 @@ class SteamTests(unittest.IsolatedAsyncioTestCase):
             await self.login.verify(args, 'other-browser')
         with self.assertRaises(LoginError):
             await self.login.verify(args + [('openid.claimed_id', 'other')], state)
-        self.login.pending[state] = 0
+        self.login.pending[state] = (0, 'unknown', 'unknown')
         with self.assertRaises(LoginError):
             await self.login.verify(args, state)
 
@@ -151,6 +151,15 @@ class SteamTests(unittest.IsolatedAsyncioTestCase):
                 await self.login.verify(list(assertion(state).items()), state)
         finally:
             await self.login.client.aclose()
+
+    async def test_login_state_is_rate_limited_per_ip_and_per_browser(self):
+        for _ in range(self.login.MAX_PENDING_PER_SESSION):
+            await self.login.begin('198.51.100.5', 'browser-a')
+        with self.assertRaises(LoginError):
+            await self.login.begin('198.51.100.5', 'browser-a')
+        # A distinct browser on the same address remains possible until the
+        # address-wide allocation budget is exhausted.
+        await self.login.begin('198.51.100.5', 'browser-b')
 
     async def test_profile_requires_matching_id_and_safe_avatar(self):
         self.assertEqual((await self.login.summary(STEAM_ID))['name'], 'Steam Player')
@@ -316,6 +325,19 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(result.status_code, 303)
         self.submissions.create_request.assert_awaited_once_with(STEAM_ID, 'faction', 'server1', faction='Manticore')
         self.assertEqual(self.client.post('/rewards/vip', data={'csrf': csrf, 'server': 'server1', 'duration': 'forever'}).status_code, 400)
+
+    def test_language_redirect_stays_on_this_origin(self):
+        for target in ('///attacker.example', '//attacker.example', '/\\attacker.example', 'https://attacker.example'):
+            response = self.client.get('/language/en', params={'next': target}, follow_redirects=False)
+            self.assertEqual(response.headers['location'], '/')
+        response = self.client.get('/language/en', params={'next': '/quests?from=language'}, follow_redirects=False)
+        self.assertEqual(response.headers['location'], '/quests?from=language')
+        self.login()
+        page = self.client.get('/me')
+        csrf = re.search(r'name="csrf" value="([^"]+)"', page.text).group(1)
+        response = self.client.post('/language', data={'csrf': csrf, 'language': 'en', 'next': '///attacker.example'},
+                                    headers={'origin': SETTINGS.base_url}, follow_redirects=False)
+        self.assertEqual(response.headers['location'], '/')
 
     def test_reward_request_is_not_created_when_red(self):
         self.login()

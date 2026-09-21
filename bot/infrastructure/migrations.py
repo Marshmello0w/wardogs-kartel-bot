@@ -103,6 +103,14 @@ REWARD_SHOP = (
     ) ENGINE=InnoDB""",
 )
 
+# The hardened faction-execution lifecycle includes
+# ``reconciliation_required`` (23 characters).  Existing installations created
+# the original status column at 20 characters, so widen it before that state is
+# ever written.
+REWARD_SHOP_HARDENING = (
+    "ALTER TABLE reward_requests MODIFY status VARCHAR(32) NOT NULL DEFAULT 'pending'",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
@@ -113,6 +121,7 @@ MIGRATIONS = (
     # feature existed. Re-run the idempotent schema at a fresh version so an
     # already marked database cannot miss the two shop tables.
     (6, REWARD_SHOP),
+    (7, REWARD_SHOP_HARDENING),
 )
 
 

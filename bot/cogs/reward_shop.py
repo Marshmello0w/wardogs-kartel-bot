@@ -113,6 +113,22 @@ class RewardShopCog(commands.Cog):
             row = await cur.fetchone()
             if not row or row['status'] != 'pending':
                 return None
+            # A player can submit several browser requests before the polling
+            # worker runs.  Lock and reject later faction requests here so only
+            # one request can ever reserve a balance and reach RCON.
+            if row['kind'] == 'faction':
+                await cur.execute("""SELECT id FROM reward_requests
+                    WHERE steam_id=%s AND kind='faction' AND status IN ('pending','processing','charged','executing')
+                    ORDER BY created_at,id FOR UPDATE""", (row['steam_id'],))
+                active_ids = [entry['id'] for entry in await cur.fetchall()]
+                if active_ids and active_ids[0] != row['id']:
+                    await cur.execute("""UPDATE reward_requests SET status='rejected',reason=%s,completed_at=UTC_TIMESTAMP()
+                        WHERE id=%s""", ('Konflikt mit einem bereits laufenden Fraktionswechsel', row['id']))
+                    return None
+                if len(active_ids) > 1:
+                    await cur.execute("""UPDATE reward_requests SET status='rejected',reason=%s,completed_at=UTC_TIMESTAMP()
+                        WHERE steam_id=%s AND kind='faction' AND status='pending' AND id<>%s""",
+                                      ('Konflikt mit einem bereits laufenden Fraktionswechsel', row['steam_id'], row['id']))
             await cur.execute("UPDATE reward_requests SET status='processing' WHERE id=%s", (request_id,))
             return row
 
@@ -120,8 +136,48 @@ class RewardShopCog(commands.Cog):
         async with database.transaction() as cur:
             await cur.execute("UPDATE reward_requests SET status=%s,reason=%s,completed_at=UTC_TIMESTAMP() WHERE id=%s", (status, str(reason or '')[:255] or None, request_id))
 
+    async def _reserve_faction_points(self, row, target):
+        """Debit before any external action and persist the charged state."""
+        async with database.transaction() as cur:
+            await cur.execute("SELECT status FROM reward_requests WHERE id=%s FOR UPDATE", (row['id'],))
+            request = await cur.fetchone()
+            if not request or request['status'] != 'processing':
+                return False
+            if not await self._debit(cur, row['steam_id'], config.REWARD_FACTION_COST, 'reward_faction', row['id'],
+                                     f'Fraktionswechsel zu {target} auf {row["server_id"]}'):
+                await cur.execute("""UPDATE reward_requests SET status='rejected',reason=%s,completed_at=UTC_TIMESTAMP()
+                    WHERE id=%s""", ('Nicht genügend Quest-Punkte', row['id']))
+                return False
+            await cur.execute("UPDATE reward_requests SET status='charged' WHERE id=%s", (row['id'],))
+            return True
+
+    async def _mark_faction_executing(self, request_id):
+        """Mark the irreversible RCON boundary before issuing the request."""
+        async with database.transaction() as cur:
+            await cur.execute("UPDATE reward_requests SET status='executing' WHERE id=%s AND status='charged'", (request_id,))
+            return cur.rowcount == 1
+
+    async def _refund_reserved_faction(self, row, reason):
+        """Idempotently refund only a charge known not to have reached RCON."""
+        async with database.transaction() as cur:
+            await cur.execute("SELECT status FROM reward_requests WHERE id=%s FOR UPDATE", (row['id'],))
+            request = await cur.fetchone()
+            if not request or request['status'] != 'charged':
+                return False
+            await cur.execute("""INSERT IGNORE INTO quest_point_ledger(steam_id,amount,kind,reference_key,reason)
+                VALUES (%s,%s,'reward_faction_refund',%s,%s)""",
+                              (row['steam_id'], config.REWARD_FACTION_COST, row['id'], str(reason)[:255]))
+            if cur.rowcount:
+                await cur.execute("""INSERT INTO quest_points(steam_id,points) VALUES (%s,%s)
+                    ON DUPLICATE KEY UPDATE points=points+VALUES(points),updated_at=UTC_TIMESTAMP()""",
+                                  (row['steam_id'], config.REWARD_FACTION_COST))
+            await cur.execute("UPDATE reward_requests SET status='failed',reason=%s,completed_at=UTC_TIMESTAMP() WHERE id=%s",
+                              (str(reason)[:255], row['id']))
+            return True
+
     async def _faction_request(self, row):
         server_id, steam_id, target = row['server_id'], str(row['steam_id']), valid_faction(row['faction'])
+        executing = False
         if not target:
             await self._finish_request(row['id'], 'rejected', 'Ungültige Fraktion')
             return
@@ -142,24 +198,33 @@ class RewardShopCog(commands.Cog):
             if max(sizes.values()) - min(sizes.values()) > 4:
                 await self._finish_request(row['id'], 'rejected', 'Die Team-Balance würde mehr als vier Spieler abweichen')
                 return
+            if not await self._reserve_faction_points(row, target):
+                return
+            # Once this transition succeeds, a restart or transport failure is
+            # deliberately reconciled by an admin instead of risking a refund
+            # for a change that may already have been applied by the server.
+            if not await self._mark_faction_executing(row['id']):
+                await self._refund_reserved_faction(row, 'Ausführung vor dem Fraktionswechsel abgebrochen')
+                return
+            executing = True
             await self.bot.rcon.request(server_id, 'PATCH', f'/v1/players/{steam_id}', payload={'faction': target})
             await self.bot.rcon.request(server_id, 'POST', f'/v1/players/{steam_id}/kill')
             verified = await self.bot.rcon.players(server_id)
             if not any(str(p.get('steamId')) == steam_id and valid_faction(p.get('faction')) == target for p in verified):
-                await self._finish_request(row['id'], 'failed', 'Fraktionswechsel konnte nicht bestätigt werden')
+                await self._finish_request(row['id'], 'reconciliation_required', 'Fraktionswechsel konnte nicht eindeutig bestätigt werden')
+                self.bot.dispatch('bot_log', '⚠️ Fraktionswechsel prüfen', f'`{steam_id}` auf {server_id} muss manuell geprüft werden; Punkte bleiben reserviert.', discord.Color.orange())
                 return
-            async with database.transaction() as cur:
-                if not await self._debit(cur, steam_id, config.REWARD_FACTION_COST, 'reward_faction', row['id'],
-                                         f'Fraktionswechsel zu {target} auf {server_id}'):
-                    # A successful RCON command is never retried. Keep the auditable failure instead of charging blindly.
-                    await cur.execute("UPDATE reward_requests SET status='failed',reason=%s,completed_at=UTC_TIMESTAMP() WHERE id=%s",
-                                      ('Punktestand hat sich während der Prüfung geändert', row['id']))
-                    return
-                await cur.execute("UPDATE reward_requests SET status='success',completed_at=UTC_TIMESTAMP() WHERE id=%s", (row['id'],))
+            await self._finish_request(row['id'], 'success')
             self.bot.dispatch('bot_log', '🏴 Fraktionswechsel eingelöst', f'`{steam_id}` wechselte auf {server_id} zu **{target}**.', discord.Color.blue())
         except RconError as exc:
-            await self._finish_request(row['id'], 'failed', exc.safe_message)
-            self.bot.dispatch('bot_log', '⚠️ Fraktionswechsel fehlgeschlagen', f'`{steam_id}` auf {server_id}: {exc.safe_message}', discord.Color.orange())
+            # Before the debit, the failed read is harmless.  After the
+            # executing marker any RCON error is ambiguous and must not refund.
+            if executing:
+                await self._finish_request(row['id'], 'reconciliation_required', exc.safe_message)
+                self.bot.dispatch('bot_log', '⚠️ Fraktionswechsel prüfen', f'`{steam_id}` auf {server_id}: {exc.safe_message}; Punkte bleiben bis zur Prüfung reserviert.', discord.Color.orange())
+            else:
+                await self._finish_request(row['id'], 'failed', exc.safe_message)
+                self.bot.dispatch('bot_log', '⚠️ Fraktionswechsel fehlgeschlagen', f'`{steam_id}` auf {server_id}: {exc.safe_message}', discord.Color.orange())
 
     async def _vip_request(self, row):
         duration = row['duration_kind']
@@ -208,6 +273,16 @@ class RewardShopCog(commands.Cog):
     @process_requests.before_loop
     async def before_process_requests(self):
         await self.bot.wait_until_ready()
+        # A charged request never reached the executing marker, so no external
+        # effect was attempted and it is safe to refund.  Executing requests
+        # may have reached RCON; leave their debit intact for reconciliation.
+        async with database.transaction() as cur:
+            await cur.execute("SELECT * FROM reward_requests WHERE kind='faction' AND status='charged' FOR UPDATE")
+            charged = await cur.fetchall()
+            await cur.execute("""UPDATE reward_requests SET status='reconciliation_required',reason=%s,completed_at=UTC_TIMESTAMP()
+                WHERE kind='faction' AND status='executing'""", ('Bot-Neustart während der RCON-Ausführung',))
+        for row in charged:
+            await self._refund_reserved_faction(row, 'Bot-Neustart vor der RCON-Ausführung')
 
     async def membership(self, membership_id=None, message_id=None, expiry_message_id=None):
         key, value = ('id', membership_id) if membership_id is not None else ('discord_message_id', message_id) if message_id is not None else ('expiry_message_id', expiry_message_id)

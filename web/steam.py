@@ -19,19 +19,31 @@ class LoginError(ValueError):
 
 
 class SteamLogin:
+    MAX_PENDING_TOTAL = 4096
+    MAX_PENDING_PER_IP = 16
+    MAX_PENDING_PER_SESSION = 4
+    PENDING_TTL_SECONDS = 600
+
     def __init__(self, settings, client):
         self.settings, self.client = settings, client
         self.pending = {}
         self.lock = asyncio.Lock()
 
-    async def begin(self):
+    async def begin(self, client_ip='unknown', session_key='unknown'):
+        """Allocate a short-lived state under bounded per-client budgets."""
+        client_ip = str(client_ip or 'unknown')[:128]
+        session_key = str(session_key or 'unknown')[:128]
         async with self.lock:
             now = time.monotonic()
-            self.pending = {k: v for k, v in self.pending.items() if v > now}
-            if len(self.pending) >= 4096:
+            self.pending = {key: value for key, value in self.pending.items() if value[0] > now}
+            if len(self.pending) >= self.MAX_PENDING_TOTAL:
                 raise LoginError('Too many pending logins')
+            if sum(value[1] == client_ip for value in self.pending.values()) >= self.MAX_PENDING_PER_IP:
+                raise LoginError('Too many pending logins for client')
+            if sum(value[2] == session_key for value in self.pending.values()) >= self.MAX_PENDING_PER_SESSION:
+                raise LoginError('Too many pending logins for browser')
             state = secrets.token_urlsafe(32)
-            self.pending[state] = now + 600
+            self.pending[state] = (now + self.PENDING_TTL_SECONDS, client_ip, session_key)
         return_to = self.settings.callback + '?' + urlencode({'state': state})
         params = {'openid.ns': OPENID_NS, 'openid.mode': 'checkid_setup',
                   'openid.return_to': return_to, 'openid.realm': self.settings.base_url + '/',
@@ -47,7 +59,8 @@ class SteamLogin:
             raise LoginError('Invalid login state')
         # Consume BEFORE network I/O: concurrent callbacks cannot replay a login.
         async with self.lock:
-            expires = self.pending.pop(state, 0)
+            pending = self.pending.pop(state, None)
+            expires = pending[0] if pending else 0
         if expires < time.monotonic():
             raise LoginError('Expired or replayed login')
         expected_return = self.settings.callback + '?' + urlencode({'state': state})

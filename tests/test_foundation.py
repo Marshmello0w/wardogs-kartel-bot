@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
 from core import config
-from core.permissions import is_admin, valid_steam_id
+from core.permissions import is_admin, require_admin, valid_steam_id
 from core.runtime import Health
 from infrastructure import database
 
@@ -27,6 +27,36 @@ class PermissionsTests(unittest.TestCase):
         self.assertTrue(valid_steam_id("76561190000000000"))
         self.assertFalse(valid_steam_id("a" * 17))
         self.assertFalse(valid_steam_id("١" * 17))
+
+
+class GuildScopeTests(unittest.IsolatedAsyncioTestCase):
+    def _interaction(self, guild_id):
+        response = SimpleNamespace(is_done=Mock(return_value=False), send_message=AsyncMock())
+        return SimpleNamespace(
+            guild_id=guild_id,
+            guild=SimpleNamespace(id=guild_id),
+            user=SimpleNamespace(guild_permissions=SimpleNamespace(administrator=True), roles=[]),
+            response=response,
+            followup=SimpleNamespace(send=AsyncMock()),
+        )
+
+    async def test_admin_is_limited_to_configured_guild(self):
+        with patch.object(config, 'GUILD_ID', '100'):
+            self.assertTrue(await require_admin(self._interaction(100)))
+            denied = self._interaction(200)
+            self.assertFalse(await require_admin(denied))
+            denied.response.send_message.assert_awaited_once()
+
+
+class RconConfigurationTests(unittest.TestCase):
+    def test_remote_rcon_requires_https_but_loopback_dev_is_allowed(self):
+        self.assertTrue(config.Server('server1', 'Server 1', 'https://rcon.example:20001', 'secret').enabled)
+        self.assertFalse(config.Server('server1', 'Server 1', 'http://rcon.example:20001', 'secret').enabled)
+        self.assertTrue(config.Server('server1', 'Server 1', 'http://127.0.0.1:20001', 'secret').enabled)
+
+    def test_missing_guild_id_fails_startup_validation(self):
+        with patch.object(config, 'DISCORD_BOT_TOKEN', 'test-token'), patch.object(config, 'GUILD_ID', ''):
+            self.assertFalse(config.validate())
 
 
 class HealthTests(unittest.TestCase):

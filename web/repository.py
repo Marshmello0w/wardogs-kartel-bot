@@ -335,7 +335,7 @@ class Repository:
                 WHERE status IN ('pending_activation','active','expired_pending_removal')
                 GROUP BY server_id'''),
             self.db.query('''SELECT id,kind,server_id,faction,duration_kind,status,reason,created_at,completed_at
-                FROM reward_requests WHERE steam_id=%s AND status IN ('pending','processing','success')
+                FROM reward_requests WHERE steam_id=%s AND status IN ('pending','processing','charged','executing','reconciliation_required','success')
                 ORDER BY created_at DESC LIMIT 8''', (steam_id,)),
         )
         # A temporary availability failure must not hide the whole shop.  The

@@ -68,6 +68,16 @@ def iso(value):
     return stamp.isoformat() if stamp else ''
 
 
+def internal_redirect_path(value):
+    """Return one normalized-origin relative target, never a network path."""
+    target = value if isinstance(value, str) else ''
+    parsed = urlsplit(target)
+    if (not target.startswith('/') or target.startswith('//') or '\\' in target
+            or parsed.scheme or parsed.netloc):
+        return '/'
+    return target
+
+
 def create_app(settings=None, repository=None, steam_client=None, reward_submission=None):
     settings = settings or Settings.from_env()
     db = ReadDatabase(settings.db_url)
@@ -169,18 +179,13 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         if selected not in LANGUAGES:
             raise HTTPException(400)
         request.session['language'] = selected
-        target = form.get('next', ['/'])[0]
-        parsed = urlsplit(target)
-        if parsed.scheme or parsed.netloc or not parsed.path.startswith('/'):
-            target = '/'
+        target = internal_redirect_path(form.get('next', ['/'])[0])
         return RedirectResponse(target, status_code=303)
 
     @app.get('/language/{selected}')
     async def select_language(request: Request, selected: Literal['de', 'en'], next: str = '/'):
         """Language preference is non-sensitive and works without form submission."""
-        parsed = urlsplit(next)
-        if parsed.scheme or parsed.netloc or not parsed.path.startswith('/'):
-            next = '/'
+        next = internal_redirect_path(next)
         request.session['language'] = selected
         return RedirectResponse(next, status_code=303)
 
@@ -210,8 +215,13 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     async def login(request: Request):
         if request.session.get('user'):
             return RedirectResponse('/me', status_code=303)
+        session_key = request.session.get('login_client_key')
+        if not isinstance(session_key, str) or len(session_key) < 16:
+            session_key = secrets.token_urlsafe(24)
+            request.session['login_client_key'] = session_key
+        client_ip = request.client.host if request.client else 'unknown'
         try:
-            state, url = await steam.begin()
+            state, url = await steam.begin(client_ip, session_key)
         except LoginError:
             return render(request, 'error.html', status=429, title_key='error_busy_title', message_key='error_busy')
         request.session['login_state'] = state
@@ -259,7 +269,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         if not user:
             return RedirectResponse('/auth/steam', status_code=303)
         data = await repo.rewards(user['steam_id'])
-        pending = any(row['status'] in ('pending', 'processing') for row in data['requests'])
+        pending = any(row['status'] in ('pending', 'processing', 'charged', 'executing') for row in data['requests'])
         return render(request, 'rewards.html', rewards=data, refresh=pending)
 
     @app.post('/rewards/faction')

@@ -1,5 +1,6 @@
 import os
 import logging
+import ipaddress
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 from dotenv import load_dotenv
@@ -131,7 +132,15 @@ class Server:
         try:
             parsed = urlparse(self.url)
             port = parsed.port
-            return bool(parsed.scheme in ("http", "https") and parsed.hostname and self.password
+            host = parsed.hostname or ''
+            try:
+                loopback = host.casefold() == 'localhost' or ipaddress.ip_address(host).is_loopback
+            except ValueError:
+                loopback = False
+            # Bearer credentials must never traverse a non-loopback cleartext
+            # connection. HTTP remains available only for local development.
+            secure_transport = parsed.scheme == 'https' or (parsed.scheme == 'http' and loopback)
+            return bool(secure_transport and host and self.password
                         and not parsed.username and not parsed.password and not parsed.query
                         and not parsed.fragment and (port is None or port > 0))
         except ValueError:
@@ -160,8 +169,10 @@ def validate():
         if value and (not str(value).isascii() or not str(value).isdigit() or int(value) <= 0):
             logging.error("Invalid %s; associated surface disabled", key)
             globals()[key] = ""
+    if not GUILD_ID:
+        logging.error("GUILD_ID is required; refusing to expose privileged commands globally")
     for srv in servers():
         if not srv.enabled:
             logging.warning("%s disabled: missing or invalid RCON configuration", srv.title)
-    return bool(DISCORD_BOT_TOKEN)
+    return bool(DISCORD_BOT_TOKEN and GUILD_ID)
 

@@ -11,3 +11,4 @@ admin_panel_msg_id.json
 pending_admin_actions.json
 *.json.*.tmp
 .pytest_cache/
+scratch/

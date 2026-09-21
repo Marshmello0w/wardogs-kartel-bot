@@ -54,7 +54,7 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
         client = RconClient()
         client.session = Session()
-        server = SimpleNamespace(enabled=True, password='not-logged', url='http://rcon.invalid')
+        server = SimpleNamespace(enabled=True, password='not-logged', url='https://rcon.invalid')
         with patch('services.rcon.config.server', return_value=server):
             first = asyncio.create_task(client.get('server1', '/v1/players'))
             await entered.wait()

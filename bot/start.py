@@ -23,15 +23,14 @@ class KartelBot(commands.Bot):
                      'server_recap', 'quest_tracker', 'player_lookup', 'low_population_guard', 'reward_shop'):
             await self.load_extension(f'cogs.{name}')
         try:
-            if config.GUILD_ID:
-                guild = discord.Object(id=int(config.GUILD_ID))
-                self.tree.copy_global_to(guild=guild)
-                await self.tree.sync(guild=guild)
-                self.tree.clear_commands(guild=None)
-                await self.tree.sync()
-            else:
-                await self.tree.sync()
-        except discord.HTTPException as exc:
+            # ``config.validate`` requires this identifier before login. Never
+            # fall back to global command registration for privileged controls.
+            guild = discord.Object(id=int(config.GUILD_ID))
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
+        except (discord.HTTPException, ValueError) as exc:
             logging.error('Command sync failed: %s', type(exc).__name__)
 
     async def on_ready(self):
@@ -47,7 +46,7 @@ class KartelBot(commands.Bot):
 
 async def main():
     if not config.validate():
-        logging.error('DISCORD_BOT_TOKEN is missing')
+        logging.error('DISCORD_BOT_TOKEN or GUILD_ID is missing or invalid')
         return
     async with KartelBot() as bot:
         await bot.start(config.DISCORD_BOT_TOKEN)
