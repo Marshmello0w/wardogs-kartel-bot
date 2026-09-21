@@ -109,6 +109,10 @@ MIGRATIONS = (
     (3, IGNORED_FACTION_CORRECTION),
     (4, QUEST_SYSTEM),
     (5, REWARD_SHOP),
+    # A prior development deployment used migration number 5 before this
+    # feature existed. Re-run the idempotent schema at a fresh version so an
+    # already marked database cannot miss the two shop tables.
+    (6, REWARD_SHOP),
 )
 
 
