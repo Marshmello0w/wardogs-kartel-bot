@@ -83,11 +83,24 @@ QUEST_SYSTEM = (
         ) ENGINE=InnoDB""",
 )
 
+# The older ``player_playtime`` table is an all-time total.  K/D eligibility
+# needs a matching calendar-day record so 7- and 30-day boards use the same
+# time window for both playtime and player counters.
+DAILY_PLAYTIME = (
+    """CREATE TABLE IF NOT EXISTS player_daily_playtime (
+        server_id VARCHAR(50) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        date DATE NOT NULL, name VARCHAR(255) NOT NULL,
+        playtime_seconds BIGINT NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id, steam_id, date), INDEX(steam_id, date)
+        ) ENGINE=InnoDB""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
     (3, IGNORED_FACTION_CORRECTION),
     (4, QUEST_SYSTEM),
+    (5, DAILY_PLAYTIME),
 )
 
 

@@ -207,6 +207,16 @@ class PureTests(unittest.TestCase):
                 for sort in ('kd', 'cash'):
                     self.assertEqual(ranking_query(server, period, sort), scope['ranking_query'](server, period, sort))
 
+    def test_kd_qualification_is_period_aware_and_cash_stays_open(self):
+        kd_sql, _ = ranking_query('server1', '7d', 'kd')
+        cash_sql, _ = ranking_query('server1', '7d', 'cash')
+        all_time_sql, _ = ranking_query('server1', 'all', 'kd')
+        self.assertIn('player_daily_playtime', kd_sql)
+        self.assertIn('totals.deaths>=5', kd_sql)
+        self.assertIn('totals.playtime_seconds>=1800', kd_sql)
+        self.assertNotIn('totals.deaths>=5', cash_sql)
+        self.assertIn('JOIN player_playtime', all_time_sql)
+
     def test_stale_uncertain_missing_bad_player_counts(self):
         self.assertFalse(server_status('server1', state_snapshot(31))['fresh'])
         self.assertFalse(server_status('server1', state_snapshot(0, True))['fresh'])

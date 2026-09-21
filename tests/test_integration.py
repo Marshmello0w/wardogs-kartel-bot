@@ -92,7 +92,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
         await database.init_db(self.pool)
         self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)
-        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 4)
+        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 5)
 
     async def test_quest_imports_once_and_ignores_white_team_time(self):
         await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
@@ -219,6 +219,8 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         player = dict(steamId=STEAM, name='Player', kills=10, deaths=5, cash=100)
         await stats.update_players('server1', partial, [player])
         await stats.update_players('server1', observed, [dict(player, kills=12,deaths=6,cash=120)])
+        await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
+            VALUES (%s,%s,%s,%s)""", ('server1', STEAM, 'Player', 1800))
         public = await stats.ranking('server1')
         personal = await stats.ranking('server1', steam_id=STEAM)
         self.assertEqual(public[0], personal)
@@ -241,9 +243,12 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_seven_calendar_days_excludes_eighth_day(self):
         await self.rows('INSERT INTO leaderboard(server_id,steam_id,name) VALUES (%s,%s,%s)', ('server1',STEAM,'Player'))
-        await self.rows("""INSERT INTO player_daily_stats(server_id,steam_id,name,date,kills)
-            VALUES (%s,%s,'Player',DATE_SUB(UTC_DATE(),INTERVAL 7 DAY),100),
-            (%s,%s,'Player',DATE_SUB(UTC_DATE(),INTERVAL 6 DAY),10)""", ('server1',STEAM,'server1',STEAM))
+        await self.rows("""INSERT INTO player_daily_stats(server_id,steam_id,name,date,kills,deaths)
+            VALUES (%s,%s,'Player',DATE_SUB(UTC_DATE(),INTERVAL 7 DAY),100,100),
+            (%s,%s,'Player',DATE_SUB(UTC_DATE(),INTERVAL 6 DAY),10,5)""", ('server1',STEAM,'server1',STEAM))
+        await self.rows("""INSERT INTO player_daily_playtime(server_id,steam_id,name,date,playtime_seconds)
+            VALUES (%s,%s,'Player',DATE_SUB(UTC_DATE(),INTERVAL 7 DAY),7200),
+            (%s,%s,'Player',DATE_SUB(UTC_DATE(),INTERVAL 6 DAY),1800)""", ('server1',STEAM,'server1',STEAM))
         self.assertEqual((await stats.ranking('server1','7d',steam_id=STEAM))['kills'], 10)
 
     async def test_ban_expires_during_preflight_read(self):
@@ -270,6 +275,8 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
             await cog.sample(config.server('server1'))
         row = (await self.rows('SELECT * FROM player_playtime'))[0]
         self.assertEqual(row['playtime_seconds'], 62)
+        daily = (await self.rows('SELECT * FROM player_daily_playtime'))[0]
+        self.assertEqual(daily['playtime_seconds'], 62)
 
     async def test_faction_entries_ignore_repeated_polls_and_count_changes(self):
         from cogs.stats_tracker import StatsTracker

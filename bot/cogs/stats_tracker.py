@@ -63,6 +63,15 @@ class StatsTracker(commands.Cog):
                         VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE name=VALUES(name),
                         playtime_seconds=playtime_seconds+VALUES(playtime_seconds),last_seen=UTC_TIMESTAMP()""",
                         (srv.id, sid, name, credited))
+                    # Keep an equivalent daily value for period-aware K/D
+                    # qualification. First observations and polling gaps have
+                    # ``credited == 0`` and therefore cannot inflate it.
+                    if credited:
+                        await cur.execute("""INSERT INTO player_daily_playtime
+                            (server_id,steam_id,date,name,playtime_seconds)
+                            VALUES (%s,%s,UTC_DATE(),%s,%s) ON DUPLICATE KEY UPDATE
+                            name=VALUES(name),playtime_seconds=playtime_seconds+VALUES(playtime_seconds)""",
+                            (srv.id, sid, name, credited))
                     faction = self.faction_name(player)
                     # Count a detected entry once: when joining after a gap or
                     # changing faction. Repeated 60-second polls do not alter it.
