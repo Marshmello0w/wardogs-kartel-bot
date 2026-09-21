@@ -111,6 +111,31 @@ REWARD_SHOP_HARDENING = (
     "ALTER TABLE reward_requests MODIFY status VARCHAR(32) NOT NULL DEFAULT 'pending'",
 )
 
+SEED_QUEST = (
+    """CREATE TABLE IF NOT EXISTS seed_sessions (
+        id CHAR(36) PRIMARY KEY, server_id VARCHAR(50) NOT NULL,
+        status VARCHAR(24) NOT NULL DEFAULT 'active',
+        activated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        activated_by VARCHAR(100) NULL, ended_at DATETIME NULL,
+        ended_by VARCHAR(100) NULL, end_reason VARCHAR(32) NULL,
+        INDEX(server_id, status), INDEX(status, activated_at)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS seed_server_state (
+        server_id VARCHAR(50) PRIMARY KEY, session_id CHAR(36) NULL,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX(session_id)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS seed_participants (
+        session_id CHAR(36) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        initial_awarded TINYINT(1) NOT NULL DEFAULT 0,
+        observed_at DATETIME NULL, continuous_seconds BIGINT NOT NULL DEFAULT 0,
+        continuous_intervals INT NOT NULL DEFAULT 0,
+        awarded_intervals INT NOT NULL DEFAULT 0,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY(session_id, steam_id), INDEX(steam_id, session_id)
+    ) ENGINE=InnoDB""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
@@ -122,6 +147,7 @@ MIGRATIONS = (
     # already marked database cannot miss the two shop tables.
     (6, REWARD_SHOP),
     (7, REWARD_SHOP_HARDENING),
+    (8, SEED_QUEST),
 )
 
 

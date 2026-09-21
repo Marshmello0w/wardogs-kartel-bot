@@ -64,6 +64,8 @@ class FixtureDatabase:
             return [{'team': 'Valkyra', 'playtime_seconds': 7_200}] if args and args[0] == STEAM_ID else []
         if 'FROM quest_point_ledger' in sql:
             return [{'amount': 5, 'kind': 'weekly_team', 'created_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
+        if 'FROM seed_server_state' in sql:
+            return [{'server_id': 'server2'}]
         if 'FROM vip_memberships' in sql:
             return [{'server_id': 'server1', 'duration_kind': 'week', 'status': 'active',
                      'ordered_at': datetime(2026, 9, 20, 10), 'activated_at': datetime(2026, 9, 20, 10),
@@ -192,6 +194,7 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['teams'][1]['two_hours_done'])
         self.assertFalse(result['teams'][1]['four_hours_done'])
         self.assertEqual(result['history'][0]['kind'], 'weekly_team')
+        self.assertEqual(result['active_seeds'], [{'server_id': 'server2', 'title': 'Server 2'}])
 
     async def test_unknown_user_empty(self):
         result = await Repository(FixtureDatabase()).profile(OTHER_ID)

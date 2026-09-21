@@ -103,6 +103,13 @@ QUEST_SAMPLE_DELAY_SECONDS = 15
 QUEST_MAX_OBSERVATION_GAP_SECONDS = 90
 QUEST_PERMANENT_SYNC_SECONDS = 5 * 60
 
+# Seed-Quest: Ein Admin startet die Phase gezielt auf einem noch leeren Server.
+# Die Statistik-Erfassung liefert den Spielerstand bereits minütlich, daher ist
+# kein zusätzlicher RCON-Poll erforderlich.
+SEED_PLAYER_LIMIT = 15
+SEED_REWARD_INTERVAL_SECONDS = 15 * 60
+SEED_MAX_OBSERVATION_GAP_SECONDS = 90
+
 # Belohnungsshop
 REWARD_FACTION_COST = 20
 VIP_WEEK_COST = 150

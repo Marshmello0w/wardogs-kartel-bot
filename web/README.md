@@ -88,6 +88,8 @@ GRANT SELECT ON `DATABASE_NAME`.`durable_state` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`quest_points` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`vip_memberships` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`reward_requests` TO 'kartell_web'@'WEB_HOST';
+GRANT SELECT ON `DATABASE_NAME`.`seed_sessions` TO 'kartell_web'@'WEB_HOST';
+GRANT SELECT ON `DATABASE_NAME`.`seed_server_state` TO 'kartell_web'@'WEB_HOST';
 ```
 
 Keine `INSERT`, `UPDATE`, `DELETE`, DDL- oder Admin-Auftragsrechte vergeben.

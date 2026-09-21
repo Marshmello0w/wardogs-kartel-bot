@@ -277,7 +277,7 @@ class Repository:
         """Return only the authenticated player's read-only quest state."""
         args = (steam_id,)
         week_start = berlin_week_start()
-        points, progress, cash, teams, history = await asyncio.gather(
+        points, progress, cash, teams, history, seed_sessions = await asyncio.gather(
             self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', args),
             self.db.query('''SELECT eligible_playtime_seconds,awarded_eligible_hours,awarded_cash_blocks
                 FROM quest_progress WHERE steam_id=%s''', args),
@@ -287,6 +287,9 @@ class Repository:
                 WHERE steam_id=%s AND week_start=%s ORDER BY team''', (steam_id, week_start)),
             self.db.query('''SELECT amount,kind,created_at FROM quest_point_ledger
                 WHERE steam_id=%s ORDER BY created_at DESC,id DESC LIMIT 12''', args),
+            self.db.query('''SELECT session.server_id FROM seed_server_state state
+                JOIN seed_sessions session ON session.id=state.session_id
+                WHERE session.status='active' ORDER BY session.server_id'''),
         )
         eligible_seconds = int(progress[0]['eligible_playtime_seconds']) if progress else 0
         lifetime_cash = int(cash[0]['lifetime_cash']) if cash else 0
@@ -315,6 +318,9 @@ class Repository:
             'week_start': week_start,
             'week_end': week_start + timedelta(days=7),
             'teams': team_quests,
+            'active_seeds': [{'server_id': row['server_id'],
+                              'title': SERVERS.get(row['server_id'], row['server_id'])}
+                             for row in seed_sessions],
             'history': history,
         }
 

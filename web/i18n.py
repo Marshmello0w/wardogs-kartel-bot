@@ -39,6 +39,10 @@ TEXT['de'].update({
     'balance_limit': 'Nicht möglich: Die Team-Balance würde mehr als vier Spieler abweichen.',
     'no_vip_slots': 'Auf diesem Server sind keine VIP-Plätze frei.',
     'vip_exists': 'Du hast auf diesem Server bereits einen reservierten oder aktiven VIP.',
+    'seed_phase': 'Startphase',
+    'seed_active_message': 'Startphase aktiv. Jetzt verbinden und Punkte verdienen.',
+    'seed_join': 'Seed-Startphase',
+    'seed_playtime': 'Seed-Spielzeit',
 })
 TEXT['en'].update({
     'redeem': 'Redeem', 'vip_slots': 'VIP slots occupied',
@@ -49,6 +53,10 @@ TEXT['en'].update({
     'balance_limit': 'Not available: team balance would differ by more than four players.',
     'no_vip_slots': 'There are no VIP slots available on this server.',
     'vip_exists': 'You already have a reserved or active VIP on this server.',
+    'seed_phase': 'Start phase',
+    'seed_active_message': 'Start phase active. Connect now to earn points.',
+    'seed_join': 'Seed start phase',
+    'seed_playtime': 'Seed playtime',
 })
 
 
