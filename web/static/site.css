@@ -85,7 +85,6 @@ main { min-height: 65svh; }
 .profile-callout p { color: var(--color-muted); margin-block-start: var(--space-xs); }
 .profile-callout .button { align-self: flex-start; }
 .footer { display: flex; gap: var(--space-md); justify-content: space-between; flex-wrap: wrap; padding-block: var(--space-lg) var(--space-xl); border-block-start: var(--rule-thin) solid var(--color-rule); font-size: var(--text-sm); color: var(--color-muted); }
-.footer-button { min-height: 44px; padding: 0; border: 0; color: inherit; background: transparent; text-decoration: underline; text-underline-offset: 4px; font: inherit; cursor: pointer; }
 .cookie-banner { position: fixed; z-index: 20; inset-inline: max(var(--space-md), env(safe-area-inset-left)) max(var(--space-md), env(safe-area-inset-right)); inset-block-end: max(var(--space-md), env(safe-area-inset-bottom)); display: grid; gap: var(--space-lg); max-width: 68rem; margin-inline: auto; padding: var(--space-lg); border: var(--rule-thin) solid var(--color-control); border-inline-start: 3px solid var(--color-accent); background: var(--color-paper-2); color: var(--color-ink); box-shadow: 0 18px 48px rgb(0 0 0 / 0.45); }
 .cookie-banner[hidden] { display: none; }
 .cookie-banner h2 { margin: 0; }

@@ -8,13 +8,6 @@ languageToggle?.addEventListener('click', () => { const open = languageOptions.h
 document.addEventListener('click', event => { if (languageMenu && !languageMenu.contains(event.target)) closeLanguageMenu(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeLanguageMenu(); });
 const cookieBanner = document.querySelector('#cookie-banner');
-const cookieSettings = document.querySelector('[data-cookie-settings]');
-function setCookieBannerOpen(open) {
-  if (!cookieBanner) return;
-  cookieBanner.hidden = !open;
-  if (open) cookieBanner.querySelector('[data-cookie-choice]')?.focus();
-}
-cookieSettings?.addEventListener('click', () => setCookieBannerOpen(true));
 cookieBanner?.querySelectorAll('[data-cookie-choice]').forEach(button => {
   button.addEventListener('click', async () => {
     const buttons = [...cookieBanner.querySelectorAll('[data-cookie-choice]')];
@@ -26,11 +19,7 @@ cookieBanner?.querySelectorAll('[data-cookie-choice]').forEach(button => {
         body: new URLSearchParams({choice: button.dataset.cookieChoice})
       });
       if (!response.ok) throw new Error('Preference request failed');
-      setCookieBannerOpen(false);
-      // Re-enable the controls before the banner can be opened again through
-      // Cookie settings.  Otherwise a previous successful choice would leave
-      // both buttons visually present but inert.
-      buttons.forEach(item => { item.disabled = false; });
+      cookieBanner.hidden = true;
     } catch {
       const actions = cookieBanner.querySelector('.cookie-banner__actions');
       if (actions) actions.setAttribute('aria-label', 'Your choice could not be saved. Please try again.');

@@ -7,8 +7,8 @@
   <meta name="description" content="{{ t('meta_description') }}">
   <title>{% block title %}{{ t('portal_title') }}{% endblock %}</title>
   <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/site.css?v=cookie-1">
-  <script src="/static/site.js?v=cookie-2" defer></script>
+  <link rel="stylesheet" href="/static/site.css?v=cookie-2">
+  <script src="/static/site.js?v=cookie-3" defer></script>
 </head>
 <body data-language="{{ language }}" data-refresh="15">
   <a class="skip" href="#content">{{ t('skip') }}</a>
@@ -25,14 +25,14 @@
       <a href="/rewards"{% if path == '/rewards' %} aria-current="page"{% endif %}>{{ t('nav_rewards') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
     </nav>
     <main id="content">{% block content %}{% endblock %}</main>
-    <footer class="footer"><span>Das Kartell <span class="muted">/ {{ t('footer_tagline') }}</span></span><span>{{ t('footer_portal') }}</span><button class="footer-button" type="button" data-cookie-settings>Cookie settings</button></footer>
+    <footer class="footer"><span>Das Kartell <span class="muted">/ {{ t('footer_tagline') }}</span></span><span>{{ t('footer_portal') }}</span></footer>
   </div>
-  <section id="cookie-banner" class="cookie-banner" role="dialog" aria-modal="false" aria-labelledby="cookie-title"{% if cookie_choice %} hidden{% endif %}>
+  <section id="cookie-banner" class="cookie-banner" role="dialog" aria-modal="false" aria-labelledby="cookie-title"{% if not show_cookie_banner %} hidden{% endif %}>
     <div class="cookie-banner__content">
       <h2 id="cookie-title">Cookies and Steam sign-in</h2>
       <p>We use a required, secure session cookie to protect forms and complete Steam OpenID sign-in. It expires when you close your browser.</p>
       <p>Choose “Accept and stay signed in” if you want us to remember your Steam sign-in on this device for up to 12 hours. Rejecting does not block Steam sign-in; it only keeps the login temporary.</p>
-      <p>We remember this choice in a functional preference cookie for 180 days, so we do not ask again. This portal does not use analytics, advertising, or tracking cookies. You can change this choice at any time through Cookie settings.</p>
+      <p>Rejecting does not save your choice, profile, or Steam login beyond the current browser session. This portal does not use analytics, advertising, or tracking cookies.</p>
     </div>
     <div class="cookie-banner__actions" aria-live="polite">
       <button class="button" type="button" data-cookie-choice="rejected">Reject and continue</button>

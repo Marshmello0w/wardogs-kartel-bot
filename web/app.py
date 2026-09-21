@@ -115,6 +115,11 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     @app.middleware('http')
     async def security_headers(request, call_next):
         response = await call_next(request)
+        # Remove the legacy preference cookie from earlier banner versions.
+        # Consent is now never recorded separately.
+        if request.cookies.get('kartell_cookie_choice'):
+            response.delete_cookie('kartell_cookie_choice', path='/', secure=settings.secure,
+                                   httponly=True, samesite='lax')
         response.headers['X-Content-Type-Options'] = 'nosniff'
         # Strip paths/claims while retaining same-origin POST Origin headers.
         # no-referrer makes Chromium submit forms with Origin: null.
@@ -138,20 +143,17 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             language = 'de'
         if not request.session.get('csrf'):
             request.session['csrf'] = secrets.token_urlsafe(32)
-        cookie_choice = request.cookies.get('kartell_cookie_choice')
-        if cookie_choice not in ('accepted', 'rejected'):
-            cookie_choice = None
         next_path = request.url.path
         return templates.TemplateResponse(request=request, name=template, status_code=status,
             context={'user': user, 'csrf': request.session.get('csrf', ''), 'servers': SERVERS,
                      'periods': PERIODS[language], 'path': request.url.path, 'language': language,
                      'languages': LANGUAGES, 'next_path': next_path,
-                     'cookie_choice': cookie_choice,
+                     'show_cookie_banner': request.session.get('remember_login') is not True,
                      't': lambda key, **values: translate(language, key, **values), **context})
 
     @app.post('/cookie-preferences')
     async def cookie_preferences(request: Request):
-        """Store the visitor's consent choice without collecting login data."""
+        """Apply a choice without retaining a separate consent record."""
         if request.headers.get('origin') not in (None, settings.base_url):
             raise HTTPException(403)
         body = bytearray()
@@ -162,12 +164,17 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         choice = parse_qs(body.decode('utf-8', errors='replace')).get('choice', [''])[0]
         if choice not in ('accepted', 'rejected'):
             raise HTTPException(400)
-        # Rejecting replaces any previously persistent session with a
-        # browser-session cookie.  Steam login itself continues to work.
-        request.session['remember_login'] = choice == 'accepted'
-        response = JSONResponse({'choice': choice})
-        response.set_cookie('kartell_cookie_choice', choice, max_age=180 * 24 * 60 * 60,
-                            httponly=True, secure=settings.secure, samesite='lax', path='/')
+        if choice == 'accepted':
+            # The session itself is the only persistent record, and only when
+            # the visitor explicitly wants their Steam login remembered.
+            request.session['remember_login'] = True
+        else:
+            # No preference or Steam login survives a browser restart after a
+            # rejection.  The temporary session remains solely for OpenID.
+            request.session.pop('remember_login', None)
+        response = JSONResponse({'accepted': choice == 'accepted'})
+        response.delete_cookie('kartell_cookie_choice', path='/', secure=settings.secure,
+                               httponly=True, samesite='lax')
         return response
 
     async def protected_form(request):
@@ -244,9 +251,8 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         if not isinstance(session_key, str) or len(session_key) < 16:
             session_key = secrets.token_urlsafe(24)
             request.session['login_client_key'] = session_key
-        # A missing choice deliberately behaves like rejection: users can
-        # authenticate with Steam, but their login ends with the browser.
-        request.session['remember_login'] = request.cookies.get('kartell_cookie_choice') == 'accepted'
+        # A missing acceptance behaves like rejection: users can authenticate
+        # with Steam, but their login ends with the browser.
         client_ip = request.client.host if request.client else 'unknown'
         try:
             state, url = await steam.begin(client_ip, session_key)
@@ -268,9 +274,11 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         except (httpx.HTTPError, ValueError, TypeError, AttributeError):
             logger.warning('Steam profile details unavailable')
             summary = {'name': '', 'avatar': ''}
+        remember_login = request.session.get('remember_login') is True
         request.session.clear()
-        request.session.update(user={'steam_id': steam_id, **summary}, csrf=secrets.token_urlsafe(32),
-                               remember_login=request.cookies.get('kartell_cookie_choice') == 'accepted')
+        request.session.update(user={'steam_id': steam_id, **summary}, csrf=secrets.token_urlsafe(32))
+        if remember_login:
+            request.session['remember_login'] = True
         return RedirectResponse('/me', status_code=303)
 
     @app.get('/me')
