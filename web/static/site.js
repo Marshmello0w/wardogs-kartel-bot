@@ -36,6 +36,16 @@ updateTimes();
 setInterval(updateTimes, 1000);
 let refreshing = false;
 const refreshSeconds = Number(document.body.dataset.refresh);
+function comparableContent(main) {
+  const copy = main.cloneNode(true);
+  // Relative timestamps change locally every second. They are not new server
+  // data and must not cause a full content replacement by themselves.
+  copy.querySelectorAll('time[data-relative]').forEach(time => {
+    time.textContent = '';
+    time.removeAttribute('title');
+  });
+  return copy.innerHTML;
+}
 async function refreshCurrentPage() {
   if (document.hidden || refreshing) return;
   // Never replace a page while somebody is entering or selecting a form value.
@@ -50,6 +60,7 @@ async function refreshCurrentPage() {
     const current = document.querySelector('main#content');
     const next = parsed.querySelector('main#content');
     if (!current || !next) return;
+    if (comparableContent(current) === comparableContent(next)) return;
     current.replaceWith(next);
     updateTimes();
     bindRewardForms();
