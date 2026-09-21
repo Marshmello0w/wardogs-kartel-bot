@@ -15,7 +15,6 @@ from fastapi.templating import Jinja2Templates
 import httpx
 from jinja2 import pass_context
 from starlette.exceptions import HTTPException
-from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .repository import (DataUnavailable, ReadDatabase, Repository,
@@ -23,6 +22,7 @@ from .repository import (DataUnavailable, ReadDatabase, Repository,
 from .settings import ROOT, SERVERS, Settings
 from .steam import LoginError, SteamLogin
 from .i18n import LANGUAGES, translate
+from .session import ConsentSessionMiddleware
 
 logger = logging.getLogger('kartell.web')
 PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
@@ -99,7 +99,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.repo, app.state.steam, app.state.reward_db = repo, steam, reward_db
-    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
+    app.add_middleware(ConsentSessionMiddleware, secret_key=settings.session_secret,
                        session_cookie='kartell_session', max_age=43200,
                        same_site='lax', https_only=settings.secure)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[urlsplit(settings.base_url).hostname,
@@ -138,12 +138,37 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             language = 'de'
         if not request.session.get('csrf'):
             request.session['csrf'] = secrets.token_urlsafe(32)
+        cookie_choice = request.cookies.get('kartell_cookie_choice')
+        if cookie_choice not in ('accepted', 'rejected'):
+            cookie_choice = None
         next_path = request.url.path
         return templates.TemplateResponse(request=request, name=template, status_code=status,
             context={'user': user, 'csrf': request.session.get('csrf', ''), 'servers': SERVERS,
                      'periods': PERIODS[language], 'path': request.url.path, 'language': language,
                      'languages': LANGUAGES, 'next_path': next_path,
+                     'cookie_choice': cookie_choice,
                      't': lambda key, **values: translate(language, key, **values), **context})
+
+    @app.post('/cookie-preferences')
+    async def cookie_preferences(request: Request):
+        """Store the visitor's consent choice without collecting login data."""
+        if request.headers.get('origin') not in (None, settings.base_url):
+            raise HTTPException(403)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 128:
+                raise HTTPException(400)
+        choice = parse_qs(body.decode('utf-8', errors='replace')).get('choice', [''])[0]
+        if choice not in ('accepted', 'rejected'):
+            raise HTTPException(400)
+        # Rejecting replaces any previously persistent session with a
+        # browser-session cookie.  Steam login itself continues to work.
+        request.session['remember_login'] = choice == 'accepted'
+        response = JSONResponse({'choice': choice})
+        response.set_cookie('kartell_cookie_choice', choice, max_age=180 * 24 * 60 * 60,
+                            httponly=True, secure=settings.secure, samesite='lax', path='/')
+        return response
 
     async def protected_form(request):
         """Read a small same-origin form and validate its session CSRF token."""
@@ -219,6 +244,9 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         if not isinstance(session_key, str) or len(session_key) < 16:
             session_key = secrets.token_urlsafe(24)
             request.session['login_client_key'] = session_key
+        # A missing choice deliberately behaves like rejection: users can
+        # authenticate with Steam, but their login ends with the browser.
+        request.session['remember_login'] = request.cookies.get('kartell_cookie_choice') == 'accepted'
         client_ip = request.client.host if request.client else 'unknown'
         try:
             state, url = await steam.begin(client_ip, session_key)
@@ -241,7 +269,8 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             logger.warning('Steam profile details unavailable')
             summary = {'name': '', 'avatar': ''}
         request.session.clear()
-        request.session.update(user={'steam_id': steam_id, **summary}, csrf=secrets.token_urlsafe(32))
+        request.session.update(user={'steam_id': steam_id, **summary}, csrf=secrets.token_urlsafe(32),
+                               remember_login=request.cookies.get('kartell_cookie_choice') == 'accepted')
         return RedirectResponse('/me', status_code=303)
 
     @app.get('/me')
