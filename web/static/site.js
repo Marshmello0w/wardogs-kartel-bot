@@ -36,32 +36,27 @@ updateTimes();
 setInterval(updateTimes, 1000);
 let refreshing = false;
 const refreshSeconds = Number(document.body.dataset.refresh);
-if (refreshSeconds) setInterval(async () => {
+async function refreshCurrentPage() {
   if (document.hidden || refreshing) return;
+  // Never replace a page while somebody is entering or selecting a form value.
+  if (document.activeElement?.closest('form, input, select, textarea, button')) return;
   refreshing = true;
   try {
-    const response = await fetch('/', {cache: 'no-store'});
-    if (!response.ok) return;
+    const response = await fetch(window.location.pathname + window.location.search, {
+      cache: 'no-store', headers: {'X-Portal-Partial': '1'}
+    });
+    if (!response.ok || new URL(response.url).pathname !== window.location.pathname) return;
     const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
-    // Leave navigation, focus, login/logout controls and scroll position intact.
-    for (const selector of ['.server-list', '.live-total']) {
-      const current = document.querySelector(selector);
-      const next = parsed.querySelector(selector);
-      if (current && next) current.replaceWith(next);
-    }
-    const currentNotice = document.querySelector('.notice');
-    const nextNotice = parsed.querySelector('.notice');
-    if (nextNotice && currentNotice) currentNotice.replaceWith(nextNotice);
-    else if (nextNotice) document.querySelector('.overview').after(nextNotice);
-    else if (currentNotice) currentNotice.remove();
+    const current = document.querySelector('main#content');
+    const next = parsed.querySelector('main#content');
+    if (!current || !next) return;
+    current.replaceWith(next);
     updateTimes();
-  } catch { /* Keep the last measured data and its aging timestamp. */ }
+    bindRewardForms();
+  } catch { /* Keep the last successful data while the next poll waits. */ }
   finally { refreshing = false; }
-}, refreshSeconds * 1000);
-document.querySelectorAll('form').forEach(form => form.addEventListener('submit', () => {
-  const button = form.querySelector('button[type="submit"]');
-  if (button) { button.setAttribute('aria-busy', 'true'); button.disabled = true; }
-}));
+}
+if (refreshSeconds) setInterval(refreshCurrentPage, refreshSeconds * 1000);
 window.addEventListener('pageshow', () => {
   document.querySelectorAll('[aria-busy="true"]').forEach(button => {
     button.removeAttribute('aria-busy'); button.disabled = false;
@@ -72,6 +67,7 @@ const rewardCopy = language === 'en'
   ? {ready: 'Redemption available', not_enough_points: 'Not enough quest points.', not_online: 'You must be online on a server.', same_faction: 'You are already in this faction.', balance_limit: 'Not available: team balance would differ by more than four players.', no_vip_slots: 'There are no VIP slots available on this server.', vip_exists: 'You already have a reserved or active VIP on this server.'}
   : {ready: 'Einlösung möglich', not_enough_points: 'Nicht genügend Quest-Punkte.', not_online: 'Du musst auf einem Server online sein.', same_faction: 'Du bist bereits in dieser Fraktion.', balance_limit: 'Nicht möglich: Die Team-Balance würde mehr als vier Spieler abweichen.', no_vip_slots: 'Auf diesem Server sind keine VIP-Plätze frei.', vip_exists: 'Du hast auf diesem Server bereits einen reservierten oder aktiven VIP.'};
 
+function bindRewardForms() {
 document.querySelectorAll('[data-reward-form]').forEach(form => {
   let availability;
   try { availability = JSON.parse(form.dataset.availability || '{}'); } catch { availability = {}; }
@@ -91,5 +87,11 @@ document.querySelectorAll('[data-reward-form]').forEach(form => {
     if (button) button.disabled = !enabled;
   };
   form.querySelectorAll('select').forEach(select => select.addEventListener('change', updateRewardAvailability));
+  form.addEventListener('submit', () => {
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) { submit.setAttribute('aria-busy', 'true'); submit.disabled = true; }
+  });
   updateRewardAvailability();
 });
+}
+bindRewardForms();
