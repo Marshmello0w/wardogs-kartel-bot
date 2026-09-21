@@ -40,7 +40,9 @@ TEXT['de'].update({
     'no_vip_slots': 'Auf diesem Server sind keine VIP-Plätze frei.',
     'vip_exists': 'Du hast auf diesem Server bereits einen reservierten oder aktiven VIP.',
     'seed_phase': 'Startphase',
+    'seed_explanation': 'Eine Startphase wird vom Admin für einen Server mit weniger als 15 Spielern aktiviert. In einer echten Fraktion erhältst du beim Mithelfen einmalig 1 Punkt und danach je volle 15 Minuten einen weiteren Punkt. Bei 15 Spielern endet die Startphase automatisch. White und Unknown zählen nicht.',
     'seed_active_message': 'Startphase aktiv. Jetzt verbinden und Punkte verdienen.',
+    'seed_none_active': 'Aktuell läuft auf keinem Server eine Startphase.',
     'seed_join': 'Seed-Startphase',
     'seed_playtime': 'Seed-Spielzeit',
 })
@@ -54,7 +56,9 @@ TEXT['en'].update({
     'no_vip_slots': 'There are no VIP slots available on this server.',
     'vip_exists': 'You already have a reserved or active VIP on this server.',
     'seed_phase': 'Start phase',
+    'seed_explanation': 'An admin activates a start phase for a server with fewer than 15 players. While helping in a real faction, you receive 1 point once when you join and another point for every full 15 minutes. The phase ends automatically at 15 players. White and Unknown do not count.',
     'seed_active_message': 'Start phase active. Connect now to earn points.',
+    'seed_none_active': 'No server is currently running a start phase.',
     'seed_join': 'Seed start phase',
     'seed_playtime': 'Seed playtime',
 })
