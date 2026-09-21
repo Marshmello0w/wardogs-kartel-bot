@@ -49,9 +49,9 @@ class GuildScopeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RconConfigurationTests(unittest.TestCase):
-    def test_remote_rcon_requires_https_but_loopback_dev_is_allowed(self):
+    def test_rcon_accepts_game_host_http_or_https(self):
         self.assertTrue(config.Server('server1', 'Server 1', 'https://rcon.example:20001', 'secret').enabled)
-        self.assertFalse(config.Server('server1', 'Server 1', 'http://rcon.example:20001', 'secret').enabled)
+        self.assertTrue(config.Server('server1', 'Server 1', 'http://rcon.example:20001', 'secret').enabled)
         self.assertTrue(config.Server('server1', 'Server 1', 'http://127.0.0.1:20001', 'secret').enabled)
 
     def test_missing_guild_id_fails_startup_validation(self):

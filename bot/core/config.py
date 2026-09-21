@@ -1,6 +1,5 @@
 import os
 import logging
-import ipaddress
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 from dotenv import load_dotenv
@@ -132,15 +131,10 @@ class Server:
         try:
             parsed = urlparse(self.url)
             port = parsed.port
-            host = parsed.hostname or ''
-            try:
-                loopback = host.casefold() == 'localhost' or ipaddress.ip_address(host).is_loopback
-            except ValueError:
-                loopback = False
-            # Bearer credentials must never traverse a non-loopback cleartext
-            # connection. HTTP remains available only for local development.
-            secure_transport = parsed.scheme == 'https' or (parsed.scheme == 'http' and loopback)
-            return bool(secure_transport and host and self.password
+            # WarDogs RCON currently exposes HTTP on hosted game servers.  TLS
+            # is not available on this installation, so both transports remain
+            # supported until the game host offers a secure endpoint.
+            return bool(parsed.scheme in ('http', 'https') and parsed.hostname and self.password
                         and not parsed.username and not parsed.password and not parsed.query
                         and not parsed.fragment and (port is None or port > 0))
         except ValueError:
