@@ -325,7 +325,7 @@ class Repository:
         poll, never a web-side RCON request.  The bot still repeats every live
         check immediately before executing a submitted change.
         """
-        points, memberships, slots, requests, presence, team_counts = await asyncio.gather(
+        points, memberships, slots, requests, presence = await asyncio.gather(
             self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', (steam_id,)),
             self.db.query('''SELECT server_id,duration_kind,status,ordered_at,activated_at,expires_at,removed_at
                 FROM vip_memberships WHERE steam_id=%s
@@ -337,12 +337,9 @@ class Repository:
             self.db.query('''SELECT id,kind,server_id,faction,duration_kind,status,reason,created_at,completed_at
                 FROM reward_requests WHERE steam_id=%s AND status IN ('pending','processing','success')
                 ORDER BY created_at DESC LIMIT 8''', (steam_id,)),
-            self.db.query('''SELECT server_id,faction,last_seen FROM player_faction_state
+            self.db.query('''SELECT server_id,last_seen FROM player_playtime
                 WHERE steam_id=%s AND last_seen>=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 90 SECOND)
                 ORDER BY last_seen DESC LIMIT 1''', (steam_id,)),
-            self.db.query('''SELECT server_id,faction,COUNT(*) AS players FROM player_faction_state
-                WHERE last_seen>=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 90 SECOND)
-                AND faction IN ('Lonestar','Valkyra','Manticore') GROUP BY server_id,faction'''),
         )
         memberships_by_server = {key: None for key in SERVERS}
         for row in memberships:
@@ -352,12 +349,6 @@ class Repository:
         score = int(points[0]['points']) if points else 0
         live = presence[0] if presence else None
         server_id = str(live['server_id']) if live and live.get('server_id') in SERVERS else None
-        current_faction = str(live.get('faction') or '').strip() if live else None
-        counts = {team: 0 for team in QUEST_TEAMS}
-        if server_id:
-            for row in team_counts:
-                if row.get('server_id') == server_id and row.get('faction') in counts:
-                    counts[row['faction']] = int(row['players'])
         faction_targets = {}
         for target in QUEST_TEAMS:
             available, reason = True, 'ready'
@@ -365,15 +356,6 @@ class Repository:
                 available, reason = False, 'not_enough_points'
             elif not server_id:
                 available, reason = False, 'not_online'
-            elif current_faction == target:
-                available, reason = False, 'same_faction'
-            else:
-                projected = dict(counts)
-                if current_faction in projected:
-                    projected[current_faction] = max(0, projected[current_faction] - 1)
-                projected[target] += 1
-                if max(projected.values()) - min(projected.values()) > 4:
-                    available, reason = False, 'balance_limit'
             faction_targets[target] = {'available': available, 'reason': reason}
         vip_options = {}
         for key in SERVERS:
@@ -392,6 +374,5 @@ class Repository:
         return {'points': int(points[0]['points']) if points else 0,
                 'memberships': memberships_by_server, 'slots': {key: used.get(key, 0) for key in SERVERS},
                 'requests': requests,
-                'faction': {'server_id': server_id, 'current_faction': current_faction,
-                            'targets': faction_targets},
+                'faction': {'server_id': server_id, 'targets': faction_targets},
                 'vip_options': vip_options}

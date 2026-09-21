@@ -72,11 +72,6 @@ class FixtureDatabase:
             return [{'id': 'safe-id', 'kind': 'faction', 'server_id': 'server1', 'faction': 'Valkyra',
                      'duration_kind': None, 'status': 'success', 'reason': None,
                      'created_at': datetime(2026, 9, 20, 10), 'completed_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
-        if 'COUNT(*) AS players FROM player_faction_state' in sql:
-            return [{'server_id': 'server1', 'faction': team, 'players': 10}
-                    for team in ('Lonestar', 'Valkyra', 'Manticore')]
-        if 'FROM player_faction_state' in sql:
-            return [{'server_id': 'server1', 'faction': 'Valkyra', 'last_seen': datetime.now(timezone.utc)}] if args and args[0] == STEAM_ID else []
         if args != (STEAM_ID,):
             return []
         if 'FROM leaderboard' in sql:
@@ -199,7 +194,7 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         db.points = 50
         result = await Repository(db).rewards(STEAM_ID)
         self.assertEqual(result['faction']['server_id'], 'server1')
-        self.assertFalse(result['faction']['targets']['Valkyra']['available'])
+        self.assertTrue(result['faction']['targets']['Valkyra']['available'])
         self.assertTrue(result['faction']['targets']['Manticore']['available'])
         self.assertFalse(result['vip_options']['server1']['week']['available'])
 
