@@ -27,6 +27,10 @@ cookieBanner?.querySelectorAll('[data-cookie-choice]').forEach(button => {
       });
       if (!response.ok) throw new Error('Preference request failed');
       setCookieBannerOpen(false);
+      // Re-enable the controls before the banner can be opened again through
+      // Cookie settings.  Otherwise a previous successful choice would leave
+      // both buttons visually present but inert.
+      buttons.forEach(item => { item.disabled = false; });
     } catch {
       const actions = cookieBanner.querySelector('.cookie-banner__actions');
       if (actions) actions.setAttribute('aria-label', 'Your choice could not be saved. Please try again.');
