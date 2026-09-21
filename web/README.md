@@ -76,7 +76,6 @@ CREATE USER 'kartell_web'@'WEB_HOST' IDENTIFIED BY 'GENERATED_SECRET';
 GRANT SELECT ON `DATABASE_NAME`.`leaderboard` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_daily_stats` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_playtime` TO 'kartell_web'@'WEB_HOST';
-GRANT SELECT ON `DATABASE_NAME`.`player_daily_playtime` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_faction_stats` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_ping_stats` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`banned_players` TO 'kartell_web'@'WEB_HOST';

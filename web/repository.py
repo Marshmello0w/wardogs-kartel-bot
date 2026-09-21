@@ -80,14 +80,12 @@ def ranking_query(server_id, timeframe='all', sort_by='kd'):
             WHERE l.server_id=%s {exclusion}"""
     else:
         days = 6 if timeframe == '7d' else 29
-        base = f"""SELECT l.steam_id,l.name,d.kills,d.deaths,d.cash,p.playtime_seconds
-            FROM leaderboard l JOIN (SELECT server_id,steam_id,SUM(kills) kills,SUM(deaths) deaths,SUM(cash) cash
-                FROM player_daily_stats WHERE date BETWEEN DATE_SUB(UTC_DATE(),INTERVAL {days} DAY) AND UTC_DATE()
-                GROUP BY server_id,steam_id) d ON d.server_id=l.server_id AND d.steam_id=l.steam_id
-            JOIN (SELECT server_id,steam_id,SUM(playtime_seconds) playtime_seconds FROM player_daily_playtime
-                WHERE date BETWEEN DATE_SUB(UTC_DATE(),INTERVAL {days} DAY) AND UTC_DATE()
-                GROUP BY server_id,steam_id) p ON p.server_id=l.server_id AND p.steam_id=l.steam_id
-            WHERE l.server_id=%s {exclusion}"""
+        base = f"""SELECT l.steam_id,l.name,SUM(d.kills) kills,SUM(d.deaths) deaths,SUM(d.cash) cash,
+            p.playtime_seconds FROM leaderboard l JOIN player_daily_stats d
+            ON d.server_id=l.server_id AND d.steam_id=l.steam_id JOIN player_playtime p
+            ON p.server_id=l.server_id AND p.steam_id=l.steam_id
+            WHERE l.server_id=%s AND d.date BETWEEN DATE_SUB(UTC_DATE(),INTERVAL {days} DAY) AND UTC_DATE()
+            {exclusion} GROUP BY l.steam_id,l.name,p.playtime_seconds"""
     order = 'cash DESC,kills DESC,steam_id ASC' if sort_by == 'cash' else 'kd DESC,kills DESC,steam_id ASC'
     return f"""SELECT scored.*,ROW_NUMBER() OVER (ORDER BY {order}) AS player_rank
         FROM (SELECT totals.*,kills / IF(deaths=0,1,deaths) AS kd FROM ({base}) totals

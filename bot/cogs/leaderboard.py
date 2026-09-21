@@ -128,7 +128,7 @@ class Leaderboard(commands.Cog):
         labels = {'7d':'Letzte 7 Tage','30d':'Letzte 30 Tage','all':'All-Time'}
         embed = discord.Embed(title=f"🏆 {config.server(server_id).title} – {labels[timeframe]}", color=discord.Color.gold())
         if sort_by == 'kd':
-            embed.description = 'K/D-Rangliste: mindestens 5 Tode und 30 Minuten Spielzeit im gewählten Zeitraum.'
+            embed.description = 'K/D-Rangliste: mindestens 5 Tode und 30 Minuten Spielzeit auf diesem Server.'
         for row in rows:
             embed.add_field(name=f"{row['player_rank']}. {row['name']}"[:256],
                 value=f"Kills: {row['kills']} | Deaths: {row['deaths']} | K/D: {row['kd']:.2f} | Cash: {row['cash']} USD", inline=False)
