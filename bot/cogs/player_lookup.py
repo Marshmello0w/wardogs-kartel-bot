@@ -294,6 +294,16 @@ class PlayerLookupCog(commands.Cog):
         pages = self.pages(profile)
         await interaction.followup.send(embed=pages[0], view=PrivateLookupView(self, interaction.user.id, profile, pages), ephemeral=True)
 
+    async def dismiss_source_message(self, interaction):
+        """Remove a consumed private select/profile message without failing its action."""
+        message = getattr(interaction, 'message', None)
+        if message is None:
+            return
+        try:
+            await message.delete()
+        except discord.HTTPException as exc:
+            self.bot.health.error('Spieler-Lookup Nachricht löschen', exc)
+
     @app_commands.command(name='lookup', description='Zeigt alle gespeicherten Daten eines Spielers.')
     @app_commands.describe(query='Spielername oder 17-stellige Steam64-ID')
     async def lookup(self, interaction: discord.Interaction, query: str):
@@ -330,6 +340,7 @@ class LookupMatchSelect(discord.ui.Select):
     async def callback(self, interaction):
         await interaction.response.defer(ephemeral=True)
         await self.view.cog.send_private_profile(interaction, self.values[0])
+        await self.view.cog.dismiss_source_message(interaction)
 
 
 class LookupMatchView(discord.ui.View):
@@ -424,7 +435,7 @@ class PrivateLookupView(discord.ui.View):
         self.cog.bot.dispatch('public_lookup', interaction.channel_id, self.pages[0], view)
         self.cog.bot.dispatch('bot_log', '📢 Spieler-Lookup veröffentlicht',
                               f"{interaction.user.mention} veröffentlichte `{self.profile['steam_id']}`.", discord.Color.blue())
-        await interaction.followup.send('Der vollständige Bericht wurde in diesem Channel veröffentlicht.', ephemeral=True)
+        await self.cog.dismiss_source_message(interaction)
 
 
 class PrivatePointLedgerView(discord.ui.View):
