@@ -110,6 +110,10 @@ class RegionGuardCog(commands.Cog):
         self.public_session = None
         self.monitor.start()
 
+    def log(self, title, description, color):
+        """Route all Region-Guard events through the central logger separately."""
+        self.bot.dispatch("bot_log", title, description, color, config.REGION_GUARD_LOG_CHANNEL_ID or None)
+
     def cog_unload(self):
         self.monitor.cancel()
         for session in (self.ptero_session, self.public_session):
@@ -158,8 +162,7 @@ class RegionGuardCog(commands.Cog):
 
     def _problem(self, srv, state, message):
         if state.get("last_error") != message:
-            self.bot.dispatch("bot_log", "⚠️ Regionsprüfung wartet",
-                              f"**{srv.title}:** {message}", discord.Color.orange())
+            self.log("⚠️ Regionsprüfung wartet", f"**{srv.title}:** {message}", discord.Color.orange())
         state["last_error"] = message
 
     async def _discover_panel_servers(self):
@@ -222,9 +225,8 @@ class RegionGuardCog(commands.Cog):
             raise PterodactylError("Pterodactyl Restart-Verbindung fehlgeschlagen") from None
         state.update(phase="awaiting_api", restart_at=now.isoformat(), last_query_at=None,
                      last_api_updated_at=None, last_region=None, last_error=None)
-        self.bot.dispatch("bot_log", "🔄 Region-Guard startet Server neu",
-                          f"**{srv.title}** war leer. Warte auf einen öffentlichen Regionsnachweis.",
-                          discord.Color.blue())
+        self.log("🔄 Region-Guard startet Server neu",
+                 f"**{srv.title}** war leer. Warte auf einen öffentlichen Regionsnachweis.", discord.Color.blue())
         return True
 
     async def _server_api(self, srv, state):
@@ -282,9 +284,8 @@ class RegionGuardCog(commands.Cog):
                 state["empty_since"] = None
                 if state.get("restart_at"):
                     state.update(phase="waiting_empty", restart_at=None, last_query_at=None)
-                    self.bot.dispatch("bot_log", "⏸️ Region-Guard pausiert",
-                                      f"**{srv.title}:** Spieler sind wieder online; kein weiterer Restart.",
-                                      discord.Color.orange())
+                    self.log("⏸️ Region-Guard pausiert",
+                             f"**{srv.title}:** Spieler sind wieder online; kein weiterer Restart.", discord.Color.orange())
                 await self.save(srv.id, state)
                 return
 
@@ -299,8 +300,7 @@ class RegionGuardCog(commands.Cog):
                     return
                 if state.get("phase") == "waiting_empty":
                     state.update(phase="idle", last_error=None)
-                    self.bot.dispatch("bot_log", "▶️ Region-Guard fortgesetzt",
-                                      f"**{srv.title}** ist seit fünf Minuten leer.", discord.Color.blue())
+                    self.log("▶️ Region-Guard fortgesetzt", f"**{srv.title}** ist seit fünf Minuten leer.", discord.Color.blue())
                 try:
                     if await self._restart(srv, state, now):
                         await self.save(srv.id, state)
@@ -340,9 +340,8 @@ class RegionGuardCog(commands.Cog):
             state["last_error"] = None
             if region == config.REGION_GUARD_TARGET:
                 state.update(completed=True, phase="complete")
-                self.bot.dispatch("bot_log", "✅ Region-Guard erfolgreich",
-                                  f"**{srv.title}** wurde mit Region **{region}** bestätigt.",
-                                  discord.Color.green())
+                self.log("✅ Region-Guard erfolgreich",
+                         f"**{srv.title}** wurde mit Region **{region}** bestätigt.", discord.Color.green())
                 await self.save(srv.id, state)
                 return
             try:
@@ -365,8 +364,7 @@ class RegionGuardCog(commands.Cog):
         try:
             mapped = await self._discover_panel_servers()
         except PterodactylError as exc:
-            self.bot.dispatch("bot_log", "⚠️ Region-Guard Panel nicht verfügbar", exc.safe_message,
-                              discord.Color.orange())
+            self.log("⚠️ Region-Guard Panel nicht verfügbar", exc.safe_message, discord.Color.orange())
             return
         for srv in config.servers():
             if not srv.enabled or srv.id in mapped:
@@ -376,9 +374,8 @@ class RegionGuardCog(commands.Cog):
                 state.update(panel_disabled=True, phase="disabled",
                              last_error="Server im Pterodactyl-Panel nicht eindeutig gefunden")
                 await self.save(srv.id, state)
-            self.bot.dispatch("bot_log", "⚠️ Region-Guard Server deaktiviert",
-                              f"**{srv.title}** wurde im Pterodactyl-Panel nicht eindeutig gefunden.",
-                              discord.Color.orange())
+            self.log("⚠️ Region-Guard Server deaktiviert",
+                     f"**{srv.title}** wurde im Pterodactyl-Panel nicht eindeutig gefunden.", discord.Color.orange())
 
     @tasks.loop(seconds=15)
     async def monitor(self):
@@ -438,9 +435,8 @@ class RegionGuardCog(commands.Cog):
                     state["phase"] = "idle"
             await self.save(server.value, state)
         wording = "pausierte" if action.value == "pause" else "aktivierte"
-        self.bot.dispatch("bot_log", "🛠️ Region-Guard Einstellung",
-                          f"{interaction.user.mention} {wording} **{config.server(server.value).title}**.",
-                          discord.Color.orange() if action.value == "pause" else discord.Color.blue())
+        self.log("🛠️ Region-Guard Einstellung", f"{interaction.user.mention} {wording} **{config.server(server.value).title}**.",
+                 discord.Color.orange() if action.value == "pause" else discord.Color.blue())
         await interaction.response.send_message(
             f"✅ Region-Guard für {config.server(server.value).title} "
             f"{'pausiert' if action.value == 'pause' else 'aktiviert'}.", ephemeral=True)
@@ -464,9 +460,9 @@ class RegionGuardCog(commands.Cog):
                 return
             state["early_enabled"] = True
             await self.save(server.value, state)
-        self.bot.dispatch("bot_log", "🛠️ Region-Guard früh freigegeben",
-                          f"{interaction.user.mention} gab **{config.server(server.value).title}** vorzeitig frei. "
-                          "Ein Restart ist erst nach fünf Minuten durchgehendem Leerstand möglich.", discord.Color.blue())
+        self.log("🛠️ Region-Guard früh freigegeben",
+                 f"{interaction.user.mention} gab **{config.server(server.value).title}** vorzeitig frei. "
+                 "Ein Restart ist erst nach fünf Minuten durchgehendem Leerstand möglich.", discord.Color.blue())
         await interaction.response.send_message(
             f"✅ Frühfreigabe für {config.server(server.value).title} erteilt. Der Server startet nur, wenn er fünf Minuten am Stück leer bleibt.",
             ephemeral=True)

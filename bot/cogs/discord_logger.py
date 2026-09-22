@@ -13,19 +13,21 @@ class DiscordLogger(commands.Cog):
         self._recap_lock = asyncio.Lock()
 
     @commands.Cog.listener()
-    async def on_bot_log(self, title: str, description: str, color: discord.Color = discord.Color.blue()):
+    async def on_bot_log(self, title: str, description: str, color: discord.Color = discord.Color.blue(),
+                         channel_id: str | None = None):
         """
         Custom event listener. 
         Kann im gesamten Bot aufgerufen werden per:
         self.bot.dispatch("bot_log", "Titel", "Beschreibung", discord.Color.red())
         """
-        if not config.DISCORD_LOG_CHANNEL_ID:
+        target_channel_id = channel_id or config.DISCORD_LOG_CHANNEL_ID
+        if not target_channel_id:
             return
 
-        channel = self.bot.get_channel(int(config.DISCORD_LOG_CHANNEL_ID))
+        channel = self.bot.get_channel(int(target_channel_id))
         if not channel:
             try:
-                channel = await self.bot.fetch_channel(int(config.DISCORD_LOG_CHANNEL_ID))
+                channel = await self.bot.fetch_channel(int(target_channel_id))
             except Exception as e:
                 logging.error(f"Konnte Log-Channel nicht finden: {e}")
                 return
