@@ -1,5 +1,5 @@
 """Admin-only player lookup backed exclusively by persisted statistics."""
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 import discord
@@ -13,6 +13,20 @@ from infrastructure import database
 
 FOOTER_RE = re.compile(r"Steam64: ([0-9]{17}) · Seite ([0-9]+)/([0-9]+)")
 
+POINT_KIND_LABELS = {
+    'legacy_playtime': 'Spielzeit (Nachtrag)',
+    'eligible_playtime': 'Spielzeit',
+    'cash': 'Verdientes Cash',
+    'weekly_team': 'Fraktion Playtime',
+    'seed_join': 'Seed-Start',
+    'seed_playtime': 'Seed-Spielzeit',
+    'admin_set': 'Admin-Anpassung',
+    'reward_faction': 'Fraktionswechsel',
+    'reward_faction_refund': 'Fraktionswechsel-Erstattung',
+    'vip_purchase': 'VIP-Einlösung',
+    'vip_refund': 'VIP-Erstattung',
+}
+
 
 def duration(seconds):
     seconds = int(seconds or 0)
@@ -23,6 +37,13 @@ def duration(seconds):
 
 def when(value):
     return value.strftime('%d.%m.%Y %H:%M UTC') if isinstance(value, datetime) else '—'
+
+
+def relative_when(value):
+    if not isinstance(value, datetime):
+        return '—'
+    stamp = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return discord.utils.format_dt(stamp, 'R')
 
 
 def title_for(server_id):
@@ -116,6 +137,13 @@ class PlayerLookupCog(commands.Cog):
             jobs = await cur.fetchall()
             await cur.execute('SELECT points FROM quest_points WHERE steam_id=%s', (steam_id,))
             quest_points = await cur.fetchone()
+            await cur.execute("""SELECT server_id,status,expires_at,duration_kind,source FROM vip_memberships
+                WHERE steam_id=%s AND status IN ('pending_activation','active','expired_pending_removal')
+                ORDER BY server_id,status,id DESC""", (steam_id,))
+            vip_memberships = await cur.fetchall()
+            await cur.execute("""SELECT amount,kind,reason,admin_mention,created_at FROM quest_point_ledger
+                WHERE steam_id=%s ORDER BY created_at DESC,id DESC""", (steam_id,))
+            point_ledger = await cur.fetchall()
 
         servers = {}
         names = set()
@@ -138,7 +166,24 @@ class PlayerLookupCog(commands.Cog):
         return dict(steam_id=steam_id, names=sorted(names), servers=servers, bans=bans,
                     target=target, jobs=jobs,
                     points=int(quest_points['points']) if quest_points else 0,
-                    exists=bool(servers or bans or target or jobs or quest_points))
+                    vip_memberships=vip_memberships, point_ledger=point_ledger,
+                    exists=bool(servers or bans or target or jobs or quest_points or vip_memberships or point_ledger))
+
+    @staticmethod
+    def vip_summary(memberships):
+        if not memberships:
+            return 'Kein VIP aktiv.'
+        entries = []
+        for membership in memberships:
+            server = title_for(membership['server_id'])
+            status = membership['status']
+            if status == 'active':
+                entries.append(f'**{server}:** aktiv bis {when(membership["expires_at"])} ({relative_when(membership["expires_at"])})')
+            elif status == 'pending_activation':
+                entries.append(f'**{server}:** wartet auf Aktivierung')
+            else:
+                entries.append(f'**{server}:** abgelaufen – Entfernung ausstehend')
+        return '\n'.join(entries)
 
     def pages(self, profile):
         steam_id, servers = profile['steam_id'], profile['servers']
@@ -149,6 +194,7 @@ class PlayerLookupCog(commands.Cog):
         overview.description = (
             f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {shown_names}\n'
             f'**Quest-Punkte:** {profile.get("points", 0)}')
+        overview.add_field(name='⭐ VIP', value=self.vip_summary(profile.get('vip_memberships', [])), inline=False)
         if profile['target']:
             target = profile['target']
             overview.add_field(name='Aktuelles Admin-Ziel', value=(
@@ -210,6 +256,33 @@ class PlayerLookupCog(commands.Cog):
             current.add_field(name=field_name, value=field_value, inline=False)
         for index, embed in enumerate(pages, start=1):
             embed.set_footer(text=f'Steam64: {steam_id} · Seite {index}/{len(pages)}')
+            embed.timestamp = discord.utils.utcnow()
+        return pages
+
+    def point_pages(self, profile):
+        """Render the complete immutable points ledger separately from the profile."""
+        steam_id = profile['steam_id']
+        name = profile['names'][0] if profile['names'] else 'Unbekannter Spieler'
+        entries = []
+        for movement in profile.get('point_ledger', []):
+            label = POINT_KIND_LABELS.get(movement['kind'], movement['kind'])
+            admin = f"\nAdmin: {movement['admin_mention']}" if movement.get('admin_mention') else ''
+            reason = f"\nGrund: {movement['reason']}" if movement.get('reason') else ''
+            entries.append(
+                f"**{movement['amount']:+d} Punkte · {label}**\n"
+                f"{when(movement['created_at'])}{reason}{admin}")
+
+        first = discord.Embed(title=f'🎯 Punktebewegungen: {name}', color=discord.Color.blue(),
+                              description=f'**Aktueller Stand:** {profile.get("points", 0)} Punkte')
+        pages, current = [first], first
+        fields = text_fields('Punktebewegungen', entries or ['Noch keine Punktebewegungen gespeichert.'])
+        for field_name, field_value in fields:
+            if len(current.fields) >= 25 or embed_size(current) + len(field_name) + len(field_value) > 5700:
+                current = discord.Embed(title=f'🎯 Punktebewegungen: {name}', color=discord.Color.blue())
+                pages.append(current)
+            current.add_field(name=field_name, value=field_value, inline=False)
+        for index, embed in enumerate(pages, start=1):
+            embed.set_footer(text=f'Steam64: {steam_id} · Punktebewegungen {index}/{len(pages)}')
             embed.timestamp = discord.utils.utcnow()
         return pages
 
@@ -337,6 +410,13 @@ class PrivateLookupView(discord.ui.View):
     async def set_points(self, interaction, button):
         await interaction.response.send_modal(SetQuestPointsModal(self.cog, self.profile['steam_id']))
 
+    @discord.ui.button(label='Punktebewegungen', style=discord.ButtonStyle.secondary, emoji='📜')
+    async def point_ledger(self, interaction, button):
+        pages = self.cog.point_pages(self.profile)
+        await interaction.response.edit_message(
+            embed=pages[0],
+            view=PrivatePointLedgerView(self.cog, self.owner, self.profile, self.pages, pages, self.page))
+
     @discord.ui.button(label='Öffentlich machen', style=discord.ButtonStyle.primary, emoji='📢')
     async def publish(self, interaction, button):
         await interaction.response.defer(ephemeral=True)
@@ -345,6 +425,39 @@ class PrivateLookupView(discord.ui.View):
         self.cog.bot.dispatch('bot_log', '📢 Spieler-Lookup veröffentlicht',
                               f"{interaction.user.mention} veröffentlichte `{self.profile['steam_id']}`.", discord.Color.blue())
         await interaction.followup.send('Der vollständige Bericht wurde in diesem Channel veröffentlicht.', ephemeral=True)
+
+
+class PrivatePointLedgerView(discord.ui.View):
+    def __init__(self, cog, owner, profile, profile_pages, point_pages, profile_page=0, page=0):
+        super().__init__(timeout=300)
+        self.cog, self.owner, self.profile = cog, owner, profile
+        self.profile_pages, self.point_pages = profile_pages, point_pages
+        self.profile_page, self.page = profile_page, page
+        self.previous.disabled = page == 0
+        self.next.disabled = page >= len(point_pages) - 1
+
+    async def interaction_check(self, interaction):
+        return interaction.user.id == self.owner and await require_admin(interaction)
+
+    @discord.ui.button(label='Profil', style=discord.ButtonStyle.secondary, emoji='🔍')
+    async def profile_button(self, interaction, button):
+        await interaction.response.edit_message(
+            embed=self.profile_pages[self.profile_page],
+            view=PrivateLookupView(self.cog, self.owner, self.profile, self.profile_pages, self.profile_page))
+
+    @discord.ui.button(label='Zurück', style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction, button):
+        self.page -= 1
+        self.previous.disabled = self.page == 0
+        self.next.disabled = False
+        await interaction.response.edit_message(embed=self.point_pages[self.page], view=self)
+
+    @discord.ui.button(label='Weiter', style=discord.ButtonStyle.secondary)
+    async def next(self, interaction, button):
+        self.page += 1
+        self.previous.disabled = False
+        self.next.disabled = self.page >= len(self.point_pages) - 1
+        await interaction.response.edit_message(embed=self.point_pages[self.page], view=self)
 
 
 class PublicLookupView(discord.ui.View):

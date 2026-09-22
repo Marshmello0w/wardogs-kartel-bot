@@ -113,12 +113,22 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
                        bans=[dict(issued_at=datetime(2026, 1, 1), status='active', admin_mention='Admin',
                                   duration_str='Permanent', expires_at=None, reason='Test')],
                        jobs=[dict(server_id='server1', action='ban', status='pending', attempts=2,
-                                  next_attempt=datetime(2026, 1, 2), last_error='HTTP 503')])
+                                  next_attempt=datetime(2026, 1, 2), last_error='HTTP 503')],
+                       points=42, vip_memberships=[dict(server_id='server2', status='active',
+                                                         expires_at=datetime(2026, 1, 10), duration_kind='week', source='shop')])
         pages = PlayerLookupCog.pages(cog, profile)
         self.assertEqual(len(pages), 1)
         field_names = [field.name for field in pages[0].fields]
         self.assertIn('🛡️ Ban-Historie', field_names)
         self.assertIn('⚙️ Admin-Aufträge', field_names)
+        self.assertIn('⭐ VIP', field_names)
+
+        ledger_pages = PlayerLookupCog.point_pages(cog, dict(profile, point_ledger=[
+            dict(amount=5, kind='seed_join', reason='Server 1', admin_mention=None, created_at=datetime(2026, 1, 2)),
+            dict(amount=-150, kind='vip_purchase', reason='VIP week', admin_mention=None, created_at=datetime(2026, 1, 3)),
+        ]))
+        self.assertIn('+5 Punkte · Seed-Start', ledger_pages[0].fields[0].value)
+        self.assertIn('-150 Punkte · VIP-Einlösung', ledger_pages[0].fields[0].value)
 
     def test_live_status_formats_team_scores(self):
         self.assertEqual(format_scores({'factionScores': [
