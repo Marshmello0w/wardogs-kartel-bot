@@ -276,11 +276,15 @@ class RegionGuardCog(commands.Cog):
             tracker = self.bot.get_cog("RoundTracker")
             current = tracker.current(srv.id) if tracker else None
             players = ((current or {}).get("snapshot", {}).get("players", {}).get("current"))
-            if not isinstance(players, int):
+            # Before the first restart, an empty fresh RCON snapshot is the
+            # safety gate. Once Pterodactyl has accepted a restart, RCON is
+            # expected to be briefly unavailable; the public API confirmation
+            # must continue independently until a future restart is considered.
+            if not isinstance(players, int) and not state.get("restart_at"):
                 self._problem(srv, state, "RCON-Spielerstand ist nicht frisch genug.")
                 await self.save(srv.id, state)
                 return
-            if players != 0:
+            if isinstance(players, int) and players != 0:
                 state["empty_since"] = None
                 if state.get("restart_at"):
                     state.update(phase="waiting_empty", restart_at=None, last_query_at=None)

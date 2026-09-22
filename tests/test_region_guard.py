@@ -148,6 +148,20 @@ class RegionGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.memory['server1']['completed'])
         self.assertEqual(self.memory['server1']['phase'], 'complete')
 
+    async def test_restart_continues_api_confirmation_while_rcon_restarts(self):
+        cog = self.cog(0)
+        restart_at = self.now
+        state = initial_state(berlin_day(restart_at))
+        state.update(phase='awaiting_api', restart_at=restart_at.isoformat())
+        self.memory['server1'] = state
+        cog.bot.tracker.value = None  # Expected while the server is rebooting.
+        cog._server_api = AsyncMock(return_value=(
+            {'updated_at': restart_at + timedelta(minutes=4), 'region': 'eu-central'}, None))
+        with patch('cogs.region_guard.storage.get_state', self._get), \
+             patch('cogs.region_guard.storage.save_state', self._save):
+            await cog.tick_server(self.server, restart_at + timedelta(minutes=4))
+        self.assertTrue(self.memory['server1']['completed'])
+
     async def test_fresh_wrong_region_restarts_when_still_empty(self):
         cog = self.cog(0)
         restart_at = self.now
