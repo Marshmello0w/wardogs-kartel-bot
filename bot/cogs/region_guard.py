@@ -359,13 +359,20 @@ class RegionGuardCog(commands.Cog):
                 return
             ready_at = restarted_at + timedelta(seconds=config.REGION_GUARD_API_DELAY_SECONDS)
             last_query_at = parse_api_timestamp(state.get("last_query_at"))
+            last_api_updated_at = parse_api_timestamp(state.get("last_api_updated_at"))
+            # Once the API gave us a valid but still pre-restart timestamp, it
+            # is actively catching up. Poll it faster without increasing calls
+            # for timeouts, errors, or normally fresh responses.
+            poll_seconds = (config.REGION_GUARD_API_STALE_POLL_SECONDS
+                            if last_api_updated_at and last_api_updated_at < ready_at
+                            else config.REGION_GUARD_API_POLL_SECONDS)
             if now < ready_at or (last_query_at and
-                                  now < last_query_at + timedelta(seconds=config.REGION_GUARD_API_POLL_SECONDS)):
+                                  now < last_query_at + timedelta(seconds=poll_seconds)):
                 if now < ready_at:
                     remaining = int((ready_at - now).total_seconds())
                     self.trace(srv, "API-Wartezeit", f"Warte noch **{max(0, remaining)} Sekunden** auf frische Serverlisten-Daten.", repeat=True)
                 else:
-                    remaining = int((last_query_at + timedelta(seconds=config.REGION_GUARD_API_POLL_SECONDS) - now).total_seconds())
+                    remaining = int((last_query_at + timedelta(seconds=poll_seconds) - now).total_seconds())
                     self.trace(srv, "API-Poll-Wartezeit", f"Nächste Serverlisten-Abfrage in **{max(0, remaining)} Sekunden**.", repeat=True)
                 await self.save(srv.id, state)
                 return

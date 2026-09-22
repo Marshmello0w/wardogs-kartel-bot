@@ -134,6 +134,21 @@ class RegionGuardTests(unittest.IsolatedAsyncioTestCase):
         cog._restart.assert_not_awaited()
         self.assertIn('Zeitstempel', self.memory['server1']['last_error'])
 
+    async def test_stale_api_timestamp_is_rechecked_after_thirty_seconds(self):
+        cog = self.cog(0)
+        restart_at = self.now
+        state = initial_state(berlin_day(restart_at))
+        state.update(phase='awaiting_api', restart_at=restart_at.isoformat())
+        self.memory['server1'] = state
+        cog._server_api = AsyncMock(return_value=(
+            {'updated_at': restart_at + timedelta(minutes=3), 'region': 'eu-west'}, None))
+        with patch('cogs.region_guard.storage.get_state', self._get), \
+             patch('cogs.region_guard.storage.save_state', self._save):
+            await cog.tick_server(self.server, restart_at + timedelta(minutes=4))
+            await cog.tick_server(self.server, restart_at + timedelta(minutes=4, seconds=29))
+            await cog.tick_server(self.server, restart_at + timedelta(minutes=4, seconds=30))
+        self.assertEqual(cog._server_api.await_count, 2)
+
     async def test_fresh_target_region_completes_day(self):
         cog = self.cog(0)
         restart_at = self.now
