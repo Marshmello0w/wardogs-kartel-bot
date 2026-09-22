@@ -174,6 +174,20 @@ class RegionGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(loaded['completed'])
         self.assertEqual(loaded['link_key'], 'stable-key')
 
+    async def test_panel_recovery_reenables_previously_disabled_server(self):
+        cog = self.cog(0)
+        state = initial_state(berlin_day(self.now))
+        state.update(panel_disabled=True, phase='disabled', last_error='Pterodactyl HTTP 403')
+        self.memory['server1'] = state
+        cog._discover_panel_servers = AsyncMock(return_value={'server1': 'panel-id'})
+        with patch('cogs.region_guard.storage.get_state', self._get), \
+             patch('cogs.region_guard.storage.save_state', self._save), \
+             patch('cogs.region_guard.config.servers', return_value=[self.server]):
+            await cog.initialise_panel()
+        self.assertFalse(self.memory['server1']['panel_disabled'])
+        self.assertEqual(self.memory['server1']['phase'], 'idle')
+        self.assertIsNone(self.memory['server1']['last_error'])
+
     def test_timestamp_requires_full_four_minutes(self):
         self.assertFalse(response_is_new_enough(self.now + timedelta(seconds=239), self.now))
         self.assertTrue(response_is_new_enough(self.now + timedelta(seconds=240), self.now))

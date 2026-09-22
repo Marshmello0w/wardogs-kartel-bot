@@ -367,15 +367,28 @@ class RegionGuardCog(commands.Cog):
             self.log("⚠️ Region-Guard Panel nicht verfügbar", exc.safe_message, discord.Color.orange())
             return
         for srv in config.servers():
-            if not srv.enabled or srv.id in mapped:
+            if not srv.enabled:
                 continue
             async with self.locks[srv.id]:
                 state = await self.load(srv.id)
-                state.update(panel_disabled=True, phase="disabled",
-                             last_error="Server im Pterodactyl-Panel nicht eindeutig gefunden")
-                await self.save(srv.id, state)
-            self.log("⚠️ Region-Guard Server deaktiviert",
-                     f"**{srv.title}** wurde im Pterodactyl-Panel nicht eindeutig gefunden.", discord.Color.orange())
+                if srv.id in mapped:
+                    recovered = bool(state.get("panel_disabled"))
+                    if recovered:
+                        state.update(panel_disabled=False, last_error=None)
+                        if state.get("phase") == "disabled":
+                            state["phase"] = "idle"
+                        await self.save(srv.id, state)
+                else:
+                    recovered = False
+                    state.update(panel_disabled=True, phase="disabled",
+                                 last_error="Server im Pterodactyl-Panel nicht eindeutig gefunden")
+                    await self.save(srv.id, state)
+            if srv.id not in mapped:
+                self.log("⚠️ Region-Guard Server deaktiviert",
+                         f"**{srv.title}** wurde im Pterodactyl-Panel nicht eindeutig gefunden.", discord.Color.orange())
+            elif recovered:
+                self.log("✅ Region-Guard Panel wieder verfügbar",
+                         f"**{srv.title}** wurde automatisch wieder freigegeben.", discord.Color.green())
 
     @tasks.loop(seconds=15)
     async def monitor(self):
