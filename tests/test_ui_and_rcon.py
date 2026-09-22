@@ -209,5 +209,5 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
                 await bot.load_extension('cogs.' + name)
             self.assertEqual(len(bot.cogs), 16)
             self.assertEqual({c.name for c in bot.tree.get_commands()},
-                             {'voting','forcemap','adminpanel','ban_lookup','lookup','addvip','seed','regionguard'})
+                             {'voting','forcemap','adminpanel','ban_lookup','lookup','addvip','seed','regionguard','regionguardstart'})
             self.assertEqual(len(bot.persistent_views), 7)

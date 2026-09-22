@@ -120,8 +120,9 @@ VIP_EXPIRY_CHECK_SECONDS = 60
 # Automatische Regionsprüfung nach einem leeren Server. Die öffentliche
 # Serverliste wird nur ungefähr alle fünf Minuten aktualisiert, deshalb wird
 # ihr Zeitstempel und nicht die Antwortgeschwindigkeit als Nachweis verwendet.
-REGION_GUARD_START_HOUR = 4
-REGION_GUARD_END_HOUR = 10
+REGION_GUARD_START_HOUR = 3
+REGION_GUARD_END_HOUR = 9
+REGION_GUARD_EMPTY_SECONDS = 5 * 60
 REGION_GUARD_TARGET = os.getenv("REGION_GUARD_TARGET", "eu-central").strip().casefold()
 REGION_GUARD_API_DELAY_SECONDS = 4 * 60
 REGION_GUARD_API_POLL_SECONDS = 2 * 60

@@ -51,6 +51,16 @@ def in_restart_window(value: datetime | None = None):
     return config.REGION_GUARD_START_HOUR <= local.hour < config.REGION_GUARD_END_HOUR
 
 
+def restart_allowed(state, value: datetime | None = None):
+    """Allow the regular window or an explicit early-release before it opens.
+
+    An early release never extends the guard past its normal 09:00 cutoff.
+    """
+    local = as_utc(value).astimezone(BERLIN)
+    return local.hour < config.REGION_GUARD_END_HOUR and (
+        local.hour >= config.REGION_GUARD_START_HOUR or bool(state.get("early_enabled")))
+
+
 def parse_api_timestamp(value):
     if not isinstance(value, str):
         return None
@@ -73,7 +83,9 @@ def initial_state(day):
         "paused": False,
         "panel_disabled": False,
         "completed": False,
+        "early_enabled": False,
         "phase": "idle",
+        "empty_since": None,
         "restart_at": None,
         "last_query_at": None,
         "last_api_updated_at": None,
@@ -254,7 +266,7 @@ class RegionGuardCog(commands.Cog):
         now = as_utc(now)
         async with self.locks[srv.id]:
             state = await self.load(srv.id, now)
-            if (not in_restart_window(now) or state.get("paused") or state.get("panel_disabled") or
+            if (not restart_allowed(state, now) or state.get("paused") or state.get("panel_disabled") or
                     state.get("completed")):
                 await self.save(srv.id, state)
                 return
@@ -267,6 +279,7 @@ class RegionGuardCog(commands.Cog):
                 await self.save(srv.id, state)
                 return
             if players != 0:
+                state["empty_since"] = None
                 if state.get("restart_at"):
                     state.update(phase="waiting_empty", restart_at=None, last_query_at=None)
                     self.bot.dispatch("bot_log", "⏸️ Region-Guard pausiert",
@@ -275,12 +288,19 @@ class RegionGuardCog(commands.Cog):
                 await self.save(srv.id, state)
                 return
 
-            if state.get("phase") == "waiting_empty":
-                state.update(phase="idle", last_error=None)
-                self.bot.dispatch("bot_log", "▶️ Region-Guard fortgesetzt",
-                                  f"**{srv.title}** ist wieder leer.", discord.Color.blue())
-
             if not state.get("restart_at"):
+                empty_since = parse_api_timestamp(state.get("empty_since"))
+                if not empty_since:
+                    state.update(empty_since=now.isoformat(), phase="waiting_empty", last_error=None)
+                    await self.save(srv.id, state)
+                    return
+                if now < empty_since + timedelta(seconds=config.REGION_GUARD_EMPTY_SECONDS):
+                    await self.save(srv.id, state)
+                    return
+                if state.get("phase") == "waiting_empty":
+                    state.update(phase="idle", last_error=None)
+                    self.bot.dispatch("bot_log", "▶️ Region-Guard fortgesetzt",
+                                      f"**{srv.title}** ist seit fünf Minuten leer.", discord.Color.blue())
                 try:
                     if await self._restart(srv, state, now):
                         await self.save(srv.id, state)
@@ -379,6 +399,7 @@ class RegionGuardCog(commands.Cog):
             state = self.states.get(srv.id) or initial_state(berlin_day())
             description = (f"**Status:** {state.get('phase', 'idle')}\n"
                            f"**Pausiert:** {'Ja' if state.get('paused') else 'Nein'}\n"
+                           f"**Frühfreigabe:** {'Ja' if state.get('early_enabled') else 'Nein'}\n"
                            f"**Panel deaktiviert:** {'Ja' if state.get('panel_disabled') else 'Nein'}\n"
                            f"**Heute abgeschlossen:** {'Ja' if state.get('completed') else 'Nein'}\n"
                            f"**Letzte Region:** {state.get('last_region') or '—'}")
@@ -423,6 +444,32 @@ class RegionGuardCog(commands.Cog):
         await interaction.response.send_message(
             f"✅ Region-Guard für {config.server(server.value).title} "
             f"{'pausiert' if action.value == 'pause' else 'aktiviert'}.", ephemeral=True)
+
+    @app_commands.command(name="regionguardstart", description="Gibt den Region-Guard vor 03:00 Uhr für einen leeren Server frei.")
+    @app_commands.choices(server=[app_commands.Choice(name=f"Server {number}", value=f"server{number}") for number in range(1, 4)])
+    async def region_guard_start(self, interaction: discord.Interaction, server: app_commands.Choice[str]):
+        if not await require_admin(interaction):
+            return
+        now = utc_now()
+        local = now.astimezone(BERLIN)
+        if local.hour >= config.REGION_GUARD_END_HOUR:
+            await interaction.response.send_message(
+                f"Die Regionsprüfung endet um {config.REGION_GUARD_END_HOUR:02d}:00 Uhr. Eine Frühfreigabe ist heute nicht mehr möglich.",
+                ephemeral=True)
+            return
+        async with self.locks[server.value]:
+            state = await self.load(server.value, now)
+            if state.get("completed"):
+                await interaction.response.send_message("Dieser Server wurde heute bereits erfolgreich geprüft.", ephemeral=True)
+                return
+            state["early_enabled"] = True
+            await self.save(server.value, state)
+        self.bot.dispatch("bot_log", "🛠️ Region-Guard früh freigegeben",
+                          f"{interaction.user.mention} gab **{config.server(server.value).title}** vorzeitig frei. "
+                          "Ein Restart ist erst nach fünf Minuten durchgehendem Leerstand möglich.", discord.Color.blue())
+        await interaction.response.send_message(
+            f"✅ Frühfreigabe für {config.server(server.value).title} erteilt. Der Server startet nur, wenn er fünf Minuten am Stück leer bleibt.",
+            ephemeral=True)
 
 
 async def setup(bot):

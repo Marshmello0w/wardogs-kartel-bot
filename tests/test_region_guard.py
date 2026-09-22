@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 
-from cogs.region_guard import (RegionGuardCog, berlin_day, in_restart_window,
+from cogs.region_guard import (RegionGuardCog, berlin_day, in_restart_window, restart_allowed,
                                initial_state, response_is_new_enough)
 
 
@@ -72,7 +72,7 @@ class RegionGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(in_restart_window(datetime(2026, 9, 22, 8, 0, tzinfo=UTC)))
         self.assertEqual(berlin_day(self.now), '2026-09-22')
 
-    async def test_empty_fresh_rcon_starts_one_restart(self):
+    async def test_empty_fresh_rcon_starts_only_after_five_minutes(self):
         cog = self.cog(0)
         restarts = []
 
@@ -85,7 +85,9 @@ class RegionGuardTests(unittest.IsolatedAsyncioTestCase):
         with patch('cogs.region_guard.storage.get_state', self._get), \
              patch('cogs.region_guard.storage.save_state', self._save):
             await cog.tick_server(self.server, self.now)
-        self.assertEqual(restarts, [self.now])
+            await cog.tick_server(self.server, self.now + timedelta(seconds=299))
+            await cog.tick_server(self.server, self.now + timedelta(seconds=300))
+        self.assertEqual(restarts, [self.now + timedelta(seconds=300)])
         self.assertEqual(self.memory['server1']['phase'], 'awaiting_api')
 
     async def test_player_join_pauses_and_later_empty_resumes(self):
@@ -99,8 +101,23 @@ class RegionGuardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.memory['server1']['phase'], 'waiting_empty')
             cog.bot.tracker.value = snapshot(0)
             cog._restart = AsyncMock(return_value=True)
-            await cog.tick_server(self.server, self.now + timedelta(seconds=15))
+            await cog.tick_server(self.server, self.now + timedelta(minutes=5, seconds=15))
+            await cog.tick_server(self.server, self.now + timedelta(minutes=10, seconds=15))
         cog._restart.assert_awaited_once()
+
+    async def test_early_release_still_needs_five_minutes_empty(self):
+        early = datetime(2026, 9, 22, 0, 0, tzinfo=UTC)  # 02:00 Europe/Berlin
+        cog = self.cog(0)
+        state = initial_state(berlin_day(early))
+        state['early_enabled'] = True
+        self.memory['server1'] = state
+        cog._restart = AsyncMock(return_value=True)
+        with patch('cogs.region_guard.storage.get_state', self._get), \
+             patch('cogs.region_guard.storage.save_state', self._save):
+            await cog.tick_server(self.server, early)
+            await cog.tick_server(self.server, early + timedelta(minutes=5))
+        cog._restart.assert_awaited_once()
+        self.assertTrue(restart_allowed(self.memory['server1'], early + timedelta(minutes=5)))
 
     async def test_old_api_timestamp_is_never_processed(self):
         cog = self.cog(0)
