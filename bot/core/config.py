@@ -117,6 +117,23 @@ VIP_MONTH_COST = 550
 VIP_SLOT_LIMIT = 20
 VIP_EXPIRY_CHECK_SECONDS = 60
 
+# Automatische Regionsprüfung nach einem leeren Server. Die öffentliche
+# Serverliste wird nur ungefähr alle fünf Minuten aktualisiert, deshalb wird
+# ihr Zeitstempel und nicht die Antwortgeschwindigkeit als Nachweis verwendet.
+REGION_GUARD_START_HOUR = 4
+REGION_GUARD_END_HOUR = 10
+REGION_GUARD_TARGET = os.getenv("REGION_GUARD_TARGET", "eu-central").strip().casefold()
+REGION_GUARD_API_DELAY_SECONDS = 4 * 60
+REGION_GUARD_API_POLL_SECONDS = 2 * 60
+REGION_GUARD_HTTP_TIMEOUT_SECONDS = _bounded_int("REGION_GUARD_HTTP_TIMEOUT_SECONDS", 15, 3, 60)
+PTERODACTYL_API_BASE_URL = os.getenv("PTERODACTYL_API_BASE_URL", "https://pteroapi.pockethost.cloud").rstrip("/")
+PTERODACTYL_CLIENT_API_KEY = os.getenv("PTERODACTYL_CLIENT_API_KEY", "")
+PTERODACTYL_SERVER_NAMES = {
+    "server1": os.getenv("PTERODACTYL_SERVER1_NAME", "testdd.xrealm.gg").strip(),
+    "server2": os.getenv("PTERODACTYL_SERVER2_NAME", "darkly-savage-watch-7h1w.xrealm.gg").strip(),
+    "server3": os.getenv("PTERODACTYL_SERVER3_NAME", "server-3.xrealm.gg").strip(),
+}
+
 # Format: Name im Discord -> (Map, Experience, Lighting)
 MAP_VOTE_OPTIONS = {
     "Bakurani": {"Map": "Kavkazi", "Experience": "Bakurani_KOTH_01", "Lighting": "DayClear"},
