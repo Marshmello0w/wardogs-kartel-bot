@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -9,6 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
 from core import config
+from services.ban_service import ingame_ban_reason
 from core.permissions import is_admin, require_admin, valid_steam_id
 from core.runtime import Health
 from infrastructure import database
@@ -57,6 +59,16 @@ class RconConfigurationTests(unittest.TestCase):
     def test_missing_guild_id_fails_startup_validation(self):
         with patch.object(config, 'DISCORD_BOT_TOKEN', 'test-token'), patch.object(config, 'GUILD_ID', ''):
             self.assertFalse(config.validate())
+
+
+class BanReasonTests(unittest.TestCase):
+    def test_temporary_ingame_ban_shows_berlin_expiry(self):
+        expiry = datetime(2026, 9, 22, 12, 30)  # Stored as naive UTC in MySQL.
+        self.assertEqual(ingame_ban_reason('Cheating', expiry),
+                         'Cheating | Entbannung: 22.09.2026 um 14:30 Uhr (Europe/Berlin)')
+
+    def test_permanent_ingame_ban_keeps_the_original_reason(self):
+        self.assertEqual(ingame_ban_reason('Cheating', None), 'Cheating')
 
 
 class HealthTests(unittest.TestCase):

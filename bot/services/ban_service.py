@@ -1,10 +1,11 @@
 """Durable desired-state bans. No RCON change precedes a committed admin action."""
 import asyncio
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta, timezone
 import hashlib
 import json
 import re
+from zoneinfo import ZoneInfo
 import discord
 from core import config
 from core.permissions import valid_steam_id
@@ -12,6 +13,20 @@ from core.runtime import read_state
 from infrastructure import database
 from infrastructure.storage import utcnow
 from services.rcon import RconError
+
+
+BERLIN = ZoneInfo('Europe/Berlin')
+
+
+def ingame_ban_reason(reason, expires_at):
+    """Keep the stored reason intact while giving the banned player a local expiry time."""
+    reason = str(reason or '').strip()
+    if not expires_at:
+        return reason
+    expires_at = (expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None
+                  else expires_at.astimezone(timezone.utc))
+    local = expires_at.astimezone(BERLIN)
+    return f'{reason} | Entbannung: {local:%d.%m.%Y um %H:%M Uhr} (Europe/Berlin)'
 
 
 def config_banned_ids(text):
@@ -152,7 +167,8 @@ class BanService:
                 return True
             try:
                 await self.bot.rcon.request(server_id, 'POST', '/v1/bans',
-                                            payload=dict(steamId=steam_id, reason=job['reason']),
+                                            payload=dict(steamId=steam_id,
+                                                         reason=ingame_ban_reason(job['reason'], job['expires_at'])),
                                             guard=lambda: not job['expires_at'] or job['expires_at'] > utcnow())
             except RconError as exc:
                 if not exc.uncertain:
