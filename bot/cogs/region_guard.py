@@ -114,6 +114,11 @@ class RegionGuardCog(commands.Cog):
         """Route all Region-Guard events through the central logger separately."""
         self.bot.dispatch("bot_log", title, description, color, config.REGION_GUARD_LOG_CHANNEL_ID or None)
 
+    def trace(self, srv, title, description):
+        """Detailed test trace for every Region-Guard decision and external call."""
+        if config.REGION_GUARD_VERBOSE_LOGGING:
+            self.log(f"🔎 {title}", f"**{srv.title}:** {description}", discord.Color.blurple())
+
     def cog_unload(self):
         self.monitor.cancel()
         for session in (self.ptero_session, self.public_session):
@@ -208,11 +213,14 @@ class RegionGuardCog(commands.Cog):
         current = tracker.current(srv.id) if tracker else None
         players = ((current or {}).get("snapshot", {}).get("players", {}).get("current"))
         if not isinstance(players, int) or players != 0:
+            self.trace(srv, "Restart abgebrochen", "Finale RCON-Prüfung bestätigt keinen leeren Server.")
             return False
+        self.trace(srv, "Restart-Vorprüfung", "RCON bestätigt 0 Spieler. Pterodactyl-Server wird ermittelt.")
         panel_ids = await self._discover_panel_servers()
         identifier = panel_ids.get(srv.id)
         if not identifier:
             raise PterodactylError("Server im Pterodactyl-Panel nicht eindeutig gefunden")
+        self.trace(srv, "Pterodactyl-Restart", "Restart-Aufruf wird an das Panel gesendet.")
         session = await self._ptero_session()
         try:
             async with session.post(f"{config.PTERODACTYL_API_BASE_URL}/api/client/servers/{identifier}/power",
@@ -223,6 +231,7 @@ class RegionGuardCog(commands.Cog):
             raise PterodactylError("Pterodactyl Restart Timeout") from None
         except aiohttp.ClientError:
             raise PterodactylError("Pterodactyl Restart-Verbindung fehlgeschlagen") from None
+        self.trace(srv, "Pterodactyl-Restart", "Panel hat den Restart angenommen.")
         state.update(phase="awaiting_api", restart_at=now.isoformat(), last_query_at=None,
                      last_api_updated_at=None, last_region=None, last_error=None)
         self.log("🔄 Region-Guard startet Server neu",
@@ -233,22 +242,26 @@ class RegionGuardCog(commands.Cog):
         """Fetch one server entry, preferring a learned stable link key."""
         params = {"key": state["link_key"]} if state.get("link_key") else {"code": srv.uuid}
         session = await self._public_session()
-        async def fetch(query):
+        async def fetch(query, source):
+            self.trace(srv, "WarDogs-API Anfrage", f"Öffentliche Serverliste wird über {source} abgefragt.")
             try:
                 async with session.get("https://wardogserverlist.com/api/server", params=query) as response:
                     if response.status != 200:
+                        self.trace(srv, "WarDogs-API Antwort", f"HTTP {response.status}.")
                         return None, response.status
                     return await response.json(content_type=None), None
             except asyncio.TimeoutError:
+                self.trace(srv, "WarDogs-API Antwort", "Timeout.")
                 return None, "timeout"
             except aiohttp.ClientError:
+                self.trace(srv, "WarDogs-API Antwort", "Verbindung fehlgeschlagen.")
                 return None, "connection"
 
-        payload, failure = await fetch(params)
+        payload, failure = await fetch(params, "stabilen Server-Schlüssel" if state.get("link_key") else "Join-Code")
         # A link key can disappear after a host-side re-registration. The last
         # known join code is the safe fallback that lets us learn a new key.
         if failure == 404 and state.get("link_key") and srv.uuid:
-            payload, failure = await fetch({"code": srv.uuid})
+            payload, failure = await fetch({"code": srv.uuid}, "Join-Code nach Schlüssel-Fehler")
         if failure:
             messages = {"timeout": "WarDogs API Timeout", "connection": "WarDogs API Verbindung fehlgeschlagen"}
             return None, messages.get(failure, f"WarDogs API HTTP {failure}")
@@ -262,7 +275,10 @@ class RegionGuardCog(commands.Cog):
         if isinstance(link_key, str) and link_key.strip():
             state["link_key"] = link_key.strip()
         region = server.get("region")
-        return {"updated_at": updated_at, "region": str(region or "").casefold()}, None
+        normalized_region = str(region or "").casefold()
+        self.trace(srv, "WarDogs-API Antwort",
+                   f"Region: **{normalized_region or '—'}** · Datenstand: {updated_at:%d.%m.%Y %H:%M:%S UTC}.")
+        return {"updated_at": updated_at, "region": normalized_region}, None
 
     async def tick_server(self, srv, now=None):
         now = as_utc(now)
@@ -276,6 +292,9 @@ class RegionGuardCog(commands.Cog):
             tracker = self.bot.get_cog("RoundTracker")
             current = tracker.current(srv.id) if tracker else None
             players = ((current or {}).get("snapshot", {}).get("players", {}).get("current"))
+            self.trace(srv, "Region-Guard Prüfschritt",
+                       f"Phase: **{state.get('phase')}** · RCON-Spieler: **{players if isinstance(players, int) else 'nicht verfügbar'}** · "
+                       f"Restart läuft: **{'Ja' if state.get('restart_at') else 'Nein'}**.")
             # Before the first restart, an empty fresh RCON snapshot is the
             # safety gate. Once Pterodactyl has accepted a restart, RCON is
             # expected to be briefly unavailable; the public API confirmation
@@ -284,6 +303,8 @@ class RegionGuardCog(commands.Cog):
                 self._problem(srv, state, "RCON-Spielerstand ist nicht frisch genug.")
                 await self.save(srv.id, state)
                 return
+            if not isinstance(players, int):
+                self.trace(srv, "RCON während Restart", "Nicht erreichbar; API-Nachweis wird trotzdem fortgesetzt.")
             if isinstance(players, int) and players != 0:
                 state["empty_since"] = None
                 if state.get("restart_at"):
@@ -297,9 +318,12 @@ class RegionGuardCog(commands.Cog):
                 empty_since = parse_api_timestamp(state.get("empty_since"))
                 if not empty_since:
                     state.update(empty_since=now.isoformat(), phase="waiting_empty", last_error=None)
+                    self.trace(srv, "Leerstand-Timer gestartet", "0 Spieler erkannt. Warte fünf Minuten durchgehenden Leerstand.")
                     await self.save(srv.id, state)
                     return
                 if now < empty_since + timedelta(seconds=config.REGION_GUARD_EMPTY_SECONDS):
+                    remaining = int((empty_since + timedelta(seconds=config.REGION_GUARD_EMPTY_SECONDS) - now).total_seconds())
+                    self.trace(srv, "Leerstand-Timer", f"Server bleibt leer; noch **{max(0, remaining)} Sekunden** bis zur Restart-Freigabe.")
                     await self.save(srv.id, state)
                     return
                 if state.get("phase") == "waiting_empty":
@@ -326,6 +350,12 @@ class RegionGuardCog(commands.Cog):
             last_query_at = parse_api_timestamp(state.get("last_query_at"))
             if now < ready_at or (last_query_at and
                                   now < last_query_at + timedelta(seconds=config.REGION_GUARD_API_POLL_SECONDS)):
+                if now < ready_at:
+                    remaining = int((ready_at - now).total_seconds())
+                    self.trace(srv, "API-Wartezeit", f"Warte noch **{max(0, remaining)} Sekunden** auf frische Serverlisten-Daten.")
+                else:
+                    remaining = int((last_query_at + timedelta(seconds=config.REGION_GUARD_API_POLL_SECONDS) - now).total_seconds())
+                    self.trace(srv, "API-Poll-Wartezeit", f"Nächste Serverlisten-Abfrage in **{max(0, remaining)} Sekunden**.")
                 await self.save(srv.id, state)
                 return
 
@@ -348,6 +378,8 @@ class RegionGuardCog(commands.Cog):
                          f"**{srv.title}** wurde mit Region **{region}** bestätigt.", discord.Color.green())
                 await self.save(srv.id, state)
                 return
+            self.trace(srv, "Regionsentscheidung",
+                       f"Region **{region or '—'}** ist nicht **{config.REGION_GUARD_TARGET}**; weiterer Restart wird geprüft.")
             try:
                 if not await self._restart(srv, state, now):
                     state.update(phase="waiting_empty", restart_at=None)
