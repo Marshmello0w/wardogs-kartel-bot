@@ -23,6 +23,7 @@ from .settings import ROOT, SERVERS, Settings
 from .steam import LoginError, SteamLogin
 from .i18n import LANGUAGES, translate
 from .session import ConsentSessionMiddleware
+from .visitor_tracker import VisitorTracker
 
 logger = logging.getLogger('kartell.web')
 PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
@@ -83,6 +84,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     db = ReadDatabase(settings.db_url)
     reward_db = reward_submission or RewardSubmissionDatabase(settings.reward_db_url)
     repo = repository or Repository(db)
+    visitors = VisitorTracker(ROOT / 'data' / 'unique_visitors.json', settings.session_secret)
     # API keys and OpenID signatures must not appear in request logs.
     logging.getLogger('httpx').setLevel(logging.WARNING)
     client = steam_client or httpx.AsyncClient(timeout=10, follow_redirects=False)
@@ -98,7 +100,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             await client.aclose()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.repo, app.state.steam, app.state.reward_db = repo, steam, reward_db
+    app.state.repo, app.state.steam, app.state.reward_db, app.state.visitors = repo, steam, reward_db, visitors
     app.add_middleware(ConsentSessionMiddleware, secret_key=settings.session_secret,
                        session_cookie='kartell_session', max_age=43200,
                        same_site='lax', https_only=settings.secure)
@@ -115,6 +117,15 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     @app.middleware('http')
     async def security_headers(request, call_next):
         response = await call_next(request)
+        # Count successful HTML/page requests, not static assets, health checks,
+        # or form/API posts.  Uvicorn supplies the proxy-validated client IP.
+        if (request.method == 'GET' and response.status_code < 400
+                and request.url.path not in ('/health', '/tokens.css')
+                and not request.url.path.startswith('/static/')):
+            try:
+                await visitors.record(request.client.host if request.client else None)
+            except OSError:
+                logger.warning('Unique visitor counter file unavailable')
         # Remove the legacy preference cookie from earlier banner versions.
         # Consent is now never recorded separately.
         if request.cookies.get('kartell_cookie_choice'):
