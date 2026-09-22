@@ -108,16 +108,27 @@ class RegionGuardCog(commands.Cog):
         self.panel_checked_at = None
         self.ptero_session = None
         self.public_session = None
+        self.trace_at = {}
         self.monitor.start()
 
     def log(self, title, description, color):
         """Route all Region-Guard events through the central logger separately."""
         self.bot.dispatch("bot_log", title, description, color, config.REGION_GUARD_LOG_CHANNEL_ID or None)
 
-    def trace(self, srv, title, description):
+    def trace(self, srv, title, description, *, repeat=False):
         """Detailed test trace for every Region-Guard decision and external call."""
-        if config.REGION_GUARD_VERBOSE_LOGGING:
-            self.log(f"🔎 {title}", f"**{srv.title}:** {description}", discord.Color.blurple())
+        if not config.REGION_GUARD_VERBOSE_LOGGING:
+            return
+        if repeat:
+            trace_at = getattr(self, "trace_at", None)
+            if trace_at is None:
+                trace_at = self.trace_at = {}
+            key, now = (srv.id, title), utc_now()
+            previous = trace_at.get(key)
+            if previous and (now - previous).total_seconds() < config.REGION_GUARD_TRACE_REPEAT_SECONDS:
+                return
+            trace_at[key] = now
+        self.log(f"🔎 {title}", f"**{srv.title}:** {description}", discord.Color.blurple())
 
     def cog_unload(self):
         self.monitor.cancel()
@@ -294,7 +305,7 @@ class RegionGuardCog(commands.Cog):
             players = ((current or {}).get("snapshot", {}).get("players", {}).get("current"))
             self.trace(srv, "Region-Guard Prüfschritt",
                        f"Phase: **{state.get('phase')}** · RCON-Spieler: **{players if isinstance(players, int) else 'nicht verfügbar'}** · "
-                       f"Restart läuft: **{'Ja' if state.get('restart_at') else 'Nein'}**.")
+                       f"Restart läuft: **{'Ja' if state.get('restart_at') else 'Nein'}**.", repeat=True)
             # Before the first restart, an empty fresh RCON snapshot is the
             # safety gate. Once Pterodactyl has accepted a restart, RCON is
             # expected to be briefly unavailable; the public API confirmation
@@ -304,7 +315,7 @@ class RegionGuardCog(commands.Cog):
                 await self.save(srv.id, state)
                 return
             if not isinstance(players, int):
-                self.trace(srv, "RCON während Restart", "Nicht erreichbar; API-Nachweis wird trotzdem fortgesetzt.")
+                self.trace(srv, "RCON während Restart", "Nicht erreichbar; API-Nachweis wird trotzdem fortgesetzt.", repeat=True)
             if isinstance(players, int) and players != 0:
                 state["empty_since"] = None
                 if state.get("restart_at"):
@@ -323,7 +334,7 @@ class RegionGuardCog(commands.Cog):
                     return
                 if now < empty_since + timedelta(seconds=config.REGION_GUARD_EMPTY_SECONDS):
                     remaining = int((empty_since + timedelta(seconds=config.REGION_GUARD_EMPTY_SECONDS) - now).total_seconds())
-                    self.trace(srv, "Leerstand-Timer", f"Server bleibt leer; noch **{max(0, remaining)} Sekunden** bis zur Restart-Freigabe.")
+                    self.trace(srv, "Leerstand-Timer", f"Server bleibt leer; noch **{max(0, remaining)} Sekunden** bis zur Restart-Freigabe.", repeat=True)
                     await self.save(srv.id, state)
                     return
                 if state.get("phase") == "waiting_empty":
@@ -352,10 +363,10 @@ class RegionGuardCog(commands.Cog):
                                   now < last_query_at + timedelta(seconds=config.REGION_GUARD_API_POLL_SECONDS)):
                 if now < ready_at:
                     remaining = int((ready_at - now).total_seconds())
-                    self.trace(srv, "API-Wartezeit", f"Warte noch **{max(0, remaining)} Sekunden** auf frische Serverlisten-Daten.")
+                    self.trace(srv, "API-Wartezeit", f"Warte noch **{max(0, remaining)} Sekunden** auf frische Serverlisten-Daten.", repeat=True)
                 else:
                     remaining = int((last_query_at + timedelta(seconds=config.REGION_GUARD_API_POLL_SECONDS) - now).total_seconds())
-                    self.trace(srv, "API-Poll-Wartezeit", f"Nächste Serverlisten-Abfrage in **{max(0, remaining)} Sekunden**.")
+                    self.trace(srv, "API-Poll-Wartezeit", f"Nächste Serverlisten-Abfrage in **{max(0, remaining)} Sekunden**.", repeat=True)
                 await self.save(srv.id, state)
                 return
 

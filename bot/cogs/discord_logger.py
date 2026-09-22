@@ -1,6 +1,8 @@
 import asyncio
 import logging
+from collections import defaultdict
 from io import BytesIO
+from time import monotonic
 import discord
 from discord.ext import commands
 
@@ -11,6 +13,8 @@ class DiscordLogger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._recap_lock = asyncio.Lock()
+        self._log_locks = defaultdict(asyncio.Lock)
+        self._last_log_sent_at = {}
 
     @commands.Cog.listener()
     async def on_bot_log(self, title: str, description: str, color: discord.Color = discord.Color.blue(),
@@ -24,14 +28,6 @@ class DiscordLogger(commands.Cog):
         if not target_channel_id:
             return
 
-        channel = self.bot.get_channel(int(target_channel_id))
-        if not channel:
-            try:
-                channel = await self.bot.fetch_channel(int(target_channel_id))
-            except Exception as e:
-                logging.error(f"Konnte Log-Channel nicht finden: {e}")
-                return
-
         embed = discord.Embed(
             title=title[:256],
             description=description[:4096],
@@ -41,7 +37,22 @@ class DiscordLogger(commands.Cog):
         embed.timestamp = discord.utils.utcnow()
 
         try:
-            await channel.send(embed=embed)
+            # Serialise messages per channel and leave a safety margin below
+            # Discord's channel rate limit. Important bursts are queued, never
+            # dropped, and ordinary bot features keep their own channels.
+            async with self._log_locks[str(target_channel_id)]:
+                elapsed = monotonic() - self._last_log_sent_at.get(str(target_channel_id), 0)
+                if elapsed < config.DISCORD_LOG_MIN_INTERVAL_SECONDS:
+                    await asyncio.sleep(config.DISCORD_LOG_MIN_INTERVAL_SECONDS - elapsed)
+                channel = self.bot.get_channel(int(target_channel_id))
+                if not channel:
+                    try:
+                        channel = await self.bot.fetch_channel(int(target_channel_id))
+                    except Exception as e:
+                        logging.error(f"Konnte Log-Channel nicht finden: {e}")
+                        return
+                await channel.send(embed=embed)
+                self._last_log_sent_at[str(target_channel_id)] = monotonic()
         except Exception as e:
             logging.error(f"Konnte Bot-Log nicht in Discord senden: {e}")
 
