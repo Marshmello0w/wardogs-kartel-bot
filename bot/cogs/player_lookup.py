@@ -294,16 +294,6 @@ class PlayerLookupCog(commands.Cog):
         pages = self.pages(profile)
         await interaction.followup.send(embed=pages[0], view=PrivateLookupView(self, interaction.user.id, profile, pages), ephemeral=True)
 
-    async def dismiss_source_message(self, interaction):
-        """Remove a consumed private select/profile message without failing its action."""
-        message = getattr(interaction, 'message', None)
-        if message is None:
-            return
-        try:
-            await message.delete()
-        except discord.HTTPException as exc:
-            self.bot.health.error('Spieler-Lookup Nachricht löschen', exc)
-
     @app_commands.command(name='lookup', description='Zeigt alle gespeicherten Daten eines Spielers.')
     @app_commands.describe(query='Spielername oder 17-stellige Steam64-ID')
     async def lookup(self, interaction: discord.Interaction, query: str):
@@ -338,9 +328,20 @@ class LookupMatchSelect(discord.ui.Select):
         super().__init__(placeholder='Spieler auswählen …', options=options)
 
     async def callback(self, interaction):
-        await interaction.response.defer(ephemeral=True)
-        await self.view.cog.send_private_profile(interaction, self.values[0])
-        await self.view.cog.dismiss_source_message(interaction)
+        try:
+            profile = await self.view.cog.profile(self.values[0])
+            if not profile['exists']:
+                await interaction.response.edit_message(content='Kein gespeicherter Spieler zu dieser Steam64-ID gefunden.', embed=None, view=None)
+                return
+            pages = self.view.cog.pages(profile)
+            # Editing the component source works for ephemeral follow-ups too.
+            # It replaces the temporary selector instead of trying to delete a
+            # message through a token belonging to an earlier interaction.
+            await interaction.response.edit_message(
+                content=None, embed=pages[0], view=PrivateLookupView(self.view.cog, interaction.user.id, profile, pages))
+        except Exception as exc:
+            self.view.cog.bot.health.error('Spieler-Lookup', exc)
+            await interaction.response.edit_message(content='Die Spielerdatenbank ist momentan nicht verfügbar.', embed=None, view=None)
 
 
 class LookupMatchView(discord.ui.View):
@@ -430,12 +431,13 @@ class PrivateLookupView(discord.ui.View):
 
     @discord.ui.button(label='Öffentlich machen', style=discord.ButtonStyle.primary, emoji='📢')
     async def publish(self, interaction, button):
-        await interaction.response.defer(ephemeral=True)
         view = PublicLookupView(self.cog, self.profile['steam_id'])
         self.cog.bot.dispatch('public_lookup', interaction.channel_id, self.pages[0], view)
         self.cog.bot.dispatch('bot_log', '📢 Spieler-Lookup veröffentlicht',
                               f"{interaction.user.mention} veröffentlichte `{self.profile['steam_id']}`.", discord.Color.blue())
-        await self.cog.dismiss_source_message(interaction)
+        # Clear the private source directly through the component response.
+        # This is supported for ephemeral follow-up messages, unlike DELETE.
+        await interaction.response.edit_message(content=None, embed=None, view=None)
 
 
 class PrivatePointLedgerView(discord.ui.View):
