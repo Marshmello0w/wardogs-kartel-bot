@@ -149,8 +149,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.tick()
         self.assertFalse(any(method == 'POST' for _,method,_ in self.bot.rcon.calls))
         jobs = await self.rows('SELECT action,status FROM admin_jobs')
-        self.assertEqual(sum(j['action'] == 'ban' and j['status'] == 'superseded' for j in jobs), 3)
-        self.assertEqual(sum(j['action'] == 'unban' and j['status'] == 'done' for j in jobs), 3)
+        self.assertFalse(any(j['status'] in ('done', 'superseded') for j in jobs))
 
     async def test_unban_supersedes_old_ban_and_restart_preserves_jobs(self):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin')
@@ -158,7 +157,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         restarted = BanService(self.bot)
         await restarted.tick()
         self.assertFalse(any(method == 'POST' for _,method,_ in self.bot.rcon.calls))
-        self.assertEqual(len(await self.rows("SELECT * FROM admin_jobs WHERE status='done'")), 3)
+        self.assertEqual(len(await self.rows("SELECT * FROM admin_jobs WHERE status IN ('done', 'superseded')")), 0)
 
     async def test_new_action_during_network_wait_is_retained(self):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin')

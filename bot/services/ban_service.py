@@ -128,7 +128,7 @@ class BanService:
                 await cur.execute("""UPDATE admin_targets SET version=%s,desired=%s,reason=%s,
                     admin_mention=%s,expires_at=%s,ban_id=%s,updated_at=UTC_TIMESTAMP() WHERE steam_id=%s""",
                     (version, action, reason, admin, expires, ban_id, steam_id))
-                await cur.execute("UPDATE admin_jobs SET status='superseded' WHERE steam_id=%s AND status='pending'", (steam_id,))
+                await cur.execute("DELETE FROM admin_jobs WHERE steam_id=%s AND status='pending'", (steam_id,))
                 for srv in config.servers():
                     await self._job(cur, dict(steam_id=steam_id, version=version, desired=action), srv.id)
         self.bot.dispatch('bot_log', '🛡️ Admin-Aktion gespeichert',
@@ -151,7 +151,7 @@ class BanService:
                     await cur.execute("UPDATE admin_targets SET version=%s,desired='unban',updated_at=UTC_TIMESTAMP() WHERE steam_id=%s",
                                       (target['version'], steam_id))
                     await cur.execute("UPDATE global_bans SET status='expired' WHERE id=%s AND status='active'", (target['ban_id'],))
-                    await cur.execute("UPDATE admin_jobs SET status='superseded' WHERE steam_id=%s AND status='pending'", (steam_id,))
+                    await cur.execute("DELETE FROM admin_jobs WHERE steam_id=%s AND status='pending'", (steam_id,))
                     for srv in config.servers():
                         await self._job(cur, target, srv.id)
                 self.bot.dispatch('bot_log', '⏳ Ban abgelaufen',
@@ -210,9 +210,12 @@ class BanService:
                 error = f'HTTP {exc.status}' if isinstance(exc, RconError) and exc.status else type(exc).__name__
                 self.bot.health.error(key, exc)
             async with database.transaction() as cur:
-                await cur.execute("""UPDATE admin_jobs SET status=%s,attempts=attempts+1,
-                    next_attempt=%s,last_error=%s WHERE id=%s AND status='pending'""",
-                    ('pending' if error else 'done', utcnow() + timedelta(seconds=min(300, 5 * 2 ** min(job['attempts'], 6))), error, job['id']))
+                if error:
+                    await cur.execute("""UPDATE admin_jobs SET attempts=attempts+1,
+                        next_attempt=%s,last_error=%s WHERE id=%s AND status='pending'""",
+                        (utcnow() + timedelta(seconds=min(300, 5 * 2 ** min(job['attempts'], 6))), error, job['id']))
+                else:
+                    await cur.execute("DELETE FROM admin_jobs WHERE id=%s AND status='pending'", (job['id'],))
             if not error:
                 self.bot.dispatch('bot_log', '✅ Admin-Auftrag ausgeführt',
                                   f"{config.server(job['server_id']).title}: {job['action']} für `{job['steam_id']}`",
@@ -223,6 +226,7 @@ class BanService:
             await self.initialize()
             await self.expire()
             async with database.transaction() as cur:
+                await cur.execute("DELETE FROM admin_jobs WHERE status IN ('done', 'superseded')")
                 await cur.execute("""SELECT id,steam_id,server_id FROM admin_jobs WHERE status='pending'
                     AND next_attempt<=UTC_TIMESTAMP() ORDER BY id LIMIT 30""")
                 jobs = await cur.fetchall()
