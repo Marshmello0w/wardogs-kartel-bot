@@ -435,9 +435,10 @@ class PrivateLookupView(discord.ui.View):
         self.cog.bot.dispatch('public_lookup', interaction.channel_id, self.pages[0], view)
         self.cog.bot.dispatch('bot_log', '📢 Spieler-Lookup veröffentlicht',
                               f"{interaction.user.mention} veröffentlichte `{self.profile['steam_id']}`.", discord.Color.blue())
-        # Clear the private source directly through the component response.
-        # This is supported for ephemeral follow-up messages, unlike DELETE.
-        await interaction.response.edit_message(content=None, embed=None, view=None)
+        # Discord rejects a fully empty message. A zero-width space removes all
+        # visible content and controls; ``delete_after`` makes a best-effort,
+        # silent cleanup for ephemeral follow-up messages.
+        await interaction.response.edit_message(content='\u200b', embed=None, view=None, delete_after=2)
 
 
 class PrivatePointLedgerView(discord.ui.View):
