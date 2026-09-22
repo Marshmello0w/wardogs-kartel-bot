@@ -61,18 +61,18 @@ ADMIN_PANEL_MSG_ID_FILE = "admin_panel_msg_id.json"
 # -----------------
 # Der Bot wählt am Ende jeder Runde zufällig eine dieser Nachrichten aus und sendet sie auf dem Server.
 BROADCAST_MESSAGES = [
-    "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen 👉 hier geht’s zum Discord: https://discord.gg/bakuranikartell",
-    "Während ihr gerade wartet: Verpasst keine News, Events und unser neues Leaderboard auf dem Discord: https://discord.gg/bakuranikartell",
-    "Dir gefällt der Server? Lass uns ein Feedback auf unserem Discord da: https://discord.gg/bakuranikartell"
+    "Immer die neuesten News & Events zu WarDogs mitbekommen und neue Teamkollegen kennenlernen 👉 hier geht’s zum Discord: https://dsc.gg/dkwd",
+    "Während ihr gerade wartet: Verpasst keine News, Events und unser neues Leaderboard auf dem Discord: https://dsc.gg/dkwd",
+    "Dir gefällt der Server? Lass uns ein Feedback auf unserem Discord da: https://dsc.gg/dkwd"
 ]
 
 # Nach der deutschen Runden-Ende-Nachricht wird nach kurzer Einblendepause eine
 # inhaltlich gleiche englische Variante zufällig ausgewählt.
 BROADCAST_FOLLOWUP_DELAY_SECONDS = 10
 ENGLISH_BROADCAST_MESSAGES = [
-    "Stay up to date with the latest WarDogs news and events, and find new teammates 👉 join our Discord: https://discord.gg/bakuranikartell",
-    "While you're waiting: don't miss news, events, and our new leaderboard on Discord: https://discord.gg/bakuranikartell",
-    "Enjoying the server? Leave us some feedback on our Discord: https://discord.gg/bakuranikartell"
+    "Stay up to date with the latest WarDogs news and events, and find new teammates 👉 join our Discord: https://dsc.gg/dkwd",
+    "While you're waiting: don't miss news, events, and our new leaderboard on Discord: https://dsc.gg/dkwd",
+    "Enjoying the server? Leave us some feedback on our Discord: https://dsc.gg/dkwd"
 ]
 
 # Automatisches Rundenende bei dauerhaft zu geringer Spielerzahl.
