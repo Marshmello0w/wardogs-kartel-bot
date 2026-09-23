@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
 import httpx
+from jinja2 import Environment, FileSystemLoader
 
 from web.app import create_app
 from web.repository import DataUnavailable, Repository, ranking_query, server_status
@@ -375,6 +376,15 @@ class RouteTests(unittest.TestCase):
         for query in ('server=other', 'period=forever', 'sort=steam_id', 'page=0', 'page=10001'):
             self.assertEqual(self.client.get('/leaderboard?' + query).status_code, 400)
         self.assertEqual(self.client.get('/health').json(), {'status': 'ok'})
+
+    def test_base_template_remains_compatible_during_deployment(self):
+        # AMP can load a new template before its running Python process restarts.
+        root = Path(__file__).resolve().parents[1]
+        template = Environment(loader=FileSystemLoader(root / 'web' / 'templates')).get_template('base.html')
+        html = template.render(language='de', t=lambda key: key, user=None,
+                               languages={'de': 'Deutsch'}, next_path='/', path='/',
+                               show_cookie_banner=False)
+        self.assertRegex(html, r'/static/site\.css\?v=[0-9a-f]{12}')
 
     def test_database_failure_is_not_empty_success(self):
         self.repo.statuses = AsyncMock(side_effect=DataUnavailable('secret db error'))
