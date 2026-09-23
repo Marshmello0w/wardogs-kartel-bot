@@ -7,6 +7,17 @@ from core.permissions import valid_steam_id
 from core.runtime import read_state, write_state
 from domain import stats
 
+SORT_ORDER = ('kd', 'cash', 'playtime')
+
+
+def following_sort(sort_by):
+    return SORT_ORDER[(SORT_ORDER.index(sort_by) + 1) % len(SORT_ORDER)] if sort_by in SORT_ORDER else 'kd'
+
+
+def playtime_text(seconds):
+    hours, minutes = divmod(max(0, int(seconds or 0)) // 60, 60)
+    return f'{hours} Std. {minutes:02d} Min.'
+
 
 class EphemeralTimeframeDropdown(discord.ui.Select):
     def __init__(self, current_tf):
@@ -23,7 +34,7 @@ class EphemeralSortDropdown(discord.ui.Select):
     def __init__(self, current_sort):
         super().__init__(placeholder='Sortierung', options=[
             discord.SelectOption(label=label, value=value, default=value == current_sort)
-            for value,label in [('kd','Nach K/D'),('cash','Nach Cash')]])
+            for value,label in [('kd','Nach K/D'),('cash','Nach Cash'),('playtime','Nach Spielzeit')]])
 
     async def callback(self, interaction):
         self.view.current_sort = self.values[0]
@@ -126,12 +137,17 @@ class Leaderboard(commands.Cog):
     async def generate_embed(self, server_id, timeframe='7d', sort_by='kd'):
         rows = await stats.ranking(server_id, timeframe, sort_by)
         labels = {'7d':'Letzte 7 Tage','30d':'Letzte 30 Tage','all':'All-Time'}
-        embed = discord.Embed(title=f"🏆 {config.server(server_id).title} – {labels[timeframe]}", color=discord.Color.gold())
+        sort_labels = {'kd':'K/D','cash':'Cash','playtime':'Spielzeit'}
+        embed = discord.Embed(title=f"🏆 {config.server(server_id).title} – {labels[timeframe]} · {sort_labels[sort_by]}", color=discord.Color.gold())
         if sort_by == 'kd':
             embed.description = 'K/D-Rangliste: mindestens 5 Tode und 30 Minuten Spielzeit auf diesem Server.'
+        if timeframe != 'all' and any(row.get('legacy_seconds', 0) for row in rows):
+            note = 'Spielzeit enthält noch übernommene Gesamtzeit vom Start der Tageserfassung.'
+            embed.description = f'{embed.description}\n{note}' if embed.description else note
         for row in rows:
             embed.add_field(name=f"{row['player_rank']}. {row['name']}"[:256],
-                value=f"Kills: {row['kills']} | Deaths: {row['deaths']} | K/D: {row['kd']:.2f} | Cash: {row['cash']} USD", inline=False)
+                value=(f"Kills: {row['kills']} | Deaths: {row['deaths']} | K/D: {row['kd']:.2f} | Cash: {row['cash']} USD\n"
+                       f"Spielzeit: {playtime_text(row['playtime_seconds'])}"), inline=False)
         if not rows:
             embed.description = 'Noch keine gewerteten Spielerdaten vorhanden.'
         tracker = self.bot.get_cog('RoundTracker')
@@ -178,21 +194,30 @@ class Leaderboard(commands.Cog):
             for srv in config.servers():
                 if not srv.enabled:
                     continue
-                embed = await self.generate_embed(srv.id)
-                view = PublicLeaderboardView(self, srv.id)
-                message = None
-                message_id = saved.get(srv.id, {}).get('msg_id')
-                if message_id:
-                    try:
-                        message = await channel.fetch_message(message_id)
-                    except discord.NotFound:
-                        pass
-                if message is None:
-                    message = await channel.send(embed=embed, view=view)
-                    saved[srv.id] = {'msg_id': message.id}
+                try:
+                    entry = saved.get(srv.id, {})
+                    sort_by = entry.get('next_sort', 'kd')
+                    if sort_by not in SORT_ORDER:
+                        sort_by = 'kd'
+                    embed = await self.generate_embed(srv.id, sort_by=sort_by)
+                    view = PublicLeaderboardView(self, srv.id)
+                    message = None
+                    if entry.get('msg_id'):
+                        try:
+                            message = await channel.fetch_message(entry['msg_id'])
+                        except discord.NotFound:
+                            pass
+                    if message is None:
+                        message = await channel.send(embed=embed, view=view)
+                    elif not message.embeds or message.embeds[0].to_dict() != embed.to_dict():
+                        await message.edit(embed=embed, view=view)
+                    else:
+                        continue
+                    saved[srv.id] = {'msg_id': message.id, 'next_sort': following_sort(sort_by)}
                     write_state(self.state_file, saved)
-                elif not message.embeds or message.embeds[0].to_dict() != embed.to_dict():
-                    await message.edit(embed=embed, view=view)
+                    self.bot.health.ok(f'Leaderboard-Panel {srv.title}')
+                except Exception as exc:
+                    self.bot.health.error(f'Leaderboard-Panel {srv.title}', exc)
             self.bot.health.ok('Leaderboard-Panels')
         except Exception as exc:
             self.bot.health.error('Leaderboard-Panels', exc)

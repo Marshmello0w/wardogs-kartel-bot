@@ -1,9 +1,23 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from time import monotonic
 from discord.ext import commands, tasks
 from core import config
 from core.permissions import valid_steam_id
 from infrastructure import database
+
+
+def daily_playtime_slices(now, seconds):
+    """Assign an observed interval to its UTC calendar days."""
+    start = now - timedelta(seconds=seconds)
+    remaining = seconds
+    while start < now:
+        midnight = datetime.combine(start.date() + timedelta(days=1), datetime.min.time(), timezone.utc)
+        end = min(now, midnight)
+        amount = remaining if end == now else int((end - start).total_seconds())
+        yield start.date(), amount
+        remaining -= amount
+        start = end
 
 
 class StatsTracker(commands.Cog):
@@ -45,6 +59,7 @@ class StatsTracker(commands.Cog):
         try:
             players = await self.bot.rcon.players(srv.id)
             now = monotonic()
+            observed_at = datetime.now(timezone.utc)
             elapsed = now - self.last_observed.get(srv.id, now)
             seconds = int(elapsed) if 0 <= elapsed <= 90 else 0
             previous = self.last_online.get(srv.id, set())
@@ -63,6 +78,14 @@ class StatsTracker(commands.Cog):
                         VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE name=VALUES(name),
                         playtime_seconds=playtime_seconds+VALUES(playtime_seconds),last_seen=UTC_TIMESTAMP()""",
                         (srv.id, sid, name, credited))
+                    if credited:
+                        for day, day_seconds in daily_playtime_slices(observed_at, credited):
+                            if day_seconds:
+                                await cur.execute("""INSERT INTO player_daily_playtime
+                                    (server_id,steam_id,date,playtime_seconds)
+                                    VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
+                                    playtime_seconds=playtime_seconds+VALUES(playtime_seconds)""",
+                                    (srv.id, sid, day, day_seconds))
                     faction = self.faction_name(player)
                     # Count a detected entry once: when joining after a gap or
                     # changing faction. Repeated 60-second polls do not alter it.

@@ -136,6 +136,22 @@ SEED_QUEST = (
     ) ENGINE=InnoDB""",
 )
 
+DAILY_PLAYTIME = (
+    """CREATE TABLE IF NOT EXISTS player_daily_playtime (
+        server_id VARCHAR(50) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        date DATE NOT NULL, playtime_seconds BIGINT NOT NULL DEFAULT 0,
+        legacy_seconds BIGINT NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id, steam_id, date), INDEX(date)
+    ) ENGINE=InnoDB""",
+    # Existing playtime has no dates. Seed today's bucket once, preserving the
+    # user's requested starting value for 7/30-day rankings. INSERT IGNORE
+    # makes a partially completed migration safe to retry after a restart.
+    """INSERT IGNORE INTO player_daily_playtime
+        (server_id, steam_id, date, playtime_seconds, legacy_seconds)
+        SELECT server_id, steam_id, UTC_DATE(), playtime_seconds, playtime_seconds
+        FROM player_playtime""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
@@ -148,6 +164,7 @@ MIGRATIONS = (
     (6, REWARD_SHOP),
     (7, REWARD_SHOP_HARDENING),
     (8, SEED_QUEST),
+    (9, DAILY_PLAYTIME),
 )
 
 

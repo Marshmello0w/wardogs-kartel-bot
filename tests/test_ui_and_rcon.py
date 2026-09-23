@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,12 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 import discord
 from core import config
 from cogs.admin_panel import AdminPanelCog
-from cogs.leaderboard import PublicLeaderboardDropdown
+from cogs.leaderboard import Leaderboard, PublicLeaderboardDropdown, following_sort
 from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
 from cogs.player_lookup import PlayerLookupCog, unique_matches
 from cogs.server_recap import current_day_window, player_graph, previous_day_window
 from cogs.server_status import format_scores
+from cogs.stats_tracker import daily_playtime_slices
 from core.runtime import Health
 from services.rcon import RconClient, RconError, Reply
 from start import KartelBot
@@ -97,6 +99,71 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscordTests(unittest.IsolatedAsyncioTestCase):
+    def test_daily_playtime_splits_at_utc_midnight(self):
+        end = datetime(2026, 9, 23, 0, 0, 30, tzinfo=timezone.utc)
+        self.assertEqual(list(daily_playtime_slices(end, 60)),
+                         [(datetime(2026, 9, 22).date(), 30),
+                          (datetime(2026, 9, 23).date(), 30)])
+
+    async def test_public_leaderboards_rotate_independently_and_retry_failures(self):
+        self.assertEqual([following_sort(x) for x in ('kd', 'cash', 'playtime')],
+                         ['cash', 'playtime', 'kd'])
+        servers = [SimpleNamespace(id=f'server{i}', title=f'Server {i}', enabled=True) for i in (1, 2)]
+        state = {'server1': {'msg_id': 101}}
+        messages = {101: SimpleNamespace(id=101, embeds=[], edit=AsyncMock())}
+        next_id = 102
+
+        async def send(*, embed, view):
+            nonlocal next_id
+            message = SimpleNamespace(id=next_id, embeds=[embed], edit=AsyncMock())
+            async def edit_sent(**kwargs):
+                await edit(message, **kwargs)
+            message.edit.side_effect = edit_sent
+            messages[next_id] = message
+            next_id += 1
+            return message
+
+        async def edit(message, *, embed, view):
+            message.embeds = [embed]
+
+        async def edit_first(**kwargs):
+            await edit(messages[101], **kwargs)
+
+        messages[101].edit.side_effect = edit_first
+        channel = SimpleNamespace(send=AsyncMock(side_effect=send),
+                                  fetch_message=AsyncMock(side_effect=lambda mid: messages[mid]))
+        bot = SimpleNamespace(get_channel=lambda _: channel, health=Mock())
+        cog = Leaderboard.__new__(Leaderboard)
+        cog.bot, cog.state_file = bot, 'test-state.json'
+        calls = []
+        fail_server1 = False
+
+        async def generate(server_id, timeframe='7d', sort_by='kd'):
+            calls.append((server_id, sort_by))
+            if fail_server1 and server_id == 'server1':
+                raise RuntimeError('temporary database error')
+            return discord.Embed(title=f'{server_id}-{sort_by}-{len(calls)}')
+
+        cog.generate_embed = generate
+
+        def save(path, value):
+            state.clear()
+            state.update(copy.deepcopy(value))
+
+        loop_globals = Leaderboard.update_leaderboard_ui.coro.__globals__
+        with patch.object(config, 'LEADERBOARD_CHANNEL_ID', '123'), \
+             patch('cogs.leaderboard.config.servers', return_value=servers), \
+             patch.dict(loop_globals, read_state=lambda path, default: copy.deepcopy(state), write_state=save):
+            for _ in range(3):
+                await Leaderboard.update_leaderboard_ui.coro(cog)
+            self.assertEqual(calls, [(server, sort) for sort in ('kd', 'cash', 'playtime')
+                                     for server in ('server1', 'server2')], (state, bot.health.error.call_args_list))
+            self.assertEqual((state['server1']['next_sort'], state['server2']['next_sort']), ('kd', 'kd'),
+                             bot.health.error.call_args_list)
+            fail_server1 = True
+            await Leaderboard.update_leaderboard_ui.coro(cog)
+            self.assertEqual((state['server1']['next_sort'], state['server2']['next_sort']), ('kd', 'cash'))
+
     def test_lookup_name_matches_are_deduplicated_and_limited(self):
         rows = [
             {'steam_id': '76561190000000001', 'name': 'Same', 'last_seen': datetime(2026, 1, 2)},

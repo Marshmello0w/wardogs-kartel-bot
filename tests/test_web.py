@@ -54,7 +54,9 @@ class FixtureDatabase:
             return [{'item_key': 'server1', 'payload': state_snapshot()},
                     {'item_key': 'server2', 'payload': state_snapshot(age=300)}]
         if 'ROW_NUMBER' in sql:
-            return [{'player_rank': 1, 'name': '<script>alert(1)</script>', 'kills': 12, 'deaths': 3, 'cash': 500, 'kd': 4}]
+            return [{'player_rank': 1, 'name': '<script>alert(1)</script>', 'kills': 12,
+                     'deaths': 3, 'cash': 500, 'kd': 4, 'playtime_seconds': 3_600,
+                     'legacy_seconds': 3_600}]
         if 'FROM quest_points' in sql:
             return [{'points': self.points}] if args and args[0] == STEAM_ID else []
         if 'FROM quest_progress' in sql:
@@ -235,17 +237,21 @@ class PureTests(unittest.TestCase):
         exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), scope)
         for server in ('server1', 'server2', 'server3'):
             for period in ('all', '7d', '30d'):
-                for sort in ('kd', 'cash'):
+                for sort in ('kd', 'cash', 'playtime'):
                     self.assertEqual(ranking_query(server, period, sort), scope['ranking_query'](server, period, sort))
 
     def test_kd_qualification_and_cash_ranking_rules(self):
         kd_sql, _ = ranking_query('server1', '7d', 'kd')
         cash_sql, _ = ranking_query('server1', '7d', 'cash')
+        playtime_sql, _ = ranking_query('server1', '7d', 'playtime')
         all_time_sql, _ = ranking_query('server1', 'all', 'kd')
         self.assertIn('JOIN player_playtime', kd_sql)
         self.assertIn('totals.deaths>=5', kd_sql)
-        self.assertIn('totals.playtime_seconds>=1800', kd_sql)
+        self.assertIn('totals.qualifying_playtime_seconds>=1800', kd_sql)
         self.assertNotIn('totals.deaths>=5', cash_sql)
+        self.assertNotIn('totals.deaths>=5', playtime_sql)
+        self.assertIn('playtime_seconds DESC', playtime_sql)
+        self.assertIn('FROM player_daily_playtime', playtime_sql)
         self.assertIn('JOIN player_playtime', all_time_sql)
 
     def test_stale_uncertain_missing_bad_player_counts(self):
@@ -373,6 +379,10 @@ class RouteTests(unittest.TestCase):
         result = self.client.get('/leaderboard')
         self.assertEqual(result.status_code, 200)
         self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt;', result.text)
+        self.assertIn('name="sort" value="playtime"', result.text)
+        self.assertIn('leaderboard', result.text)
+        self.assertIn('übernommene Gesamtzeit', result.text)
+        self.assertEqual(self.client.get('/leaderboard?sort=playtime').status_code, 200)
         for query in ('server=other', 'period=forever', 'sort=steam_id', 'page=0', 'page=10001'):
             self.assertEqual(self.client.get('/leaderboard?' + query).status_code, 400)
         self.assertEqual(self.client.get('/health').json(), {'status': 'ok'})

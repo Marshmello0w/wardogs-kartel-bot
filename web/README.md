@@ -85,6 +85,7 @@ beim App-Start ausgeführt und benötigt einen berechtigten Datenbankadministrat
 CREATE USER 'kartell_web'@'WEB_HOST' IDENTIFIED BY 'GENERATED_SECRET';
 GRANT SELECT ON `DATABASE_NAME`.`leaderboard` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_daily_stats` TO 'kartell_web'@'WEB_HOST';
+GRANT SELECT ON `DATABASE_NAME`.`player_daily_playtime` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_playtime` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_faction_stats` TO 'kartell_web'@'WEB_HOST';
 GRANT SELECT ON `DATABASE_NAME`.`player_ping_stats` TO 'kartell_web'@'WEB_HOST';
@@ -121,9 +122,11 @@ bei einem Fraktionswechsel den Live-RCON-Status und ist der einzige Prozess, der
   Über 30 Sekunden alte, unklare oder unvollständige Messungen gelten als veraltet,
   nicht als bewiesener Serverausfall. Die Gesamtspielerzahl zählt nur aktuelle Messungen.
   Das Dashboard lädt alle 30 Sekunden nach; DB-Cache 5 Sekunden.
-- `/leaderboard`: dieselbe K/D-/Cash-Reihenfolge und dieselben Ban-Ausschlüsse wie Discord.
+- `/leaderboard`: dieselben K/D-, Cash- und Spielzeit-Ränge und Ban-Ausschlüsse wie Discord.
   7/30 Tage zählen einschließlich heute in UTC; Gesamtwerte sind die gespeicherten
-  Lifetime-Counter. 50 Einträge je Seite; Cache 20 Sekunden.
+  Lifetime-Counter. Die Tages-Spielzeit enthält zunächst einmalig importierte
+  Gesamtspielzeit, die nach 7 bzw. 30 Tagen aus dem Fenster fällt.
+  50 Einträge je Seite; Cache 20 Sekunden.
 - `/me`: nur die ID aus der verifizierten Steam-Sitzung. Parameter mit anderen Steam-IDs
   werden ignoriert. Bekannte Namen umfassen die gespeicherten Tagesnamen. Die zuletzt
   gemessenen Rundenwerte sind nicht automatisch eine aktuell laufende Runde. Fraktionswerte

@@ -46,30 +46,41 @@ async def update_players(server_id, state, players):
 
 
 def ranking_query(server_id, timeframe='all', sort_by='kd'):
-    if timeframe not in ('all', '7d', '30d') or sort_by not in ('kd', 'cash'):
+    if timeframe not in ('all', '7d', '30d') or sort_by not in ('kd', 'cash', 'playtime'):
         raise ValueError('Invalid ranking')
     exclusion = """AND NOT EXISTS (SELECT 1 FROM banned_players b WHERE b.server_id=l.server_id AND b.steam_id=l.steam_id)
         AND NOT EXISTS (SELECT 1 FROM admin_targets t WHERE t.steam_id=l.steam_id AND t.desired='ban'
         AND (t.expires_at IS NULL OR t.expires_at>UTC_TIMESTAMP()))"""
     qualification = ''
     if sort_by == 'kd':
-        # A short, low-risk visit must not produce a #1 K/D. Cash rankings
-        # intentionally remain available to every tracked player.
-        qualification = 'AND totals.deaths>=5 AND totals.playtime_seconds>=1800'
+        # Cash and playtime remain available to every tracked player.
+        qualification = 'AND totals.deaths>=5 AND totals.qualifying_playtime_seconds>=1800'
     if timeframe == 'all':
         base = f"""SELECT l.steam_id,l.name,l.lifetime_kills kills,l.lifetime_deaths deaths,l.lifetime_cash cash,
-            p.playtime_seconds FROM leaderboard l JOIN player_playtime p
+            p.playtime_seconds,p.playtime_seconds qualifying_playtime_seconds,0 legacy_seconds
+            FROM leaderboard l JOIN player_playtime p
             ON p.server_id=l.server_id AND p.steam_id=l.steam_id
             WHERE l.server_id=%s {exclusion}"""
     else:
         days = 6 if timeframe == '7d' else 29
-        base = f"""SELECT l.steam_id,l.name,SUM(d.kills) kills,SUM(d.deaths) deaths,SUM(d.cash) cash,
-            p.playtime_seconds FROM leaderboard l JOIN player_daily_stats d
-            ON d.server_id=l.server_id AND d.steam_id=l.steam_id JOIN player_playtime p
+        base = f"""SELECT l.steam_id,l.name,COALESCE(d.kills,0) kills,COALESCE(d.deaths,0) deaths,
+            COALESCE(d.cash,0) cash,COALESCE(dp.playtime_seconds,0) playtime_seconds,
+            p.playtime_seconds qualifying_playtime_seconds,COALESCE(dp.legacy_seconds,0) legacy_seconds
+            FROM leaderboard l JOIN player_playtime p
             ON p.server_id=l.server_id AND p.steam_id=l.steam_id
-            WHERE l.server_id=%s AND d.date BETWEEN DATE_SUB(UTC_DATE(),INTERVAL {days} DAY) AND UTC_DATE()
-            {exclusion} GROUP BY l.steam_id,l.name,p.playtime_seconds"""
-    order = 'cash DESC,kills DESC,steam_id ASC' if sort_by == 'cash' else 'kd DESC,kills DESC,steam_id ASC'
+            LEFT JOIN (SELECT server_id,steam_id,SUM(kills) kills,SUM(deaths) deaths,SUM(cash) cash
+                FROM player_daily_stats WHERE date BETWEEN DATE_SUB(UTC_DATE(),INTERVAL {days} DAY)
+                AND UTC_DATE() GROUP BY server_id,steam_id) d
+            ON d.server_id=l.server_id AND d.steam_id=l.steam_id
+            LEFT JOIN (SELECT server_id,steam_id,SUM(playtime_seconds) playtime_seconds,
+                SUM(legacy_seconds) legacy_seconds FROM player_daily_playtime
+                WHERE date BETWEEN DATE_SUB(UTC_DATE(),INTERVAL {days} DAY) AND UTC_DATE()
+                GROUP BY server_id,steam_id) dp
+            ON dp.server_id=l.server_id AND dp.steam_id=l.steam_id
+            WHERE l.server_id=%s {exclusion} AND (d.steam_id IS NOT NULL OR dp.steam_id IS NOT NULL)"""
+    order = {'kd':'kd DESC,kills DESC,steam_id ASC',
+             'cash':'cash DESC,kills DESC,steam_id ASC',
+             'playtime':'playtime_seconds DESC,kills DESC,steam_id ASC'}[sort_by]
     return f"""SELECT scored.*,ROW_NUMBER() OVER (ORDER BY {order}) AS player_rank
         FROM (SELECT totals.*,kills / IF(deaths=0,1,deaths) AS kd FROM ({base}) totals
         WHERE 1=1 {qualification}) scored""", (server_id,)
