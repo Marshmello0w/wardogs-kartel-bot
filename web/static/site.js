@@ -99,7 +99,8 @@ window.addEventListener('pageshow', () => {
 document.addEventListener('change', event => {
   if (!(event.target instanceof Element)) return;
   const select = event.target.closest('select[name="server"], select[name="period"]');
-  const form = select?.closest('form[data-leaderboard-filters]');
+  // Accept both the current template and the previous one during deployment.
+  const form = select?.closest('form[data-leaderboard-filters], form.filters[action="/leaderboard"]');
   if (!form) return;
   const activeSort = form.querySelector('button[name="sort"].active');
   if (activeSort) form.requestSubmit(activeSort);
