@@ -2,7 +2,7 @@
 {% block title %}{{ t('nav_leaderboard') }} · Das Kartell{% endblock %}
 {% block content %}
 <section class="page-heading"><h1>{{ t('leader_title') }}</h1><p>{{ t('leader_copy') }}</p></section>
-<form class="filters" method="get" action="/leaderboard">
+<form class="filters" method="get" action="/leaderboard" data-leaderboard-filters>
   <label>{{ t('server') }}<select name="server">{% for key, title in servers.items() %}<option value="{{ key }}"{% if key == server %} selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
   <label>{{ t('period') }}<select name="period">{% for key, title in periods.items() %}<option value="{{ key }}"{% if key == period %} selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
   <div class="sort-control"><span>{{ t('sort_by') }}</span><div class="sort-buttons" role="group" aria-label="{{ t('sort_by') }}">
