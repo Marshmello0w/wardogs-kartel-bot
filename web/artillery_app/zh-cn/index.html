@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+
+<html data-page-language="zh-cn" lang="zh-CN">
+<head>
+<script src="/artillery-app/privacy.js"></script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta content="202028ddb3b841b2" name="yandex-verification"/>
+<meta content="LtfWehCgGAvT8AdpuHGFaCUKBNsmPOEk4J3YkqZEJvM" name="google-site-verification"/>
+<meta charset="utf-8"/>
+
+<meta content="no-referrer" name="referrer"/>
+
+
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<base href="../"/>
+<script src="js/core/mobile-redirect.js?v=69f13e44a76a"></script>
+
+<title>WARDOGS 炮兵计算器 | L81 迫击炮、SPH-2 与战术地图</title>
+<link href="assets/favicon.png" rel="icon"/>
+<link href="style.css?v=69f13e44a76a" rel="stylesheet"/>
+<meta content="免费的 WARDOGS 炮兵计算器，支持 L81 迫击炮、SPH-2、实时小队房间、Bakurani、Ozeti、Zestafona 地图、等高线及 Terrain3D MIL 修正。" name="description"/>
+<meta name="robots" content="noindex, nofollow"/>
+<meta content="#101316" name="theme-color"/>
+<link href="https://wardogs-artillery.com/zh-cn/" rel="canonical"/>
+<link href="https://wardogs-artillery.com/" hreflang="en" rel="alternate"/>
+<link href="https://wardogs-artillery.com/ru/" hreflang="ru" rel="alternate"/>
+<link href="https://wardogs-artillery.com/uk/" hreflang="uk" rel="alternate"/>
+<link href="https://wardogs-artillery.com/de/" hreflang="de" rel="alternate"/>
+<link href="https://wardogs-artillery.com/fr/" hreflang="fr" rel="alternate"/>
+<link href="https://wardogs-artillery.com/es/" hreflang="es" rel="alternate"/>
+<link href="https://wardogs-artillery.com/pl/" hreflang="pl" rel="alternate"/>
+<link href="https://wardogs-artillery.com/pt/" hreflang="pt" rel="alternate"/>
+<link href="https://wardogs-artillery.com/zh-cn/" hreflang="zh-CN" rel="alternate"/>
+<link href="https://wardogs-artillery.com/ko/" hreflang="ko" rel="alternate"/>
+<link href="https://wardogs-artillery.com/ja/" hreflang="ja" rel="alternate"/>
+<link href="https://wardogs-artillery.com/cs/" hreflang="cs" rel="alternate"/>
+<link href="https://wardogs-artillery.com/" hreflang="x-default" rel="alternate"/>
+<link href="https://wardogs-artillery.com/mobile/zh-cn/" media="only screen and (max-width: 900px)" rel="alternate"/>
+<meta content="website" property="og:type"/>
+<meta content="WARDOGS Artillery Calculator" property="og:site_name"/>
+<meta content="zh_CN" property="og:locale"/>
+<meta content="en_GB" property="og:locale:alternate"/>
+<meta content="ru_RU" property="og:locale:alternate"/>
+<meta content="uk_UA" property="og:locale:alternate"/>
+<meta content="de_DE" property="og:locale:alternate"/>
+<meta content="fr_FR" property="og:locale:alternate"/>
+<meta content="es_ES" property="og:locale:alternate"/>
+<meta content="pl_PL" property="og:locale:alternate"/>
+<meta content="pt_PT" property="og:locale:alternate"/>
+<meta content="ko_KR" property="og:locale:alternate"/>
+<meta content="ja_JP" property="og:locale:alternate"/>
+<meta content="cs_CZ" property="og:locale:alternate"/>
+<meta content="WARDOGS 炮兵计算器 | L81 迫击炮、SPH-2 与战术地图" property="og:title"/>
+<meta content="免费的 WARDOGS 炮兵计算器，支持 L81 迫击炮、SPH-2、实时小队房间、Bakurani、Ozeti、Zestafona 地图、等高线及 Terrain3D MIL 修正。" property="og:description"/>
+<meta property="og:url" content="https://wardogs-artillery.com/zh-cn/"/>
+<meta content="https://wardogs-artillery.com/assets/preview.png" property="og:image"/>
+<meta content="image/png" property="og:image:type"/>
+<meta content="1200" property="og:image:width"/>
+<meta content="675" property="og:image:height"/>
+<meta content="WARDOGS 炮兵计算器战术地图与射击解算界面" property="og:image:alt"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="https://wardogs-artillery.com/assets/preview.png" name="twitter:image"/>
+<meta content="WARDOGS 炮兵计算器 | L81 迫击炮、SPH-2 与战术地图" name="twitter:title"/>
+<meta content="免费的 WARDOGS 炮兵计算器，支持 L81 迫击炮、SPH-2、实时小队房间、Bakurani、Ozeti、Zestafona 地图、等高线及 Terrain3D MIL 修正。" name="twitter:description"/>
+<script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "WARDOGS Artillery Calculator",
+  "url": "https://wardogs-artillery.com/zh-cn/",
+  "image": "https://wardogs-artillery.com/assets/preview.png",
+  "description": "免费的 WARDOGS 炮兵计算器，支持 L81 迫击炮、SPH-2、实时小队房间、Bakurani、Ozeti、Zestafona 地图、等高线及 Terrain3D MIL 修正。",
+  "applicationCategory": "GameApplication",
+  "operatingSystem": "Any",
+  "isAccessibleForFree": true,
+  "inLanguage": "zh-cn",
+  "browserRequirements": "Requires JavaScript and a modern web browser",
+  "codeRepository": "https://github.com/apollyon-sys/wardogs-calculator",
+  "alternateName": [
+    "WARDOGS 炮兵计算器",
+    "WARDOGS L81 迫击炮计算器",
+    "WARDOGS Arty Calc"
+  ],
+  "softwareVersion": "1.10.0",
+  "featureList": [
+    "WARDOGS L81 迫击炮射击解算",
+    "SPH-2 LOW / HIGH 射击解算",
+    "使用共享战术地图的实时小队房间",
+    "Bakurani 互动战术地图与等高线",
+    "Ozeti 互动战术地图与等高线",
+    "Zestafona 互动战术地图与等高线",
+    "保存目标的完整射击信息",
+    "测距尺与绘图工具",
+    "战术地图标记"
+  ]
+}</script>
+<script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "它支持 WARDOGS L81 迫击炮吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "支持。选择 L81 迫击炮并设置炮位与目标位置后，计算器会提供距离、方位角、射程状态和射表 MIL。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "WARDOGS 炮兵计算器支持 SPH-2 吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "支持。SPH-2 解算包括距离、方位角、LOW / HIGH 射击方案，以及在受支持地形上的可选实验性 Terrain3D MIL 修正。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "支持哪些 WARDOGS 地图？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "目前包含 Bakurani、Ozeti 和 Zestafona 互动地图。三张地图均使用校准后的游戏坐标，支持战术地图工具和地形等高线，并在 Terrain3D 数据覆盖范围内提供高程信息。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "WARDOGS 小队可以一起使用战术地图吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "可以。创建实时小队房间并分享邀请链接或代码后，绘图、区域、多边形和战术标记会在房间内同步。每位玩家仍保留独立的武器、炮位、目标和射程圈，队友只会看到带名称的位置，不会看到重复的射程圈。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "WARDOGS 地图可以显示地形等高线吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "可以。受支持的 WARDOGS 地图提供可切换的地形等高线图层，可在 Layers 菜单中与其他战术图层一起开启或关闭。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "SPH-2 车体方向应输入什么？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "输入驾驶员座位罗盘显示的车头方向，范围为 0–359 度。该值与射击方位角不同。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "SPH-2 应选择 LOW 还是 HIGH？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "LOW 是较平的弹道，HIGH 是较陡的弹道。根据射击和地形选择可用弹道，计算器会显示对应 MIL。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "坐标旁的 Paste 和 Lock 有什么区别？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Paste 只更新对应的炮位或目标坐标；Lock 会阻止地图点击和拖动改变该点。"
+      }
+    }
+  ]
+}</script>
+<link as="script" fetchpriority="high" href="js/app.bundle.js?v=69f13e44a76a" rel="preload"/>
+<link rel="stylesheet" href="/artillery-app/kartell-theme.css">
+</head>
+<body>
+<header>
+<div class="header-title">
+<img alt="" aria-hidden="true" class="header-brand-icon" src="assets/favicon.png"/>
+<h1 data-i18n="title">WARDOGS // 炮兵计算器</h1>
+</div>
+<div class="header-controls">
+<button aria-label="Toggle theme" class="theme-toggle" id="themeToggle" title="Toggle theme" type="button">
+<span id="themeIcon">☼</span>
+</button>
+<select class="language-select" id="language"></select>
+</div>
+</header>
+<main>
+<!-- WORKSPACE -->
+<section class="workspace">
+<div class="toolbar">
+<span class="status" id="status"></span>
+</div>
+<div class="map">
+<canvas id="canvas"></canvas>
+<aside class="control-dock" aria-label="操作">
+<details class="sidebar-section" open>
+<summary><span class="sidebar-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg></span><span class="sidebar-section-title" data-i18n="sidebarSetup">设置</span><span class="sidebar-section-summary">地图 · 武器</span><span class="sidebar-section-chevron" aria-hidden="true">⌄</span></summary>
+<div class="sidebar-section-body">
+<div class="map-choice-grid"><div class="sidebar-field"><label for="mapSelect" data-i18n="presetMap">预设地图</label><select id="mapSelect"></select></div><div id="mapStyleSlot"></div></div>
+<div class="sidebar-field"><label for="weapon" data-i18n="weaponType">武器类型</label><select id="weapon"></select></div>
+</div>
+</details>
+<details class="sidebar-section" open>
+<summary><span class="sidebar-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg></span><span class="sidebar-section-title" data-i18n="sidebarCoordinates">坐标</span><span class="sidebar-section-summary" id="coordinateSectionSummary">2000, 2000 → 2500, 2500</span><span class="sidebar-section-chevron" aria-hidden="true">⌄</span></summary>
+<div class="sidebar-section-body">
+<div class="coordinate-point is-active" data-point="origin">
+<div class="coordinate-point-header">
+<button aria-pressed="true" class="coordinate-point-select active" id="originMode" type="button">
+<span class="coordinate-point-marker" aria-hidden="true">A</span>
+<span class="coordinate-point-label"><strong data-i18n="artillery">炮位</strong><small><span class="coordinate-placement-active" data-i18n="placingOnMap">正在地图上放置</span><span class="coordinate-placement-inactive" data-i18n="clickToPlace">点击放置</span></small></span>
+</button>
+<div class="point-coordinate-actions"><button aria-label="复制" class="coordinate-icon-button" id="coordinateOriginCopy" title="复制" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="sr-only" data-i18n="copyCoordinates">复制</span></button>
+<button aria-label="粘贴" class="coordinate-icon-button coordinate-paste-button" id="coordinateOriginPaste" title="粘贴" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v13h14V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M12 10v7m-3-3 3 3 3-3"/></svg><span class="sr-only" data-i18n="pasteCoordinates">粘贴</span></button>
+<button aria-label="锁定" aria-pressed="false" class="coordinate-icon-button point-lock-button" id="coordinateOriginLock" title="锁定此位置，防止地图点击或拖动修改" type="button"></button></div>
+</div>
+<div class="coordinate-inputs">
+<input aria-label="炮位 X" id="ox" inputmode="decimal" step="0.01" type="number" value="2000"/>
+<input aria-label="炮位 Y" id="oy" inputmode="decimal" step="0.01" type="number" value="2000"/>
+</div>
+</div>
+<div class="coordinate-point" data-point="target">
+<div class="coordinate-point-header">
+<button aria-pressed="false" class="coordinate-point-select" id="targetMode" type="button">
+<span class="coordinate-point-marker" aria-hidden="true">T</span>
+<span class="coordinate-point-label"><strong data-i18n="target">目标</strong><small><span class="coordinate-placement-active" data-i18n="placingOnMap">正在地图上放置</span><span class="coordinate-placement-inactive" data-i18n="clickToPlace">点击放置</span></small></span>
+</button>
+<div class="point-coordinate-actions"><button aria-label="复制" class="coordinate-icon-button" id="coordinateTargetCopy" title="复制" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="sr-only" data-i18n="copyCoordinates">复制</span></button>
+<button aria-label="粘贴" class="coordinate-icon-button coordinate-paste-button" id="coordinateTargetPaste" title="粘贴" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v13h14V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M12 10v7m-3-3 3 3 3-3"/></svg><span class="sr-only" data-i18n="pasteCoordinates">粘贴</span></button>
+<button aria-label="锁定" aria-pressed="false" class="coordinate-icon-button point-lock-button" id="coordinateTargetLock" title="锁定此位置，防止地图点击或拖动修改" type="button"></button></div>
+</div>
+<div class="coordinate-inputs">
+<input aria-label="目标 X" id="tx" inputmode="decimal" step="0.01" type="number" value="2500"/>
+<input aria-label="目标 Y" id="ty" inputmode="decimal" step="0.01" type="number" value="2500"/>
+</div>
+</div>
+<div class="sidebar-quick-actions"><button data-i18n="swap" id="swap" type="button">交换位置</button><button class="sidebar-reset-button" data-i18n="clear" id="clear" type="button">重置</button></div>
+</div>
+</details>
+<details class="sidebar-section firing-solution-panel">
+<summary>
+<span class="firing-solution-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+</span>
+<span class="firing-solution-title" data-i18n="firingSolution">射击诸元</span>
+<span class="firing-solution-summary" id="solutionSummary">—</span>
+<strong class="firing-solution-status" id="rangeStatus">—</strong>
+<span class="firing-solution-chevron" aria-hidden="true">⌄</span>
+</summary>
+<div class="firing-solution-body">
+<div class="firing-solution-range">
+<span data-i18n="weaponRange">射程</span>
+<strong id="range">—</strong>
+</div>
+<div class="result solution-result">
+<div class="solution-primary-grid">
+<div class="solution-metric">
+<span class="solution-metric-label" data-i18n="distance">距离</span>
+<strong class="solution-metric-value" id="distm">—</strong>
+<span class="solution-metric-sub" id="dist">—</span>
+</div>
+<div class="solution-metric solution-metric-highlight">
+<span class="solution-metric-label" data-i18n="mil">MIL</span>
+<strong class="solution-metric-value" id="mil">—</strong>
+<span class="solution-metric-sub" id="milAlt" hidden></span>
+</div>
+<div class="solution-metric">
+<span class="solution-metric-label" data-i18n="azimuth">方位角</span>
+<strong class="solution-metric-value" id="angle">—</strong>
+<span class="solution-metric-sub solution-metric-spacer" aria-hidden="true">&nbsp;</span>
+</div>
+</div>
+</div>
+<button class="solution-support-prompt" id="solutionSupport" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>
+<span data-i18n="solutionSupportPrompt">觉得有用？帮助项目持续运行</span>
+</button>
+</div>
+</details>
+<button aria-controls="guideFaqDrawer" aria-expanded="false" class="guide-faq-button" id="guideFaqButton" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z"/></svg>
+<span class="guide-faq-button-copy"><strong data-i18n="guideAndFaq">指南与常见问题</strong><small data-i18n="guideAndFaqDescription">计算器、地图和 SPH-2</small></span>
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+</button>
+</aside>
+<aside aria-hidden="true" aria-labelledby="guideFaqTitle" class="guide-faq-drawer" id="guideFaqDrawer" inert>
+<div class="guide-faq-header"><h2 data-i18n="guideAndFaq" id="guideFaqTitle">指南与常见问题</h2><button aria-label="关闭" class="guide-faq-close" id="guideFaqClose" title="关闭" type="button">×</button></div>
+<div class="guide-faq-scroll"><article class="seo-guide-hub">
+<header class="seo-guide-hero">
+<span aria-hidden="true" class="seo-guide-hero-icon"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z"/></svg></span>
+<div>
+<span class="seo-guide-eyebrow">分步指南</span>
+<h2 id="wardogs-artillery-calculator">WARDOGS 炮兵计算器</h2>
+<p>WARDOGS 炮兵计算器是一款免费、开源的社区工具，可根据手动设置的炮位与目标位置计算距离、方位角和 MIL。L81 迫击炮与 SPH-2 共用同一套战术地图工作区，还可创建实时小队房间，在不合并各玩家射击解算的情况下共享战术规划。</p>
+</div>
+</header>
+<nav aria-label="分步指南" class="seo-category-nav">
+<a class="seo-category-link" href="#guide-getting-started"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9Z"/></svg></span><span>快速开始</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#guide-weapons"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><span>武器与射击</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#guide-maps"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span><span>战术地图</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#guide-tools"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span><span>团队与地图工具</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#wardogs-calculator-faq"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.1 2.2c-.9.4-.9 1-.9 1.8M12 17h.01"/></svg></span><span>常见问题</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+</nav>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-getting-started"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9Z"/></svg></span><h3>快速开始</h3></div>
+<p class="seo-category-lead">以下步骤适用于 L81 迫击炮和 SPH-2。坐标可以手动输入、从剪贴板粘贴，或直接在战术地图上放置。</p>
+<ol class="seo-step-grid">
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">1</span>
+<div>
+<h4>选择地图和武器</h4>
+<p>选择 Bakurani、Ozeti 或 Zestafona，再选择地图样式以及 L81 迫击炮或 SPH-2。射程和射表会随武器更新。</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">2</span>
+<div>
+<h4>设置炮位和目标</h4>
+<p>选择炮位或目标后在地图放置，或输入 X、Y。Copy 用于复制，Paste 仅粘贴该点坐标，Lock 可防止误移动。</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">3</span>
+<div>
+<h4>设置 SPH-2 车体与弹道</h4>
+<p>在第三张坐标卡中输入驾驶员罗盘显示的车头方向，并选择 LOW 或 HIGH。请将车辆停在平地；车体方向修正不会测量实际倾斜。</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">4</span>
+<div>
+<h4>查看射击解算</h4>
+<p>在左侧菜单打开 Firing solution，确认射程状态、距离、MIL 和方位角。Out of range 表示当前距离没有有效射表解算。</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">5</span>
+<div>
+<h4>保存并共享战术规划</h4>
+<p>保存常用目标，使用测距尺和绘图工具，或创建房间与小队同步区域、多边形和标记。</p>
+</div>
+</li>
+</ol>
+<aside class="seo-tips-card">
+<h4>精度与操作建议</h4>
+<ul>
+<li>放置坐标前确认所选地图与服务器地图一致。</li>
+<li>设置炮位后使用 Lock，避免放置目标时误移动炮位。</li>
+</ul>
+</aside>
+</section>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-weapons"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><h3>武器与射击</h3></div>
+<div class="seo-resource-grid">
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>
+<div>
+<h4>WARDOGS L81 迫击炮计算器</h4>
+<p>选择 L81 迫击炮，在地图上设置炮位与目标位置，计算器会给出距离、方位角以及射表 MIL。射程状态会提示目标是否位于 L81 迫击炮支持的射程范围内。</p>
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>
+<div>
+<h4>WARDOGS SPH-2 计算器</h4>
+<p>在第三张坐标卡中输入驾驶员罗盘显示的车头方向，并选择 LOW 或 HIGH。请将车辆停在平地；车体方向修正不会测量实际倾斜。</p>
+</div>
+</article>
+</div>
+</section>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-maps"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span><h3>战术地图</h3></div>
+<div class="seo-resource-grid">
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span>
+<div>
+<h4><a href="maps/bakurani/">Bakurani 互动地图<span aria-hidden="true" class="seo-resource-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a></h4>
+<p>Bakurani 互动地图已校准到 WARDOGS 游戏坐标。炮位、目标、保存的目标、测距尺、绘图和战术标记都使用同一坐标空间，并提供地形等高线和 Terrain3D 高程数据，用于战术规划和受支持的 SPH-2 地形修正预览。</p>
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span>
+<div>
+<h4><a href="maps/ozeti/">Ozeti 互动地图<span aria-hidden="true" class="seo-resource-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a></h4>
+<p>Ozeti 互动地图使用校准后的 WARDOGS 坐标和修正后的可玩区域对齐，可用于炮兵解算与战术规划。炮位、目标、保存目标、绘图、标记和地形等高线都使用同一坐标空间，并在数据覆盖范围内提供 Terrain3D 高程信息。</p>
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span>
+<div>
+<h4><a href="maps/zestafona/">Zestafona 互动地图<span aria-hidden="true" class="seo-resource-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a></h4>
+<p>Zestafona 互动地图使用校准后的 WARDOGS 坐标，可用于设置炮位、目标和进行战术规划。多级地图瓦片、保存目标、测距尺、绘图、标记、地形等高线和 Terrain3D 高程信息均集成在同一工作区中。</p>
+</div>
+</article>
+</div>
+</section>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-tools"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span><h3>团队与地图工具</h3></div>
+<div class="seo-resource-grid">
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span>
+<div>
+<h4>WARDOGS 实时小队地图房间</h4>
+<p>创建房间并分享邀请链接或代码，即可在同一张 WARDOGS 战术地图上协作。绘图、区域、多边形和玩家标记会实时同步。每位玩家的武器、炮位、目标和射程圈保持独立；队友只能看到带名称的位置，不会出现重复的射程圈。</p>
+</div>
+</article>
+</div>
+</section>
+<section class="seo-category-section seo-faq">
+<div class="seo-category-heading" id="wardogs-calculator-faq"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.1 2.2c-.9.4-.9 1-.9 1.8M12 17h.01"/></svg></span><h3>常见问题</h3></div>
+<div class="seo-faq-list">
+<details class="seo-faq-item">
+<summary>
+<span>它支持 WARDOGS L81 迫击炮吗？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>支持。选择 L81 迫击炮并设置炮位与目标位置后，计算器会提供距离、方位角、射程状态和射表 MIL。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>WARDOGS 炮兵计算器支持 SPH-2 吗？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>支持。SPH-2 解算包括距离、方位角、LOW / HIGH 射击方案，以及在受支持地形上的可选实验性 Terrain3D MIL 修正。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>支持哪些 WARDOGS 地图？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>目前包含 Bakurani、Ozeti 和 Zestafona 互动地图。三张地图均使用校准后的游戏坐标，支持战术地图工具和地形等高线，并在 Terrain3D 数据覆盖范围内提供高程信息。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>WARDOGS 小队可以一起使用战术地图吗？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>可以。创建实时小队房间并分享邀请链接或代码后，绘图、区域、多边形和战术标记会在房间内同步。每位玩家仍保留独立的武器、炮位、目标和射程圈，队友只会看到带名称的位置，不会看到重复的射程圈。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>WARDOGS 地图可以显示地形等高线吗？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>可以。受支持的 WARDOGS 地图提供可切换的地形等高线图层，可在 Layers 菜单中与其他战术图层一起开启或关闭。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>SPH-2 车体方向应输入什么？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>输入驾驶员座位罗盘显示的车头方向，范围为 0–359 度。该值与射击方位角不同。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>SPH-2 应选择 LOW 还是 HIGH？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>LOW 是较平的弹道，HIGH 是较陡的弹道。根据射击和地形选择可用弹道，计算器会显示对应 MIL。</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>坐标旁的 Paste 和 Lock 有什么区别？</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>Paste 只更新对应的炮位或目标坐标；Lock 会阻止地图点击和拖动改变该点。</p>
+</details>
+</div>
+</section>
+</article></div>
+</aside>
+
+<!-- CURSOR -->
+<div class="cursor-coords" id="cursorCoords">
+<span class="cursor-y">
+          y0.00
+        </span>
+<span class="cursor-x">
+          x0.00
+        </span>
+</div>
+<!-- SAVED TARGETS -->
+<div class="saved-targets">
+<div class="saved-targets-header">
+<span data-i18n="savedTargets">已保存目标</span>
+<span class="saved-targets-count" id="savedTargetsCount">
+      0
+    </span>
+</div>
+<div class="saved-targets-list" id="savedTargetsList"></div>
+<div class="saved-target-options">
+<label class="save-artillery-option">
+<input id="saveArtilleryPosition" type="checkbox"/>
+<span data-i18n="saveArtilleryPosition">同时保存炮位</span>
+</label>
+</div>
+<div class="saved-target-actions">
+<button class="save-target-button" data-i18n="save" id="saveTarget" type="button">保存</button>
+<div class="saved-target-transfer-actions">
+<button data-i18n="exportAllTargets" id="exportSavedTargets" type="button">全部导出</button>
+<button data-i18n="importTargets" id="importSavedTargets" type="button">导入</button>
+</div>
+<div aria-live="polite" class="saved-target-transfer-status" id="savedTargetsTransferStatus"></div>
+</div>
+</div>
+<!-- MAP TOOLS -->
+<div class="map-tools" id="mapTools">
+<div class="map-tool-popover map-tool-palette" id="pencilPalette"></div>
+<div class="map-tool-popover map-tool-marker-picker" id="markerPicker"></div>
+<div class="map-tool-popover map-tool-coordinate-search" id="coordinateSearchPopover">
+<div class="map-tool-popover-title" id="coordinateSearchTitle">Coordinate search</div>
+<div class="map-tool-search-grid">
+<input id="coordinateSearchX" inputmode="numeric" placeholder="X" type="number"/>
+<input id="coordinateSearchY" inputmode="numeric" placeholder="Y" type="number"/>
+</div>
+<button class="map-tool-search-go" id="coordinateSearchGo" type="button">Go</button>
+<div class="map-tool-search-error" id="coordinateSearchError"></div>
+</div>
+<div class="map-tool-popover map-tool-layers" id="mapLayersPopover"></div>
+<div class="map-tool-popover map-tool-data-transfer" id="mapDataTransferPopover"></div>
+<div class="map-tools-bar">
+<button aria-label="Ruler" class="map-tool-button" data-tool="ruler" id="mapToolRuler" title="Ruler" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 17.5 17.5 4 20 6.5 6.5 20 4 17.5Z"/>
+<path d="m13 8.5 2.5 2.5"/>
+<path d="m10 11.5 1.8 1.8"/>
+<path d="m7 14.5 2.5 2.5"/>
+</svg>
+</button>
+<button aria-label="Pencil" class="map-tool-button" data-tool="pencil" id="mapToolPencil" title="Pencil" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 20l4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"/>
+<path d="m14.8 6 3.2 3.2"/>
+</svg>
+</button>
+<button aria-label="Eraser" class="map-tool-button" data-tool="eraser" id="mapToolEraser" title="Eraser" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="m4.5 14.5 8-8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L10 19H6.5L4.5 17a1.8 1.8 0 0 1 0-2.5Z"/>
+<path d="m9.5 9.5 5 5"/>
+<path d="M10 19h9"/>
+</svg>
+</button>
+<button aria-label="Markers" class="map-tool-button" data-tool="marker" id="mapToolMarker" title="Markers" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+<circle cx="12" cy="12" r="4"/>
+<path d="M12 3v5M12 16v5M3 12h5M16 12h5"/>
+</svg>
+</button>
+<button aria-label="Coordinate search" class="map-tool-button" data-tool="coordinateSearch" id="mapToolCoordinateSearch" title="Coordinate search" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="10.5" cy="10.5" r="5.5"/>
+<path d="m15 15 5 5"/>
+</svg>
+</button>
+<button aria-label="Layers" class="map-tool-button" data-tool="layers" id="mapToolLayers" title="Layers" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+<path d="M5 7h2M10 7h9M5 12h2M10 12h9M5 17h2M10 17h9"/>
+</svg>
+</button>
+<button aria-label="Import / Export" class="map-tool-button" data-tool="dataTransfer" id="mapToolDataTransfer" title="Import / Export" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v10"/><path d="m4 11 3 3 3-3"/><path d="M17 20V10"/><path d="m14 13 3-3 3 3"/></svg>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<footer id="siteFooter"></footer>
+<script src="js/app.bundle.js?v=69f13e44a76a"></script>
+</body>
+</html>

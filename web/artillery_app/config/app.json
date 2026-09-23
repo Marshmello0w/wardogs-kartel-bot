@@ -1,0 +1,73 @@
+{
+  "features": {
+    "sphPlatformCorrection": {
+      "enabled": true
+    }
+  },
+  "collab": {
+    "enabled": false,
+    "serverUrl": "",
+    "maxParticipants": 8,
+    "roomLifetimeHours": 6,
+    "maxRoomsPerDay": 250,
+    "maxChangeBatchesPerDay": 20000,
+    "maxChangeBatchesPerRoom": 1000,
+    "batchDelayMs": 300,
+    "allowedOrigins": [
+      "https://wardogs-artillery.com"
+    ],
+    "developmentOrigins": [
+      "http://localhost:8000",
+      "http://127.0.0.1:8000"
+    ],
+    "maxRoomsPerAdmission": 25,
+    "admissionLifetimeMinutes": 30,
+    "maxInvalidMessages": 5,
+    "turnstile": {
+      "enabled": false,
+      "siteKey": "0x4AAAAAAEsqj3RkFZ7z3IfY",
+      "hostname": "wardogs-artillery.com",
+      "action": "create-lobby"
+    }
+  },
+  "feedback": {
+    "enabled": false,
+    "serverUrl": ""
+  },
+  "mapTools": {
+    "shortcuts": {
+      "ruler": "r",
+      "pencil": "p",
+      "zone": "z",
+      "polygon": "g",
+      "eraser": "e",
+      "marker": "m",
+      "coordinateSearch": "f",
+      "layers": "l",
+      "fireAdjust": "i",
+      "clearTool": "escape",
+      "undo": "ctrl+z",
+      "redo": "ctrl+y",
+      "redoAlt": "ctrl+shift+z"
+    }
+  },
+  "site": {
+    "lastModified": "2026-09-22",
+    "footer": {
+      "disclaimer": "Unofficial community project. Not affiliated with or endorsed by BULKHEAD or the WARDOGS development team.",
+      "productName": "WARDOGS Artillery Calculator",
+      "authorLabel": "by",
+      "authorName": "Apollyon · wardogs-artillery.com",
+      "authorUrl": "https://wardogs-artillery.com/",
+      "sourceCodeUrl": "https://github.com/apollyon-sys/wardogs-calculator",
+      "version": "1.10.0"
+    }
+  },
+  "map": {
+    "camera": {
+      "maxZoom": 100,
+      "mobileMaxZoom": 40,
+      "panSpeed": 800
+    }
+  }
+}

@@ -1,0 +1,24 @@
+/* Das Kartell palette applied after the upstream desktop/mobile styles. */
+:root, :root[data-theme="light"] {
+  color-scheme: dark;
+  --body-bg: #171310;
+  --header-bg: #1d1713;
+  --aside-bg: #211a15;
+  --map-bg: #100e0c;
+  --panel-bg: #1b1612;
+  --input-bg: #29211a;
+  --input-hover-bg: #33271d;
+  --border: #45382e;
+  --border-light: #5a4939;
+  --text: #f5ede3;
+  --muted: #c0ad99;
+  --accent: #ff9c35;
+  --accent-border: #e57b1d;
+  --primary-bg: #704019;
+  --primary-border: #b96620;
+  --active-bg: #3a2718;
+  --grid-major: #685441;
+  --grid-minor: #352b23;
+}
+.theme-toggle { display: none !important; }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline-color: var(--accent); }

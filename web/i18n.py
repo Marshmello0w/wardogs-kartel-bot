@@ -31,6 +31,12 @@ TEXT = {
 
 # Kept separately so the main concise catalogue remains easy to scan.
 TEXT['de'].update({
+    'nav_artillery': 'Artillerie-Rechner',
+    'artillery_title': 'Artillerie-Rechner',
+    'artillery_intro': 'Interaktive Karten und Schussberechnung für L81-Mörser und SPH-2.',
+    'artillery_creator': 'Erstellt von',
+    'artillery_fullscreen': 'Rechner im Vollbild öffnen',
+    'artillery_notice': 'Die Kartenansicht lädt je nach Zoomstufe zusätzliche Bilder. Live-Lobbys des Originals sind hier nicht verfügbar.',
     'redeem': 'Einlösen', 'vip_slots': 'VIP-Plätze belegt',
     'current_server': 'Aktueller Server:', 'not_on_server': 'Du bist auf keinem aktuellen Server erkannt.',
     'reward_ready': 'Einlösung möglich', 'not_enough_points': 'Nicht genügend Quest-Punkte.',
@@ -47,6 +53,12 @@ TEXT['de'].update({
     'seed_playtime': 'Seed-Spielzeit',
 })
 TEXT['en'].update({
+    'nav_artillery': 'Artillery calculator',
+    'artillery_title': 'Artillery calculator',
+    'artillery_intro': 'Interactive maps and firing solutions for the L81 Mortar and SPH-2.',
+    'artillery_creator': 'Created by',
+    'artillery_fullscreen': 'Open calculator full-screen',
+    'artillery_notice': 'The map view loads additional images at each zoom level. Live lobbies from the original are not available here.',
     'redeem': 'Redeem', 'vip_slots': 'VIP slots occupied',
     'current_server': 'Current server:', 'not_on_server': 'You are not detected on a current server.',
     'reward_ready': 'Redemption available', 'not_enough_points': 'Not enough quest points.',

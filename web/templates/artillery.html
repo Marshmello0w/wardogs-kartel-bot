@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ t('artillery_title') }} · {{ t('portal_title') }}{% endblock %}
+{% block content %}
+<section class="artillery-page-head">
+  <div><span class="artillery-eyebrow">WARDOGS / TACTICAL TOOLS</span><h1>{{ t('artillery_title') }}</h1><p>{{ t('artillery_intro') }}</p></div>
+  <a class="button" href="/artillery-app/{{ 'de/' if language == 'de' else '' }}" target="_blank" rel="noopener">{{ t('artillery_fullscreen') }} <span aria-hidden="true">↗</span></a>
+</section>
+<div class="artillery-attribution"><span>{{ t('artillery_creator') }} <a href="https://wardogs-artillery.com/" target="_blank" rel="noopener noreferrer">wardogs-artillery.com <span aria-hidden="true">↗</span></a></span><span>{{ t('artillery_notice') }}</span></div>
+<iframe class="artillery-frame" title="{{ t('artillery_title') }}" src="/artillery-app/{{ 'de/' if language == 'de' else '' }}" loading="eager" allow="fullscreen" referrerpolicy="same-origin"></iframe>
+{% endblock %}

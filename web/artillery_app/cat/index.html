@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html data-page-language="cat" lang="cat">
+<head>
+<script src="/artillery-app/privacy.js"></script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta charset="utf-8"/>
+
+<meta content="no-referrer" name="referrer"/>
+
+
+<meta content="width=device-width,initial-scale=1" name="viewport"/><base href="../"/>
+<script src="js/core/mobile-redirect.js?v=69f13e44a76a"></script>
+
+<title>WARDOGS Meowculator | L81 Mortar, SPH-2 &amp; Team Meowp</title>
+<link href="../assets/favicon.png" rel="icon"/>
+<link href="style.css?v=69f13e44a76a" rel="stylesheet"/>
+<meta content="Free WARDOGS arty meowculator for L81 Mortar and SPH-2 with live squad meowbbies, Bakurani, Ozeti and Zestafona meowps, contours and Terrain3D MIL meowgic." name="description"/><meta name="robots" content="noindex, nofollow"/><meta content="#101316" name="theme-color"/><link href="https://wardogs-artillery.com/cat/" rel="canonical"/>
+<link href="https://wardogs-artillery.com/mobile/cat/" media="only screen and (max-width: 900px)" rel="alternate"/><meta content="website" property="og:type"/><meta content="WARDOGS Artillery Calculator" property="og:site_name"/><meta content="WARDOGS Meowculator | L81 Mortar, SPH-2 &amp; Team Meowp" property="og:title"/><meta content="Free WARDOGS arty meowculator for L81 Mortar and SPH-2 with live squad meowbbies, Bakurani, Ozeti and Zestafona meowps, contours and Terrain3D MIL meowgic." property="og:description"/><meta property="og:url" content="https://wardogs-artillery.com/cat/"/>
+<meta content="https://wardogs-artillery.com/assets/preview.png" property="og:image"/>
+<meta content="image/png" property="og:image:type"/>
+<meta content="1200" property="og:image:width"/>
+<meta content="675" property="og:image:height"/>
+<meta content="WARDOGS Artillery Calculator tactical map and artillery calculation interface" property="og:image:alt"/><meta content="summary_large_image" name="twitter:card"/>
+<meta content="https://wardogs-artillery.com/assets/preview.png" name="twitter:image"/>
+<meta content="WARDOGS Meowculator | L81 Mortar, SPH-2 &amp; Team Meowp" name="twitter:title"/><meta content="Free WARDOGS arty meowculator for L81 Mortar and SPH-2 with live squad meowbbies, Bakurani, Ozeti and Zestafona meowps, contours and Terrain3D MIL meowgic." name="twitter:description"/><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "WARDOGS Artillery Calculator",
+  "url": "https://wardogs-artillery.com/cat/",
+  "image": "https://wardogs-artillery.com/assets/preview.png",
+  "description": "Free WARDOGS arty meowculator for L81 Mortar and SPH-2 with live squad meowbbies, Bakurani, Ozeti and Zestafona meowps, contours and Terrain3D MIL meowgic.",
+  "applicationCategory": "GameApplication",
+  "operatingSystem": "Any",
+  "isAccessibleForFree": true,
+  "inLanguage": "cat",
+  "browserRequirements": "Requires JavaScript and a modern web browser",
+  "codeRepository": "https://github.com/apollyon-sys/wardogs-calculator",
+  "alternateName": [
+    "WARDOGS Artillery Calculator & Tactical Map",
+    "WARDOGS Arty Calc",
+    "WARDOGS L81 Mortar Calculator"
+  ],
+  "softwareVersion": "1.10.0",
+  "featureList": [
+    "WARDOGS L81 Mortar meowculator",
+    "SPH-2 LOW and HIGH firing solutions",
+    "Live squad meowbbies with a shared tactical meowp",
+    "Bakurani tactical meowp with contours",
+    "Ozeti tactical meowp with contours",
+    "Zestafona tactical meowp with contours",
+    "Saved meowget firing summaries",
+    "Ruler and drawing paws",
+    "Tactical map markers"
+  ]
+}</script><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What should I enter as SPH-2 hull direction?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Use the heading shown by the driver-seat compass for the front of the hull, from 0 to 359 degrees. It is separate from the firing azimuth."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Should I choose LOW or HIGH arc for SPH-2?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Choose the arc available for the intended shot and terrain. LOW is the flatter trajectory; HIGH is the steeper trajectory. The calculator displays the corresponding MIL solution."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why are Paste and Lock shown for each point?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Each coordinate row is independent. Paste updates only that artillery or target point, while Lock protects that point from map clicks and dragging."
+      }
+    }
+  ]
+}</script>
+<link as="script" fetchpriority="high" href="js/app.bundle.js?v=69f13e44a76a" rel="preload"/>
+<link rel="stylesheet" href="/artillery-app/kartell-theme.css">
+</head>
+<body>
+<header>
+<div class="header-title">
+<img alt="" aria-hidden="true" class="header-brand-icon" src="assets/favicon.png"/>
+<h1 data-i18n="title">WARCATS // MEOWTILLERY PAWCULATOR</h1>
+</div>
+<div class="header-controls">
+<button aria-label="Toggle theme" class="theme-toggle" id="themeToggle" title="Toggle theme" type="button">
+<span id="themeIcon">☼</span>
+</button>
+<select class="language-select" id="language"></select>
+</div>
+</header>
+<main>
+<!-- WORKSPACE -->
+<section class="workspace">
+<div class="toolbar">
+<span class="status" id="status"></span>
+</div>
+<div class="map">
+<canvas id="canvas"></canvas>
+<aside class="control-dock" aria-label="MEOWNTROLS">
+<details class="sidebar-section" open>
+<summary><span class="sidebar-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg></span><span class="sidebar-section-title" data-i18n="sidebarSetup">MEOWP SETUP</span><span class="sidebar-section-summary">MEOWP · MEOWPON</span><span class="sidebar-section-chevron" aria-hidden="true">⌄</span></summary>
+<div class="sidebar-section-body">
+<div class="map-choice-grid"><div class="sidebar-field"><label for="mapSelect" data-i18n="presetMap">PRESET MEOWP</label><select id="mapSelect"></select></div><div id="mapStyleSlot"></div></div>
+<div class="sidebar-field"><label for="weapon" data-i18n="weaponType">WHAT KIND OF MEOWPON?</label><select id="weapon"></select></div>
+</div>
+</details>
+<details class="sidebar-section" open>
+<summary><span class="sidebar-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg></span><span class="sidebar-section-title" data-i18n="sidebarCoordinates">PAW COORDINATES</span><span class="sidebar-section-summary" id="coordinateSectionSummary">2000, 2000 → 2500, 2500</span><span class="sidebar-section-chevron" aria-hidden="true">⌄</span></summary>
+<div class="sidebar-section-body">
+<div class="coordinate-point is-active" data-point="origin">
+<div class="coordinate-point-header">
+<button aria-pressed="true" class="coordinate-point-select active" id="originMode" type="button">
+<span class="coordinate-point-marker" aria-hidden="true">A</span>
+<span class="coordinate-point-label"><strong data-i18n="artillery">MEOWTILLERY</strong><small><span class="coordinate-placement-active" data-i18n="placingOnMap">Col·locant al mapa</span><span class="coordinate-placement-inactive" data-i18n="clickToPlace">Clica per col·locar</span></small></span>
+</button>
+<div class="point-coordinate-actions"><button aria-label="COPY COORDS" class="coordinate-icon-button" id="coordinateOriginCopy" title="COPY COORDS" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="sr-only" data-i18n="copyCoordinates">COPY COORDS</span></button>
+<button aria-label="PASTE COORDS" class="coordinate-icon-button coordinate-paste-button" id="coordinateOriginPaste" title="PASTE COORDS" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v13h14V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M12 10v7m-3-3 3 3 3-3"/></svg><span class="sr-only" data-i18n="pasteCoordinates">PASTE COORDS</span></button>
+<button aria-label="LOCK IT" aria-pressed="false" class="coordinate-icon-button point-lock-button" id="coordinateOriginLock" title="CAT-PROOF THIS POSITION AGAINST MAP ACCIDENTS" type="button"></button></div>
+</div>
+<div class="coordinate-inputs">
+<input aria-label="MEOWTILLERY X" id="ox" inputmode="decimal" step="0.01" type="number" value="2000"/>
+<input aria-label="MEOWTILLERY Y" id="oy" inputmode="decimal" step="0.01" type="number" value="2000"/>
+</div>
+</div>
+<div class="coordinate-point" data-point="target">
+<div class="coordinate-point-header">
+<button aria-pressed="false" class="coordinate-point-select" id="targetMode" type="button">
+<span class="coordinate-point-marker" aria-hidden="true">T</span>
+<span class="coordinate-point-label"><strong data-i18n="target">MEOWGET</strong><small><span class="coordinate-placement-active" data-i18n="placingOnMap">Col·locant al mapa</span><span class="coordinate-placement-inactive" data-i18n="clickToPlace">Clica per col·locar</span></small></span>
+</button>
+<div class="point-coordinate-actions"><button aria-label="COPY COORDS" class="coordinate-icon-button" id="coordinateTargetCopy" title="COPY COORDS" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="sr-only" data-i18n="copyCoordinates">COPY COORDS</span></button>
+<button aria-label="PASTE COORDS" class="coordinate-icon-button coordinate-paste-button" id="coordinateTargetPaste" title="PASTE COORDS" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v13h14V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M12 10v7m-3-3 3 3 3-3"/></svg><span class="sr-only" data-i18n="pasteCoordinates">PASTE COORDS</span></button>
+<button aria-label="LOCK IT" aria-pressed="false" class="coordinate-icon-button point-lock-button" id="coordinateTargetLock" title="CAT-PROOF THIS POSITION AGAINST MAP ACCIDENTS" type="button"></button></div>
+</div>
+<div class="coordinate-inputs">
+<input aria-label="MEOWGET X" id="tx" inputmode="decimal" step="0.01" type="number" value="2500"/>
+<input aria-label="MEOWGET Y" id="ty" inputmode="decimal" step="0.01" type="number" value="2500"/>
+</div>
+</div>
+<div class="sidebar-quick-actions"><button data-i18n="swap" id="swap" type="button">SWAP PAW-NTS</button><button class="sidebar-reset-button" data-i18n="clear" id="clear" type="button">RESET MEOW :(</button></div>
+</div>
+</details>
+<details class="sidebar-section firing-solution-panel">
+<summary>
+<span class="firing-solution-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+</span>
+<span class="firing-solution-title" data-i18n="firingSolution">FIRING MEOW-SOLUTION</span>
+<span class="firing-solution-summary" id="solutionSummary">—</span>
+<strong class="firing-solution-status" id="rangeStatus">—</strong>
+<span class="firing-solution-chevron" aria-hidden="true">⌄</span>
+</summary>
+<div class="firing-solution-body">
+<div class="firing-solution-range">
+<span data-i18n="weaponRange">MEOWGE</span>
+<strong id="range">—</strong>
+</div>
+<div class="result solution-result">
+<div class="solution-primary-grid">
+<div class="solution-metric">
+<span class="solution-metric-label" data-i18n="distance">MEOWTANCE</span>
+<strong class="solution-metric-value" id="distm">—</strong>
+<span class="solution-metric-sub" id="dist">—</span>
+</div>
+<div class="solution-metric solution-metric-highlight">
+<span class="solution-metric-label" data-i18n="mil">MIL</span>
+<strong class="solution-metric-value" id="mil">—</strong>
+<span class="solution-metric-sub" id="milAlt" hidden></span>
+</div>
+<div class="solution-metric">
+<span class="solution-metric-label" data-i18n="azimuth">MEOWZIMUTH</span>
+<strong class="solution-metric-value" id="angle">—</strong>
+<span class="solution-metric-sub solution-metric-spacer" aria-hidden="true">&nbsp;</span>
+</div>
+</div>
+</div>
+<button class="solution-support-prompt" id="solutionSupport" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>
+<span data-i18n="solutionSupportPrompt">Útil? Ajuda a mantenir el projecte en línia</span>
+</button>
+</div>
+</details>
+<button aria-controls="guideFaqDrawer" aria-expanded="false" class="guide-faq-button" id="guideFaqButton" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z"/></svg>
+<span class="guide-faq-button-copy"><strong data-i18n="guideAndFaq">Guia i PMF</strong><small data-i18n="guideAndFaqDescription">Calculadora, mapes i SPH-2</small></span>
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+</button>
+</aside>
+<aside aria-hidden="true" aria-labelledby="guideFaqTitle" class="guide-faq-drawer" id="guideFaqDrawer" inert>
+<div class="guide-faq-header"><h2 data-i18n="guideAndFaq" id="guideFaqTitle">Guia i PMF</h2><button aria-label="CLOSE" class="guide-faq-close" id="guideFaqClose" title="CLOSE" type="button">×</button></div>
+<div class="guide-faq-scroll"><article class="seo-guide-hub">
+<header class="seo-guide-hero">
+<span aria-hidden="true" class="seo-guide-hero-icon"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z"/></svg></span>
+<div>
+<span class="seo-guide-eyebrow">Step-by-step meow guide</span>
+<h2 id="wardogs-artillery-calculator">About the meowculator</h2>
+<p>Use these steps for an L81 Mortar or SPH-2 firing solution. Coordinates may be entered manually, pasted from the clipboard, or placed directly on the tactical map.</p>
+</div>
+</header>
+<nav aria-label="Step-by-step meow guide" class="seo-category-nav">
+<a class="seo-category-link" href="#guide-getting-started"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9Z"/></svg></span><span>Primers passos</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#guide-weapons"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><span>Armes i tir</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#guide-maps"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span><span>Mapes tàctics</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#guide-tools"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span><span>Eines d’equip</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+<a class="seo-category-link" href="#wardogs-calculator-faq"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.1 2.2c-.9.4-.9 1-.9 1.8M12 17h.01"/></svg></span><span>Preguntes freqüents</span><span aria-hidden="true" class="seo-category-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a>
+</nav>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-getting-started"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9Z"/></svg></span><h3>Primers passos</h3></div>
+<p class="seo-category-lead">Use these steps for an L81 Mortar or SPH-2 firing solution. Coordinates may be entered manually, pasted from the clipboard, or placed directly on the tactical map.</p>
+<ol class="seo-step-grid">
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">1</span>
+<div>
+<h4>Select the map and weapon</h4>
+<p>Choose Bakurani, Ozeti or Zestafona, select a map style, then choose L81 Mortar or SPH-2. The supported range and firing table update with the weapon.</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">2</span>
+<div>
+<h4>Set artillery and target coordinates</h4>
+<p>Click Artillery or Target and place the point on the map, or type X and Y. Copy exports a point, Paste imports a coordinate pair, and Lock prevents accidental movement.</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">3</span>
+<div>
+<h4>Configure SPH-2 hull and arc</h4>
+<p>For SPH-2, enter the hull direction shown on the driver-seat compass and select LOW or HIGH arc in the third coordinate card. Park on level ground: hull direction correction does not measure vehicle tilt.</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">4</span>
+<div>
+<h4>Read the firing solution</h4>
+<p>Open Firing solution in the left menu. Check range status, distance, MIL and azimuth before firing. Out of range means the selected weapon table has no valid solution for that distance.</p>
+</div>
+</li>
+<li class="seo-step-card">
+<span aria-hidden="true" class="seo-step-number">5</span>
+<div>
+<h4>Save and share tactical work</h4>
+<p>Save frequently used targets, use the ruler and drawing tools for planning, or create a lobby to synchronise drawings, zones, polygons and markers with the squad.</p>
+</div>
+</li>
+</ol>
+<aside class="seo-tips-card">
+<h4>Accuracy tips</h4>
+<ul>
+<li>Confirm that the selected map matches the current server map before placing points.</li>
+<li>Use Lock after setting artillery so target placement cannot move it accidentally.</li>
+</ul>
+</aside>
+</section>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-weapons"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><h3>Armes i tir</h3></div>
+<div class="seo-resource-grid">
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>
+<div>
+<h4>WARDOGS L81 Mortar meowculator</h4>
+
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>
+<div>
+<h4>SPH-2 LOW and HIGH firing solutions</h4>
+
+</div>
+</article>
+</div>
+</section>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-maps"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span><h3>Mapes tàctics</h3></div>
+<div class="seo-resource-grid">
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span>
+<div>
+<h4><a href="maps/bakurani/">Bakurani tactical meowp with contours<span aria-hidden="true" class="seo-resource-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a></h4>
+
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span>
+<div>
+<h4><a href="maps/ozeti/">Ozeti tactical meowp with contours<span aria-hidden="true" class="seo-resource-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a></h4>
+
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><path d="m3 6 5-3 8 3 5-3v15l-5 3-8-3-5 3Z"/><path d="M8 3v15M16 6v15"/></svg></span>
+<div>
+<h4><a href="maps/zestafona/">Zestafona tactical meowp with contours<span aria-hidden="true" class="seo-resource-arrow"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></a></h4>
+
+</div>
+</article>
+</div>
+</section>
+<section class="seo-category-section">
+<div class="seo-category-heading" id="guide-tools"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span><h3>Eines d’equip</h3></div>
+<div class="seo-resource-grid">
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span>
+<div>
+<h4>Live squad meowbbies with a shared tactical meowp</h4>
+
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span>
+<div>
+<h4>Saved meowget firing summaries</h4>
+
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span>
+<div>
+<h4>Ruler and drawing paws</h4>
+
+</div>
+</article>
+<article class="seo-resource-card">
+<span aria-hidden="true" class="seo-resource-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="15" r="3"/><path d="M10.5 9.5 13.5 13M3 20c.7-3.2 2.3-5 5-5M21 7c-.7 3.2-2.3 5-5 5"/></svg></span>
+<div>
+<h4>Tactical map markers</h4>
+
+</div>
+</article>
+</div>
+</section>
+<section class="seo-category-section seo-faq">
+<div class="seo-category-heading" id="wardogs-calculator-faq"><span aria-hidden="true" class="seo-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.1 2.2c-.9.4-.9 1-.9 1.8M12 17h.01"/></svg></span><h3>Preguntes freqüents</h3></div>
+<div class="seo-faq-list">
+<details class="seo-faq-item">
+<summary>
+<span>What should I enter as SPH-2 hull direction?</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>Use the heading shown by the driver-seat compass for the front of the hull, from 0 to 359 degrees. It is separate from the firing azimuth.</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>Should I choose LOW or HIGH arc for SPH-2?</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>Choose the arc available for the intended shot and terrain. LOW is the flatter trajectory; HIGH is the steeper trajectory. The calculator displays the corresponding MIL solution.</p>
+</details>
+<details class="seo-faq-item">
+<summary>
+<span>Why are Paste and Lock shown for each point?</span>
+<span aria-hidden="true" class="seo-faq-toggle">+</span>
+</summary>
+<p>Each coordinate row is independent. Paste updates only that artillery or target point, while Lock protects that point from map clicks and dragging.</p>
+</details>
+</div>
+</section>
+</article></div>
+</aside>
+
+<!-- CURSOR -->
+<div class="cursor-coords" id="cursorCoords">
+<span class="cursor-y">
+          y0.00
+        </span>
+<span class="cursor-x">
+          x0.00
+        </span>
+</div>
+<!-- SAVED TARGETS -->
+<div class="saved-targets">
+<div class="saved-targets-header">
+<span data-i18n="savedTargets">SAVED MEOWGETS</span>
+<span class="saved-targets-count" id="savedTargetsCount">
+      0
+    </span>
+</div>
+<div class="saved-targets-list" id="savedTargetsList"></div>
+<div class="saved-target-options">
+<label class="save-artillery-option">
+<input id="saveArtilleryPosition" type="checkbox"/>
+<span data-i18n="saveArtilleryPosition">SAVE MEOWTILLERY PAW-SITION</span>
+</label>
+</div>
+<div class="saved-target-actions">
+<button class="save-target-button" data-i18n="save" id="saveTarget" type="button">SAVE</button>
+<div class="saved-target-transfer-actions">
+<button data-i18n="exportAllTargets" id="exportSavedTargets" type="button">Export all</button>
+<button data-i18n="importTargets" id="importSavedTargets" type="button">Import</button>
+</div>
+<div aria-live="polite" class="saved-target-transfer-status" id="savedTargetsTransferStatus"></div>
+</div>
+</div>
+<!-- MAP TOOLS -->
+<div class="map-tools" id="mapTools">
+<div class="map-tool-popover map-tool-palette" id="pencilPalette"></div>
+<div class="map-tool-popover map-tool-marker-picker" id="markerPicker"></div>
+<div class="map-tool-popover map-tool-coordinate-search" id="coordinateSearchPopover">
+<div class="map-tool-popover-title" id="coordinateSearchTitle">Coordinate search</div>
+<div class="map-tool-search-grid">
+<input id="coordinateSearchX" inputmode="numeric" placeholder="X" type="number"/>
+<input id="coordinateSearchY" inputmode="numeric" placeholder="Y" type="number"/>
+</div>
+<button class="map-tool-search-go" id="coordinateSearchGo" type="button">Go</button>
+<div class="map-tool-search-error" id="coordinateSearchError"></div>
+</div>
+<div class="map-tool-popover map-tool-layers" id="mapLayersPopover"></div>
+<div class="map-tool-popover map-tool-data-transfer" id="mapDataTransferPopover"></div>
+<div class="map-tools-bar">
+<button aria-label="Ruler" class="map-tool-button" data-tool="ruler" id="mapToolRuler" title="Ruler" type="button">
+<span aria-hidden="true">📏</span>
+</button>
+<button aria-label="Pencil" class="map-tool-button" data-tool="pencil" id="mapToolPencil" title="Pencil" type="button">
+<span aria-hidden="true">✎</span>
+</button>
+<button aria-label="Eraser" class="map-tool-button" data-tool="eraser" id="mapToolEraser" title="Eraser" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="m4.5 14.5 8-8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L10 19H6.5L4.5 17a1.8 1.8 0 0 1 0-2.5Z"/>
+<path d="m9.5 9.5 5 5"/>
+<path d="M10 19h9"/>
+</svg>
+</button>
+<button aria-label="Markers" class="map-tool-button" data-tool="marker" id="mapToolMarker" title="Markers" type="button">
+<span aria-hidden="true">⌖</span>
+</button>
+<button aria-label="Coordinate search" class="map-tool-button" data-tool="coordinateSearch" id="mapToolCoordinateSearch" title="Coordinate search" type="button">
+<span aria-hidden="true">⌕</span>
+</button>
+<button aria-label="Layers" class="map-tool-button" data-tool="layers" id="mapToolLayers" title="Layers" type="button">
+<span aria-hidden="true">☷</span>
+</button>
+<button aria-label="Import / Export" class="map-tool-button" data-tool="dataTransfer" id="mapToolDataTransfer" title="Import / Export" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v10"/><path d="m4 11 3 3 3-3"/><path d="M17 20V10"/><path d="m14 13 3-3 3 3"/></svg>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<footer id="siteFooter"></footer>
+<script src="js/app.bundle.js?v=69f13e44a76a"></script>
+</body>
+</html>

@@ -4,6 +4,14 @@ Eigenständige FastAPI-Anwendung für `https://kartell.marshmello0w.de`.
 Die Webinstanz bekommt ausschließlich ihre eigene `.env`, einen Steam-Web-API-Key
 und einen lesenden Datenbankbenutzer. Botdateien oder Bot-Secrets werden nicht benötigt.
 
+## Artillerie-Rechner
+
+`/artillery` enthält einen lokal eingebundenen Build des [WARDOGS Artillery Calculator](https://wardogs-artillery.com/) von Apollyon mit L81-Mörser, SPH-2 und Karten. Der zugrunde liegende Quellcode ist auf Commit `d96c15ffc2c65dc31b4cceff8a9b12a7724467a6` fixiert; Build- und Anpassungsdetails stehen in `artillery_app/UPSTREAM.md`. Die Original-MIT-Lizenz liegt im vendorten Verzeichnis.
+
+Kartenkacheln und Gelände-Daten werden bei Bedarf ausschließlich serverseitig von der festen Upstream-Asset-Adresse abgerufen und unter `web/data/artillery_assets/` zwischengespeichert. Dafür braucht die Webinstanz ausgehendes HTTPS zu `assets.wardogs-artillery.com` und Schreibrechte für `web/data/`. Der Cache ist nicht in Git und kann je nach Kartennutzung wachsen; Speicherplatz überwachen. Das Löschen dieses reinen Caches ist möglich, führt aber beim nächsten Kartenaufruf zu erneuten Downloads. Die Browser der Nutzer kontaktieren diesen Asset-Host nicht direkt.
+
+Original-Analytics, Feedback und die an die Original-Domain gebundenen Live-Lobbys sind in der Portalintegration deaktiviert. Die Karte, Werkzeuge und Ballistik laufen lokal im Portal. Die Seite verlinkt den Ersteller sichtbar. Die Kartenbilder sind **nicht** von der MIT-Lizenz abgedeckt; der Betreiber muss die Nutzungserlaubnis für das Hosten der gecachten Bilder sicherstellen.
+
 ## Installation / AMP Python App Runner
 
 Python 3.11 oder neuer. Im AMP-Anwendungsverzeichnis liegt der Ordner `web/`.

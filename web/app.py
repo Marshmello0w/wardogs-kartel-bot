@@ -1,7 +1,10 @@
 """FastAPI application factory. Run from the repository root with --factory."""
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import asyncio
 import logging
+import os
+import re
 import secrets
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
@@ -9,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
@@ -28,6 +31,23 @@ from .visitor_tracker import VisitorTracker
 logger = logging.getLogger('kartell.web')
 PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
            'en': {'7d': '7 days', '30d': '30 days', 'all': 'All time'}}
+ARTILLERY_ASSET_PATH = re.compile(
+    r'(?:maps/tiles(?:-color)?/(?:bakurani|ozeti|zestafona)/zoom_(?P<zoom>[0-7])/(?P<x>\d+)_(?P<y>\d+)\.webp'
+    r'|data/terrain/(?:bakurani|ozeti|zestafona)/(?:manifest\.json|chunks/\d+_\d+\.bin))\Z'
+)
+ARTILLERY_ASSET_ORIGIN = 'https://assets.wardogs-artillery.com/releases/assets-v1/'
+ARTILLERY_CACHE_ROOT = ROOT / 'data' / 'artillery_assets'
+
+
+def cache_artillery_asset(path, content):
+    """Keep immutable upstream release files locally after their first request."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.' + secrets.token_hex(6) + '.tmp')
+    try:
+        temporary.write_bytes(content)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 @pass_context
@@ -88,6 +108,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     # API keys and OpenID signatures must not appear in request logs.
     logging.getLogger('httpx').setLevel(logging.WARNING)
     client = steam_client or httpx.AsyncClient(timeout=10, follow_redirects=False)
+    artillery_client = httpx.AsyncClient(timeout=12, follow_redirects=False)
     steam = SteamLogin(settings, client)
 
     @asynccontextmanager
@@ -98,6 +119,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             await reward_db.close()
         if steam_client is None:
             await client.aclose()
+        await artillery_client.aclose()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.repo, app.state.steam, app.state.reward_db, app.state.visitors = repo, steam, reward_db, visitors
@@ -107,6 +129,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[urlsplit(settings.base_url).hostname,
                                                            'localhost', '127.0.0.1'])
     app.mount('/static', StaticFiles(directory=ROOT / 'static'), name='static')
+    app.mount('/artillery-app', StaticFiles(directory=ROOT / 'artillery_app', html=True), name='artillery-app')
     templates = Jinja2Templates(directory=ROOT / 'templates')
     templates.env.filters.update(number=number, duration=duration, when=when, date=date, iso=iso)
 
@@ -121,7 +144,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         # or form/API posts.  Uvicorn supplies the proxy-validated client IP.
         if (request.method == 'GET' and response.status_code < 400
                 and request.url.path not in ('/health', '/tokens.css')
-                and not request.url.path.startswith('/static/')):
+                and not request.url.path.startswith(('/static/', '/artillery-app/', '/artillery-assets/'))):
             try:
                 await visitors.record(request.client.host if request.client else None)
             except OSError:
@@ -135,17 +158,54 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         # Strip paths/claims while retaining same-origin POST Origin headers.
         # no-referrer makes Chromium submit forms with Origin: null.
         response.headers['Referrer-Policy'] = 'strict-origin'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['Content-Security-Policy'] = (
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
-            "img-src 'self' https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com "
-            "https://steamcdn-a.akamaihd.net https://cdn.akamai.steamstatic.com; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        if request.url.path.startswith('/artillery-app/'):
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; script-src 'self'; script-src-attr 'none'; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+                "connect-src 'self'; font-src 'self' data:; worker-src 'self' blob:; "
+                "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
+        else:
+            response.headers['X-Frame-Options'] = 'DENY'
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
+                "img-src 'self' https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com "
+                "https://steamcdn-a.akamaihd.net https://cdn.akamai.steamstatic.com; "
+                "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         if settings.secure:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000'
         # All pages include per-session UI; public *data* caching lives in Repository.
-        response.headers['Cache-Control'] = 'private, no-store' if not request.url.path.startswith('/static/') else 'public, max-age=3600'
+        response.headers['Cache-Control'] = ('public, max-age=86400' if request.url.path.startswith('/artillery-assets/')
+            else 'public, max-age=3600' if request.url.path.startswith(('/static/', '/artillery-app/'))
+            else 'private, no-store')
         return response
+
+    @app.get('/artillery-assets/{asset_path:path}', include_in_schema=False)
+    async def artillery_asset(asset_path: str):
+        # Fixed CDN and strict path allowlist: this route must not be a general proxy.
+        match = ARTILLERY_ASSET_PATH.fullmatch(asset_path)
+        if len(asset_path) > 180 or '..' in asset_path or not match:
+            raise HTTPException(404)
+        if match.group('zoom') and (int(match.group('x')) >= 2 ** int(match.group('zoom'))
+                                    or int(match.group('y')) >= 2 ** int(match.group('zoom'))):
+            raise HTTPException(404)
+        media_type = ('image/webp' if asset_path.endswith('.webp') else
+                      'application/json' if asset_path.endswith('.json') else 'application/octet-stream')
+        cached = ARTILLERY_CACHE_ROOT / asset_path
+        if cached.is_file():
+            return FileResponse(cached, media_type=media_type)
+        try:
+            upstream = await artillery_client.get(ARTILLERY_ASSET_ORIGIN + asset_path)
+        except httpx.HTTPError:
+            raise HTTPException(503)
+        if upstream.status_code != 200 or len(upstream.content) > 8_000_000:
+            raise HTTPException(404 if upstream.status_code == 404 else 503)
+        try:
+            await asyncio.to_thread(cache_artillery_asset, cached, upstream.content)
+        except OSError:
+            # A read-only deployment still serves the requested asset.
+            logger.warning('Artillery asset cache unavailable')
+        return Response(upstream.content, media_type=media_type)
 
     def render(request, template, status=200, **context):
         user = request.session.get('user')
@@ -253,6 +313,10 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         rows = await repo.leaderboard(server, period, sort, page)
         return render(request, 'leaderboard.html', rows=rows[:50], more=len(rows) > 50,
                       server=server, period=period, sort=sort, page=page)
+
+    @app.get('/artillery')
+    async def artillery(request: Request):
+        return render(request, 'artillery.html')
 
     @app.get('/auth/steam')
     async def login(request: Request):

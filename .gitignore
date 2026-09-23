@@ -12,3 +12,5 @@ pending_admin_actions.json
 *.json.*.tmp
 .pytest_cache/
 scratch/
+web/data/artillery_assets/
+web/data/unique_visitors.json

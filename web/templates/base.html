@@ -20,6 +20,7 @@
     <nav class="navigation" aria-label="{{ t('nav_status') }}">
       <a href="/"{% if path == '/' %} aria-current="page"{% endif %}>{{ t('nav_status') }}</a>
       <a href="/leaderboard"{% if path == '/leaderboard' %} aria-current="page"{% endif %}>{{ t('nav_leaderboard') }}</a>
+      <a href="/artillery"{% if path == '/artillery' %} aria-current="page"{% endif %}>{{ t('nav_artillery') }}</a>
       <a href="/me"{% if path == '/me' %} aria-current="page"{% endif %}>{{ t('nav_profile') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
       <a href="/quests"{% if path == '/quests' %} aria-current="page"{% endif %}>{{ t('nav_quests') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
       <a href="/rewards"{% if path == '/rewards' %} aria-current="page"{% endif %}>{{ t('nav_rewards') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>

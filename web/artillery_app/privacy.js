@@ -1,0 +1,1 @@
+window.__WARDOGS_ANALYTICS_DISABLED__ = true;
