@@ -2,6 +2,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -132,6 +133,10 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     app.mount('/artillery-app', StaticFiles(directory=ROOT / 'artillery_app', html=True), name='artillery-app')
     templates = Jinja2Templates(directory=ROOT / 'templates')
     templates.env.filters.update(number=number, duration=duration, when=when, date=date, iso=iso)
+    static_versions = {
+        name: hashlib.sha256((ROOT / 'static' / name).read_bytes()).hexdigest()[:12]
+        for name in ('site.css', 'site.js')
+    }
 
     @app.get('/tokens.css', include_in_schema=False)
     async def tokens():
@@ -220,6 +225,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
                      'periods': PERIODS[language], 'path': request.url.path, 'language': language,
                      'languages': LANGUAGES, 'next_path': next_path,
                      'show_cookie_banner': request.session.get('remember_login') is not True,
+                     'static_versions': static_versions,
                      't': lambda key, **values: translate(language, key, **values), **context})
 
     @app.post('/cookie-preferences')

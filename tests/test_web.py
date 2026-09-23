@@ -355,6 +355,8 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(self.client.get('/').status_code, 200)
         artillery = self.client.get('/artillery')
         self.assertEqual(artillery.status_code, 200)
+        self.assertRegex(artillery.text, r'/static/site\.css\?v=[0-9a-f]{12}')
+        self.assertRegex(artillery.text, r'/static/site\.js\?v=[0-9a-f]{12}')
         self.assertIn('https://wardogs-artillery.com/', artillery.text)
         self.assertIn('/artillery-app/de/', artillery.text)
         vendor = self.client.get('/artillery-app/de/')
