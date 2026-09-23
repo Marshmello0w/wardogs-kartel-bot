@@ -148,7 +148,8 @@ DAILY_PLAYTIME = (
     # makes a partially completed migration safe to retry after a restart.
     """INSERT IGNORE INTO player_daily_playtime
         (server_id, steam_id, date, playtime_seconds, legacy_seconds)
-        SELECT server_id, steam_id, UTC_DATE(), playtime_seconds, playtime_seconds
+        SELECT server_id, steam_id, UTC_DATE(), COALESCE(playtime_seconds, 0),
+               COALESCE(playtime_seconds, 0)
         FROM player_playtime""",
 )
 
@@ -181,6 +182,22 @@ async def migrate(pool):
                 await cur.execute("SELECT 1 FROM schema_migrations WHERE version=%s", (version,))
                 if await cur.fetchone():
                     continue
+                if version == 9:
+                    # An earlier, unversioned prototype used this table name
+                    # with a required `name` and without `legacy_seconds`.
+                    # Preserve its rows in an archive and create the new
+                    # schema; CREATE IF NOT EXISTS alone cannot repair it.
+                    await cur.execute("""SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='player_daily_playtime'""")
+                    columns = {row[0] for row in await cur.fetchall()}
+                    if columns and ('legacy_seconds' not in columns or 'name' in columns):
+                        await cur.execute("""SELECT 1 FROM information_schema.TABLES
+                            WHERE TABLE_SCHEMA=DATABASE()
+                            AND TABLE_NAME='player_daily_playtime_pre_v9'""")
+                        if await cur.fetchone():
+                            raise RuntimeError('Daily playtime archive already exists; inspect schema manually')
+                        await cur.execute("""RENAME TABLE player_daily_playtime
+                            TO player_daily_playtime_pre_v9""")
                 for statement in statements:
                     await cur.execute(statement)
                 await cur.execute("INSERT IGNORE INTO schema_migrations(version) VALUES (%s)", (version,))

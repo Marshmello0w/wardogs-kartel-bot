@@ -104,6 +104,30 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await database.init_db(self.pool)
         self.assertEqual((await self.rows('SELECT playtime_seconds FROM player_daily_playtime'))[0]['playtime_seconds'], 7200)
 
+    async def test_daily_playtime_migrates_old_prototype_without_losing_rows(self):
+        await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
+            VALUES ('server1',%s,'Player',7200)""", (STEAM,))
+        await self.rows('DELETE FROM schema_migrations WHERE version=9')
+        await self.rows('DROP TABLE player_daily_playtime')
+        await self.rows("""CREATE TABLE player_daily_playtime (
+            server_id VARCHAR(50) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+            date DATE NOT NULL, name VARCHAR(255) NOT NULL,
+            playtime_seconds BIGINT NOT NULL DEFAULT 0,
+            PRIMARY KEY(server_id,steam_id,date), INDEX(steam_id,date)
+            ) ENGINE=InnoDB""")
+        await self.rows("""INSERT INTO player_daily_playtime
+            (server_id,steam_id,date,name,playtime_seconds)
+            VALUES ('server1',%s,DATE_SUB(UTC_DATE(),INTERVAL 2 DAY),'Player',119)""", (STEAM,))
+
+        await database.init_db(self.pool)
+
+        archived = (await self.rows('SELECT playtime_seconds FROM player_daily_playtime_pre_v9'))[0]
+        current = (await self.rows('SELECT playtime_seconds,legacy_seconds FROM player_daily_playtime'))[0]
+        self.assertEqual(archived['playtime_seconds'], 119)
+        self.assertEqual(current, {'playtime_seconds': 7200, 'legacy_seconds': 7200})
+        await database.init_db(self.pool)
+        self.assertEqual(len(await self.rows('SELECT * FROM player_daily_playtime_pre_v9')), 1)
+
     async def test_quest_imports_once_and_ignores_white_team_time(self):
         await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
             VALUES (%s,%s,%s,%s)""", ('server1', STEAM, 'Player', 7200))
