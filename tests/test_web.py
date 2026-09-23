@@ -381,7 +381,8 @@ class RouteTests(unittest.TestCase):
         self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt;', result.text)
         self.assertIn('name="sort" value="playtime"', result.text)
         self.assertIn('leaderboard', result.text)
-        self.assertIn('übernommene Gesamtzeit', result.text)
+        self.assertNotIn('übernommene Gesamtzeit', result.text)
+        self.assertNotIn('mindestens 5 Tode', result.text)
         self.assertEqual(self.client.get('/leaderboard?sort=playtime').status_code, 200)
         for query in ('server=other', 'period=forever', 'sort=steam_id', 'page=0', 'page=10001'):
             self.assertEqual(self.client.get('/leaderboard?' + query).status_code, 400)

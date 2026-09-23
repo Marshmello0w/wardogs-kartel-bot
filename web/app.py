@@ -318,8 +318,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
                           page: int = Query(1, ge=1, le=10000)):
         rows = await repo.leaderboard(server, period, sort, page)
         return render(request, 'leaderboard.html', rows=rows[:50], more=len(rows) > 50,
-                      server=server, period=period, sort=sort, page=page,
-                      legacy_playtime=period != 'all' and any(row.get('legacy_seconds', 0) for row in rows))
+                      server=server, period=period, sort=sort, page=page)
 
     @app.get('/artillery')
     async def artillery(request: Request):

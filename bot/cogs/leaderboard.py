@@ -139,11 +139,6 @@ class Leaderboard(commands.Cog):
         labels = {'7d':'Letzte 7 Tage','30d':'Letzte 30 Tage','all':'All-Time'}
         sort_labels = {'kd':'K/D','cash':'Cash','playtime':'Spielzeit'}
         embed = discord.Embed(title=f"🏆 {config.server(server_id).title} – {labels[timeframe]} · {sort_labels[sort_by]}", color=discord.Color.gold())
-        if sort_by == 'kd':
-            embed.description = 'K/D-Rangliste: mindestens 5 Tode und 30 Minuten Spielzeit auf diesem Server.'
-        if timeframe != 'all' and any(row.get('legacy_seconds', 0) for row in rows):
-            note = 'Spielzeit enthält noch übernommene Gesamtzeit vom Start der Tageserfassung.'
-            embed.description = f'{embed.description}\n{note}' if embed.description else note
         for row in rows:
             embed.add_field(name=f"{row['player_rank']}. {row['name']}"[:256],
                 value=(f"Kills: {row['kills']} | Deaths: {row['deaths']} | K/D: {row['kd']:.2f} | Cash: {row['cash']} USD\n"

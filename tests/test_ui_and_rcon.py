@@ -99,6 +99,17 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscordTests(unittest.IsolatedAsyncioTestCase):
+    async def test_leaderboard_embed_has_no_intro_notes(self):
+        row = {'player_rank': 1, 'name': 'Spieler', 'kills': 10, 'deaths': 5,
+               'kd': 2.0, 'cash': 1000, 'playtime_seconds': 3600,
+               'legacy_seconds': 3600}
+        cog = SimpleNamespace(bot=SimpleNamespace(get_cog=lambda _: None))
+        with patch('cogs.leaderboard.stats.ranking', new=AsyncMock(return_value=[row])), \
+             patch('cogs.leaderboard.config.server', return_value=SimpleNamespace(title='Server 1')):
+            embed = await Leaderboard.generate_embed(cog, 'server1')
+        self.assertIsNone(embed.description)
+        self.assertIn('Spielzeit: 1 Std.', embed.fields[0].value)
+
     def test_daily_playtime_splits_at_utc_midnight(self):
         end = datetime(2026, 9, 23, 0, 0, 30, tzinfo=timezone.utc)
         self.assertEqual(list(daily_playtime_slices(end, 60)),
