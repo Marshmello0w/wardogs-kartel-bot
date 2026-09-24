@@ -77,6 +77,24 @@ def response_is_new_enough(updated_at, restarted_at):
                 updated_at >= restarted_at + timedelta(seconds=config.REGION_GUARD_API_DELAY_SECONDS))
 
 
+def current_api_observation(updated_at, now):
+    """Do not restart from an old or future-dated public server entry."""
+    return bool(updated_at and
+                timedelta(0) <= now - updated_at <= timedelta(seconds=config.REGION_GUARD_BASELINE_MAX_AGE_SECONDS))
+
+
+def confirmation_matches(candidate, result):
+    first = parse_api_timestamp((candidate or {}).get("updated_at"))
+    return bool(first and candidate.get("instance_id") == result["instance_id"]
+                and candidate.get("region") == result["region"]
+                and result["updated_at"] >= first + timedelta(seconds=config.REGION_GUARD_CONFIRMATION_GAP_SECONDS))
+
+
+def confirmation_sample(result):
+    return {"instance_id": result["instance_id"], "region": result["region"],
+            "updated_at": result["updated_at"].isoformat()}
+
+
 def initial_state(day):
     return {
         "day": day,
@@ -90,6 +108,12 @@ def initial_state(day):
         "last_query_at": None,
         "last_api_updated_at": None,
         "last_region": None,
+        "last_instance_id": None,
+        "previous_instance_id": None,
+        "verified_instance_id": None,
+        "pending_confirmation": None,
+        "success_probe": None,
+        "occupied_logged": False,
         "link_key": None,
         "last_error": None,
     }
@@ -220,6 +244,10 @@ class RegionGuardCog(commands.Cog):
 
     async def _restart(self, srv, state, now):
         """Ask Pterodactyl for exactly one restart after a fresh final RCON check."""
+        previous_id = state.get("last_instance_id")
+        if not previous_id:
+            self.trace(srv, "Restart abgebrochen", "Vorherige Spielinstanz-ID ist nicht belegt.")
+            return False
         tracker = self.bot.get_cog("RoundTracker")
         current = tracker.current(srv.id) if tracker else None
         players = ((current or {}).get("snapshot", {}).get("players", {}).get("current"))
@@ -244,9 +272,12 @@ class RegionGuardCog(commands.Cog):
             raise PterodactylError("Pterodactyl Restart-Verbindung fehlgeschlagen") from None
         self.trace(srv, "Pterodactyl-Restart", "Panel hat den Restart angenommen.")
         state.update(phase="awaiting_api", restart_at=now.isoformat(), last_query_at=None,
-                     last_api_updated_at=None, last_region=None, last_error=None)
+                     last_api_updated_at=None, last_region=None, last_error=None,
+                     previous_instance_id=previous_id, verified_instance_id=None,
+                     pending_confirmation=None, success_probe=None, occupied_logged=False)
         self.log("🔄 Region-Guard startet Server neu",
-                 f"**{srv.title}** war leer. Warte auf einen öffentlichen Regionsnachweis.", discord.Color.blue())
+                 f"**{srv.title}** war leer. Vorherige Spielinstanz: `{previous_id}`. "
+                 "Warte auf eine neue Spielinstanz und den öffentlichen Regionsnachweis.", discord.Color.blue())
         return True
 
     async def _server_api(self, srv, state):
@@ -286,17 +317,76 @@ class RegionGuardCog(commands.Cog):
         if isinstance(link_key, str) and link_key.strip():
             state["link_key"] = link_key.strip()
         region = server.get("region")
-        normalized_region = str(region or "").casefold()
+        instance_id = server.get("id")
+        if not isinstance(instance_id, str) or not instance_id.strip():
+            return None, "WarDogs API ohne Spielinstanz-ID"
+        instance_id = instance_id.strip()
+        normalized_region = str(region or "").strip().casefold()
+        if not normalized_region:
+            return None, "WarDogs API ohne Region"
         self.trace(srv, "WarDogs-API Antwort",
-                   f"Region: **{normalized_region or '—'}** · Datenstand: {updated_at:%d.%m.%Y %H:%M:%S UTC}.")
-        return {"updated_at": updated_at, "region": normalized_region}, None
+                   f"Instanz: `{instance_id}` · Region: **{normalized_region or '—'}** · "
+                   f"Datenstand: {updated_at:%d.%m.%Y %H:%M:%S UTC}.")
+        return {"updated_at": updated_at, "region": normalized_region,
+                "instance_id": instance_id}, None
+
+    async def _check_completed(self, srv, state, now):
+        """Observe a confirmed server until the window closes; never restart here."""
+        if not state.get("verified_instance_id"):
+            # Successes saved by the previous version cannot be re-proven after
+            # deployment. Preserve today's completion instead of restarting.
+            return
+        last_query = parse_api_timestamp(state.get("last_query_at"))
+        if last_query and now < last_query + timedelta(seconds=config.REGION_GUARD_SUCCESS_POLL_SECONDS):
+            return
+        state["last_query_at"] = now.isoformat()
+        result, problem = await self._server_api(srv, state)
+        if problem:
+            self._problem(srv, state, problem)
+            return
+        updated_at = result["updated_at"]
+        last_updated = parse_api_timestamp(state.get("last_api_updated_at"))
+        if not current_api_observation(updated_at, now) or (last_updated and updated_at <= last_updated):
+            return
+        state["last_api_updated_at"] = updated_at.isoformat()
+        state["last_error"] = None
+        if (result["instance_id"] == state["verified_instance_id"]
+                and result["region"] == config.REGION_GUARD_TARGET):
+            state["success_probe"] = None
+            return
+        first = state.get("success_probe")
+        if confirmation_matches(first, result):
+            state["success_probe"] = None
+            state["last_instance_id"] = result["instance_id"]
+            state["last_region"] = result["region"] or None
+            if result["region"] == config.REGION_GUARD_TARGET:
+                state["verified_instance_id"] = result["instance_id"]
+                self.log("ℹ️ Region-Guard neue Spielinstanz",
+                         f"**{srv.title}** ist weiterhin **{result['region']}** "
+                         f"(Instanz `{result['instance_id']}`).", discord.Color.blue())
+            else:
+                state.update(completed=False, phase="waiting_empty", restart_at=None, empty_since=None,
+                             previous_instance_id=None, verified_instance_id=None)
+                self.log("⚠️ Region-Guard Region gewechselt",
+                         f"**{srv.title}** wurde zweimal mit **{result['region'] or 'unbekannter Region'}** "
+                         "beobachtet. Ein neuer Restart ist erst nach fünf Minuten Leerstand möglich.",
+                         discord.Color.orange())
+            return
+        if not first or (first.get("instance_id"), first.get("region")) != (result["instance_id"], result["region"]):
+            state["success_probe"] = confirmation_sample(result)
+            self.trace(srv, "Erfolgs-Nachprüfung",
+                       "Abweichung erkannt; eine zweite unabhängige API-Aktualisierung wird abgewartet.")
 
     async def tick_server(self, srv, now=None):
         now = as_utc(now)
         async with self.locks[srv.id]:
             state = await self.load(srv.id, now)
-            if (not restart_allowed(state, now) or state.get("paused") or state.get("panel_disabled") or
-                    state.get("completed")):
+            if not restart_allowed(state, now) or state.get("paused") or state.get("panel_disabled"):
+                await self.save(srv.id, state)
+                return
+
+            if state.get("completed"):
+                await self._check_completed(srv, state, now)
                 await self.save(srv.id, state)
                 return
 
@@ -319,11 +409,17 @@ class RegionGuardCog(commands.Cog):
             if isinstance(players, int) and players != 0:
                 state["empty_since"] = None
                 if state.get("restart_at"):
-                    state.update(phase="waiting_empty", restart_at=None, last_query_at=None)
-                    self.log("⏸️ Region-Guard pausiert",
-                             f"**{srv.title}:** Spieler sind wieder online; kein weiterer Restart.", discord.Color.orange())
-                await self.save(srv.id, state)
-                return
+                    if not state.get("occupied_logged"):
+                        self.log("⏸️ Region-Guard Restart gesperrt",
+                                 f"**{srv.title}:** Spieler sind online. Der API-Nachweis läuft weiter, "
+                                 "aber ein weiterer Restart bleibt gesperrt.", discord.Color.orange())
+                    state["occupied_logged"] = True
+                else:
+                    await self.save(srv.id, state)
+                    return
+            elif players == 0 and state.get("restart_at") and not state.get("empty_since"):
+                state["empty_since"] = now.isoformat()
+                state["occupied_logged"] = False
 
             if not state.get("restart_at"):
                 empty_since = parse_api_timestamp(state.get("empty_since"))
@@ -340,6 +436,18 @@ class RegionGuardCog(commands.Cog):
                 if state.get("phase") == "waiting_empty":
                     state.update(phase="idle", last_error=None)
                     self.log("▶️ Region-Guard fortgesetzt", f"**{srv.title}** ist seit fünf Minuten leer.", discord.Color.blue())
+                baseline, problem = await self._server_api(srv, state)
+                if problem:
+                    self._problem(srv, state, f"Vor Restart: {problem}")
+                    await self.save(srv.id, state)
+                    return
+                if not current_api_observation(baseline["updated_at"], now):
+                    self._problem(srv, state, "Vor Restart: WarDogs-Daten sind nicht frisch genug.")
+                    await self.save(srv.id, state)
+                    return
+                state.update(last_instance_id=baseline["instance_id"],
+                             last_api_updated_at=baseline["updated_at"].isoformat(),
+                             last_region=baseline["region"] or None)
                 try:
                     if await self._restart(srv, state, now):
                         await self.save(srv.id, state)
@@ -355,6 +463,11 @@ class RegionGuardCog(commands.Cog):
             if not restarted_at:
                 state.update(restart_at=None, phase="idle")
                 self._problem(srv, state, "Ungültige gespeicherte Restart-Zeit; Vorgang wird neu aufgebaut.")
+                await self.save(srv.id, state)
+                return
+            previous_id = state.get("previous_instance_id")
+            if not previous_id:
+                self._problem(srv, state, "Vorherige Spielinstanz-ID fehlt; kein automatischer Folgerestart.")
                 await self.save(srv.id, state)
                 return
             ready_at = restarted_at + timedelta(seconds=config.REGION_GUARD_API_DELAY_SECONDS)
@@ -384,26 +497,40 @@ class RegionGuardCog(commands.Cog):
                 await self.save(srv.id, state)
                 return
             updated_at, region = result["updated_at"], result["region"]
-            state.update(last_api_updated_at=updated_at.isoformat(), last_region=region or None)
-            if not response_is_new_enough(updated_at, restarted_at):
-                self._problem(srv, state, "Warte auf einen API-Zeitstempel mindestens vier Minuten nach dem Restart.")
+            state["last_api_updated_at"] = updated_at.isoformat()
+            if not response_is_new_enough(updated_at, restarted_at) or not current_api_observation(updated_at, now):
+                self._problem(srv, state, "Warte auf einen aktuellen API-Zeitstempel mindestens vier Minuten nach dem Restart.")
+                await self.save(srv.id, state)
+                return
+            if result["instance_id"] == previous_id:
+                self._problem(srv, state, "WarDogs zeigt noch die alte Spielinstanz; kein Regionsnachweis.")
                 await self.save(srv.id, state)
                 return
             state["last_error"] = None
-            if region == config.REGION_GUARD_TARGET:
-                state.update(completed=True, phase="complete")
-                self.log("✅ Region-Guard erfolgreich",
-                         f"**{srv.title}** wurde mit Region **{region}** bestätigt.", discord.Color.green())
+            state["last_instance_id"] = result["instance_id"]
+            first = state.get("pending_confirmation")
+            if not confirmation_matches(first, result):
+                if not first or (first.get("instance_id"), first.get("region")) != (result["instance_id"], region):
+                    state["pending_confirmation"] = confirmation_sample(result)
+                    self.trace(srv, "Regionsbestätigung",
+                               "Neue Spielinstanz erkannt; warte auf eine zweite unabhängige API-Aktualisierung.")
                 await self.save(srv.id, state)
                 return
-            self.trace(srv, "Regionsentscheidung",
-                       f"Region **{region or '—'}** ist nicht **{config.REGION_GUARD_TARGET}**; weiterer Restart wird geprüft.")
-            try:
-                if not await self._restart(srv, state, now):
-                    state.update(phase="waiting_empty", restart_at=None)
-            except PterodactylError as exc:
-                state.update(panel_disabled=True, phase="disabled", restart_at=None)
-                self._problem(srv, state, exc.safe_message)
+            state["pending_confirmation"] = None
+            state["last_region"] = region or None
+            if region == config.REGION_GUARD_TARGET:
+                state.update(completed=True, phase="complete", verified_instance_id=result["instance_id"])
+                self.log("✅ Region-Guard erfolgreich",
+                         f"**{srv.title}** wurde mit neuer Spielinstanz `{result['instance_id']}` "
+                         f"zweimal in Region **{region}** bestätigt.", discord.Color.green())
+                await self.save(srv.id, state)
+                return
+            state.update(phase="waiting_empty", restart_at=None, empty_since=None,
+                         previous_instance_id=None)
+            self.log("🔁 Region-Guard falsche Region",
+                     f"**{srv.title}** meldet auf neuer Spielinstanz `{result['instance_id']}` "
+                     f"zweimal **{region or 'unbekannt'}**. Nächster Restart frühestens "
+                     "nach fünf Minuten durchgehendem Leerstand.", discord.Color.orange())
             await self.save(srv.id, state)
 
     async def tick(self):
@@ -466,7 +593,9 @@ class RegionGuardCog(commands.Cog):
                            f"**Frühfreigabe:** {'Ja' if state.get('early_enabled') else 'Nein'}\n"
                            f"**Panel deaktiviert:** {'Ja' if state.get('panel_disabled') else 'Nein'}\n"
                            f"**Heute abgeschlossen:** {'Ja' if state.get('completed') else 'Nein'}\n"
-                           f"**Letzte Region:** {state.get('last_region') or '—'}")
+                           f"**Letzte bestätigte Region:** {state.get('last_region') or '—'}\n"
+                           f"**Bestätigte Spielinstanz:** {state.get('verified_instance_id') or '—'}\n"
+                           f"**Regionsnachweis:** {'1/2' if state.get('pending_confirmation') else '—'}")
             if state.get("last_error"):
                 description += f"\n**Wartet auf:** {state['last_error']}"
             embed.add_field(name=srv.title, value=description[:1024], inline=False)
