@@ -133,7 +133,6 @@ class CombatFeed(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.rosters = {}
-        self.last_backlog_log = 0
         self.last_cleanup = 0
         if config.COMBAT_FEED_ENABLED:
             self.poll.start()
@@ -285,20 +284,9 @@ class CombatFeed(commands.Cog):
                 await cur.execute('''DELETE FROM combat_events
                     WHERE occurred_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 90 DAY) LIMIT 1000''')
                 await cur.execute('''DELETE FROM combat_feed_batches
-                    WHERE processed_at IS NOT NULL AND forwarded_at IS NOT NULL
+                    WHERE processed_at IS NOT NULL
                     AND received_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 7 DAY) LIMIT 1000''')
             self.last_cleanup = now
-        if now - self.last_backlog_log > 300:
-            async with database.transaction() as cur:
-                await cur.execute('''SELECT COUNT(*) AS total FROM combat_feed_batches
-                    WHERE forwarded_at IS NULL
-                    AND received_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 5 MINUTE)''')
-                backlog = int((await cur.fetchone())['total'])
-            if backlog:
-                self.bot.dispatch('bot_log', 'Kampf-Feed: Weiterleitung verzögert',
-                                  f'{backlog} Batch(es) warten seit über fünf Minuten auf den Anbieter.',
-                                  discord.Color.red())
-            self.last_backlog_log = now
 
     @tasks.loop(seconds=2)
     async def poll(self):

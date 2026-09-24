@@ -1,6 +1,5 @@
 """FastAPI application factory. Run from the repository root with --factory."""
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 import asyncio
 import hashlib
 import logging
@@ -29,8 +28,7 @@ from .steam import LoginError, SteamLogin
 from .i18n import LANGUAGES, translate
 from .session import ConsentSessionMiddleware
 from .visitor_tracker import VisitorTracker
-from .feed import (FeedIngressDatabase, MAX_BODY_BYTES, forwarding_loop,
-                   token_server, validate_batch)
+from .feed import FeedIngressDatabase, MAX_BODY_BYTES, token_server, validate_batch
 
 logger = logging.getLogger('kartell.web')
 PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
@@ -149,10 +147,6 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
 
     @asynccontextmanager
     async def lifespan(app):
-        feed_client = httpx.AsyncClient(timeout=12, follow_redirects=False)
-        forward_task = None
-        if settings.feed_enabled and settings.feed_db_url and all(settings.feed_tokens):
-            forward_task = asyncio.create_task(forwarding_loop(feed_db, settings.feed_tokens, feed_client))
         try:
             await asyncio.to_thread(prune_artillery_cache, ARTILLERY_CACHE_ROOT)
         except OSError:
@@ -160,13 +154,6 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         try:
             yield
         finally:
-            if forward_task:
-                forward_task.cancel()
-                try:
-                    await forward_task
-                except asyncio.CancelledError:
-                    pass
-            await feed_client.aclose()
             if feed_database is None:
                 await feed_db.close()
             await db.close()

@@ -183,8 +183,8 @@ CHALLENGE_QUESTS = (
     ) ENGINE=InnoDB""",
 )
 
-# The web ingress account can INSERT batches and SELECT/UPDATE only forwarding
-# columns. The bot owns normalized events, aggregates and quest progress.
+# The web ingress account only inserts batches. Legacy forwarding columns remain
+# in the existing table for schema compatibility; they are no longer used.
 COMBAT_FEED = (
     """CREATE TABLE IF NOT EXISTS combat_feed_batches (
         id CHAR(36) PRIMARY KEY, server_id VARCHAR(50) NOT NULL,

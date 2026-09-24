@@ -1,24 +1,17 @@
-"""Authenticated WarDogs feed ingress and durable provider forwarding.
+"""Authenticated WarDogs feed ingress for the local combat tracker.
 
 No Steam session, RCON credentials, or bot database write account is used here.
-The forwarding queue stores the original bytes, so delivery can be retried
-without reconstructing the provider's event format.
 """
 import asyncio
-from datetime import datetime, timedelta, timezone
 import json
-import logging
 import secrets
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 import aiomysql
-import httpx
 
-logger = logging.getLogger('kartell.feed')
 MAX_BODY_BYTES = 256_000
 MAX_EVENTS = 200
-PROVIDER_URL = 'https://pteroapi.pockethost.cloud/api/wardogs/feed/api/ingest/events'
 
 
 def token_server(authorization, tokens):
@@ -86,76 +79,14 @@ class FeedIngressDatabase:
             async with pool.acquire() as conn:
                 async with conn.cursor() as cur:
                     # aiomysql/PyMySQL on the AMP runtime cannot bind bytes here;
-                    # UNHEX preserves the original payload for exact forwarding.
+                    # UNHEX preserves the original payload for local processing.
                     await cur.execute('''INSERT INTO combat_feed_batches
                         (id,server_id,payload,received_at,next_forward_at)
                         VALUES (%s,%s,UNHEX(%s),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))''',
                                       (batch_id, server_id, raw.hex()))
         return batch_id
 
-    async def pending(self, limit=20):
-        pool = await self.connect()
-        async with pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute('''SELECT id,server_id,payload,forward_attempts,received_at
-                    FROM combat_feed_batches WHERE forwarded_at IS NULL
-                    AND next_forward_at<=UTC_TIMESTAMP(6)
-                    ORDER BY received_at LIMIT %s''', (limit,))
-                return await cur.fetchall()
-
-    async def forwarded(self, batch_id):
-        pool = await self.connect()
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute('''UPDATE combat_feed_batches SET forwarded_at=UTC_TIMESTAMP(6),
-                    last_forward_error=NULL WHERE id=%s AND forwarded_at IS NULL''', (batch_id,))
-
-    async def failed(self, batch_id, attempts, reason):
-        delay = min(300, 2 ** min(attempts, 8))
-        pool = await self.connect()
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute('''UPDATE combat_feed_batches SET forward_attempts=forward_attempts+1,
-                    next_forward_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL %s SECOND),
-                    last_forward_error=%s WHERE id=%s AND forwarded_at IS NULL''',
-                                  (delay, reason[:100], batch_id))
-
     async def close(self):
         if self.pool:
             self.pool.close()
             await self.pool.wait_closed()
-
-
-async def forward_once(db, tokens, client):
-    """At-least-once delivery; never discard a failed batch."""
-    # Avoid bursting up to 20 requests into the provider at once. The outer
-    # loop already spaces calls by two seconds, while the queue retains retries.
-    rows = await db.pending(limit=1)
-    for row in rows:
-        token = tokens[int(row['server_id'][-1]) - 1]
-        try:
-            response = await client.post(PROVIDER_URL, content=row['payload'],
-                                         headers={'Authorization': f'Bearer {token}',
-                                                  'Content-Type': 'application/json'})
-            response.raise_for_status()
-        except (httpx.HTTPError, ValueError) as exc:
-            # No URL/headers/body in logs: they may contain a bearer credential.
-            reason = (f'HTTP {exc.response.status_code}'
-                      if isinstance(exc, httpx.HTTPStatusError) else type(exc).__name__)
-            await db.failed(row['id'], row['forward_attempts'], reason)
-            age = datetime.now(timezone.utc) - row['received_at'].replace(tzinfo=timezone.utc)
-            if age > timedelta(minutes=5):
-                logger.error('Feed forwarding backlog: %s, age %d seconds',
-                             row['server_id'], int(age.total_seconds()))
-        else:
-            await db.forwarded(row['id'])
-    return len(rows)
-
-
-async def forwarding_loop(db, tokens, client):
-    while True:
-        try:
-            await forward_once(db, tokens, client)
-        except (aiomysql.Error, OSError, RuntimeError) as exc:
-            logger.error('Feed forwarding unavailable: %s', type(exc).__name__)
-        await asyncio.sleep(2)

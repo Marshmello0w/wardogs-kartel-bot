@@ -8,7 +8,6 @@ import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 from fastapi.testclient import TestClient
 
 os.environ['PYTHON_DOTENV_DISABLED'] = '1'
@@ -21,7 +20,7 @@ from cogs.discord_logger import DiscordLogger
 from cogs.kill_feed import BATCH_SIZE, MAX_MESSAGE_CHARS, KillFeed, kill_line, recent_batch
 from domain.combat_feed import normalized_kill, relation, roster_for_event
 from web.app import create_app
-from web.feed import FeedIngressDatabase, MAX_BODY_BYTES, forward_once, token_server, validate_batch
+from web.feed import FeedIngressDatabase, MAX_BODY_BYTES, token_server, validate_batch
 from web.settings import Settings
 
 STEAM_1 = '76561199711897930'
@@ -351,35 +350,6 @@ class DiscordPlainLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('content', kwargs)
 
 
-class ForwardingTests(unittest.IsolatedAsyncioTestCase):
-    async def test_failure_is_retried_and_success_sends_identical_payload(self):
-        raw = json.dumps(batch()).encode()
-        class Queue:
-            def __init__(self):
-                self.rows = [{'id': 'a', 'server_id': 'server2', 'payload': raw,
-                              'forward_attempts': 0, 'received_at': datetime.now(timezone.utc)}]
-                self.limits = []
-                self.failed = AsyncMock()
-                self.forwarded = AsyncMock()
-            async def pending(self, limit=20):
-                self.limits.append(limit)
-                return self.rows
-        queue = Queue()
-        sent = []
-        def handler(request):
-            sent.append((request.headers['authorization'], request.content))
-            return httpx.Response(503 if len(sent) == 1 else 204)
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            await forward_once(queue, ('one', 'two', 'three'), client)
-            queue.failed.assert_awaited_once()
-            self.assertEqual(queue.failed.call_args.args[2], 'HTTP 503')
-            queue.forwarded.assert_not_awaited()
-            await forward_once(queue, ('one', 'two', 'three'), client)
-            queue.forwarded.assert_awaited_once_with('a')
-        self.assertEqual(sent, [('Bearer two', raw), ('Bearer two', raw)])
-        self.assertEqual(queue.limits, [1, 1])
-
-
 class IngressTests(unittest.TestCase):
     def test_disabled_and_authenticated_ingress(self):
         class Queue:
@@ -388,7 +358,7 @@ class IngressTests(unittest.TestCase):
             async def receive(self, server_id, raw):
                 self.received.append((server_id, raw))
             async def pending(self, limit=20):
-                return []
+                raise AssertionError('Ingress must not start provider forwarding')
         class Repo:
             pass
         queue = Queue()
@@ -439,6 +409,27 @@ class IngressDatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('UNHEX(%s)', sql)
         self.assertIsInstance(args[2], str)
         self.assertEqual(bytes.fromhex(args[2]), raw)
+
+
+class FeedMaintenanceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_processed_batches_expire_without_forwarding(self):
+        statements = []
+
+        class Cursor:
+            async def execute(self, sql):
+                statements.append(sql)
+
+        @asynccontextmanager
+        async def transaction():
+            yield Cursor()
+
+        with (patch('cogs.combat_feed.config.COMBAT_FEED_ENABLED', False),
+              patch('cogs.combat_feed.database.transaction', transaction)):
+            cog = CombatFeed(MagicMock())
+            await cog.maintenance()
+        cleanup = next(sql for sql in statements if 'DELETE FROM combat_feed_batches' in sql)
+        self.assertIn('processed_at IS NOT NULL', cleanup)
+        self.assertNotIn('forwarded_at', cleanup)
 
 
 if __name__ == '__main__':

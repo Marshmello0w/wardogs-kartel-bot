@@ -121,41 +121,35 @@ GRANT INSERT ON `DATABASE_NAME`.`reward_requests` TO 'kartell_rewards_submit'@'W
 Der Bot verarbeitet die Anfrage innerhalb weniger Sekunden, prüft Punkte, VIP-Slots und
 bei einem Fraktionswechsel den Live-RCON-Status und ist der einzige Prozess, der Werte ändert.
 
-## Kampf-Feed (noch nicht live)
+## Kampf-Feed
 
 Migration 11 legt die Feed- und Kampfstatistiktabellen an. Der bisherige
-`kartell_web`-Nutzer bleibt lesend. Für den Empfang und die at-least-once
-Weiterleitung erhält ein **separater** Nutzer ausschließlich Rechte auf die
-Eingangswarteschlange:
+`kartell_web`-Nutzer bleibt lesend. Für den Empfang erhält ein **separater**
+Nutzer ausschließlich INSERT auf die Eingangstabelle:
 
 ```sql
 CREATE USER 'kartell_feed_ingress'@'WEB_HOST' IDENTIFIED BY 'GENERATED_SECRET';
 GRANT INSERT (id,server_id,payload,received_at,next_forward_at)
   ON `DATABASE_NAME`.`combat_feed_batches` TO 'kartell_feed_ingress'@'WEB_HOST';
-GRANT SELECT (id,server_id,payload,forward_attempts,received_at,forwarded_at,next_forward_at)
-  ON `DATABASE_NAME`.`combat_feed_batches` TO 'kartell_feed_ingress'@'WEB_HOST';
-GRANT UPDATE (forwarded_at,forward_attempts,next_forward_at,last_forward_error)
-  ON `DATABASE_NAME`.`combat_feed_batches` TO 'kartell_feed_ingress'@'WEB_HOST';
 ```
 
 `WEB_FEED_TOKEN_SERVER1` bis `SERVER3` und `WEB_FEED_DB_CONNECTION_URL` gehören
 nur in die Web-`.env`; die Tokens dürfen weder in Git noch im Bot-Log stehen.
-Der Web-Empfänger ist mit `WEB_FEED_ENABLED=false` ausgeschaltet. Nach dem
-separaten Go-live-Entscheid zuerst Migration/Rechte und Web-Empfang aktivieren,
-dann auf jedem Spielserver **nur** `WDServerFeed.Url` auf
+Der Web-Empfänger ist mit `WEB_FEED_ENABLED=false` ausgeschaltet. Zum Go-live
+zuerst Migration/Rechte und Web-Empfang aktivieren, dann auf jedem Spielserver
+**nur** `WDServerFeed.Url` auf
 `https://kartell.marshmello0w.de` setzen; der Spielserver hängt
 `/api/ingest/events` selbst an. Den jeweiligen Token unverändert lassen und
-Spielserver neu starten. Erst wenn von **allen drei** Servern echte Ereignisse
-empfangen **und** an den bisherigen Anbieter weitergeleitet wurden,
-`COMBAT_FEED_ENABLED=true` im Bot setzen. Bei fehlgeschlagener Verifikation
-die bisherige Feed-URL beibehalten oder wiederherstellen. Für Tests keine
-künstlichen Kills an die Live-API senden.
+Spielserver neu starten. Der Bot verarbeitet die empfangenen Ereignisse lokal;
+es findet keine Weiterleitung an den bisherigen Anbieter statt. Für Tests
+keine künstlichen Kills an die Live-API senden.
 
-Die Weiterleitung ist wiederholbar, aber nicht exakt einmal garantiert.
 Ist das Portal bereits vor dem Empfang nicht erreichbar, hängt ein möglicher
 Verlust vom Retry-Verhalten des Spiels ab. Ein Bot-Neustart vergibt keine
 Fraktionsquests für inzwischen veraltete Roster-Daten. Einzelereignisse werden
-nach 90 Tagen gelöscht, Aggregate bleiben erhalten.
+nach 90 Tagen und verarbeitete Eingangs-Batches nach sieben Tagen gelöscht;
+Aggregate bleiben erhalten. Bestehende SELECT-/UPDATE-Rechte des Feed-Nutzers
+aus der früheren Weiterleitung können in MySQL entzogen werden.
 
 ## Daten und Sichtbarkeit
 
