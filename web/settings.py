@@ -14,6 +14,9 @@ class Settings:
     base_url: str = 'https://kartell.marshmello0w.de'
     db_url: str = field(default='', repr=False)
     reward_db_url: str = field(default='', repr=False)
+    feed_db_url: str = field(default='', repr=False)
+    feed_tokens: tuple[str, str, str] = field(default=('', '', ''), repr=False)
+    feed_enabled: bool = False
     steam_key: str = field(default='', repr=False)
     session_secret: str = field(default='', repr=False)
 
@@ -26,6 +29,8 @@ class Settings:
             raise ValueError('PUBLIC_BASE_URL must be an origin without path or credentials')
         if len(self.session_secret) < 32:
             raise ValueError('WEB_SESSION_SECRET must contain at least 32 characters')
+        if self.feed_enabled and all(self.feed_tokens) and len(set(self.feed_tokens)) != 3:
+            raise ValueError('Feed tokens must identify three distinct servers')
         object.__setattr__(self, 'base_url', self.base_url.rstrip('/'))
 
     @property
@@ -43,5 +48,8 @@ class Settings:
         return cls(base_url=values.get('PUBLIC_BASE_URL', cls.base_url),
                    db_url=values.get('WEB_DB_CONNECTION_URL', ''),
                    reward_db_url=values.get('WEB_REWARD_DB_CONNECTION_URL', ''),
+                   feed_db_url=values.get('WEB_FEED_DB_CONNECTION_URL', ''),
+                   feed_tokens=tuple(values.get(f'WEB_FEED_TOKEN_SERVER{i}', '') for i in range(1, 4)),
+                   feed_enabled=values.get('WEB_FEED_ENABLED', '').casefold() in ('1', 'true', 'yes'),
                    steam_key=values.get('STEAM_WEB_API_KEY', ''),
                    session_secret=values.get('WEB_SESSION_SECRET', ''))

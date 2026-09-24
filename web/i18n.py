@@ -125,6 +125,41 @@ TEXT['en'].update({
     'challenge_desc_consistency': 'Get at least 5 kills in each of three rounds today.',
 })
 
+TEXT['de'].update({
+    'combat_title': 'Kampfstatistiken',
+    'combat_since': 'Seit Beginn der Feed-Erfassung; getrennt von den bisherigen RCON-Gesamtwerten.',
+    'combat_kills': 'Erfasste Kills', 'combat_deaths': 'Erfasste Tode',
+    'combat_headshots': 'Headshots', 'combat_headshot': 'Headshot',
+    'combat_longest': 'Weitester Kill', 'combat_weapons': 'Häufigste Waffen',
+    'combat_recent': 'Letzte zehn Kampfereignisse', 'combat_event_kill': 'Kill',
+    'combat_event_death': 'Tod', 'combat_no_events': 'Noch keine Kampfereignisse erfasst.',
+    'challenge_round_feed_headshots': 'Präzisionsrunde',
+    'challenge_desc_round_feed_headshots': '3 Headshots in derselben Runde.',
+    'challenge_round_feed_long_kills': 'Fernschütze',
+    'challenge_desc_round_feed_long_kills': 'Ein Kill aus mindestens 150 m in derselben Runde.',
+    'challenge_daily_feed_headshots': 'Präzisionstag',
+    'challenge_desc_daily_feed_headshots': '10 Headshots an einem Berliner Kalendertag.',
+    'challenge_daily_feed_long_kills': 'Distanzjäger',
+    'challenge_desc_daily_feed_long_kills': '3 Kills aus mindestens 150 m an einem Berliner Kalendertag.',
+})
+TEXT['en'].update({
+    'combat_title': 'Combat statistics',
+    'combat_since': 'Since feed tracking began; separate from existing RCON lifetime totals.',
+    'combat_kills': 'Recorded kills', 'combat_deaths': 'Recorded deaths',
+    'combat_headshots': 'Headshots', 'combat_headshot': 'Headshot',
+    'combat_longest': 'Longest kill', 'combat_weapons': 'Most used weapons',
+    'combat_recent': 'Last ten combat events', 'combat_event_kill': 'Kill',
+    'combat_event_death': 'Death', 'combat_no_events': 'No combat events recorded yet.',
+    'challenge_round_feed_headshots': 'Precision round',
+    'challenge_desc_round_feed_headshots': 'Get 3 headshots in the same round.',
+    'challenge_round_feed_long_kills': 'Long-range shot',
+    'challenge_desc_round_feed_long_kills': 'Get one kill from at least 150 m in the same round.',
+    'challenge_daily_feed_headshots': 'Precision day',
+    'challenge_desc_daily_feed_headshots': 'Get 10 headshots in one Berlin calendar day.',
+    'challenge_daily_feed_long_kills': 'Distance hunter',
+    'challenge_desc_daily_feed_long_kills': 'Get 3 kills from at least 150 m in one Berlin calendar day.',
+})
+
 
 def translate(language: str, key: str, **values) -> str:
     text = TEXT.get(language, TEXT['de']).get(key, TEXT['de'].get(key, key))

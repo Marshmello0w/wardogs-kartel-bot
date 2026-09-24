@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
+import aiomysql
 from jinja2 import pass_context
 from starlette.exceptions import HTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -28,6 +29,8 @@ from .steam import LoginError, SteamLogin
 from .i18n import LANGUAGES, translate
 from .session import ConsentSessionMiddleware
 from .visitor_tracker import VisitorTracker
+from .feed import (FeedIngressDatabase, MAX_BODY_BYTES, forwarding_loop,
+                   token_server, validate_batch)
 
 logger = logging.getLogger('kartell.web')
 PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
@@ -129,10 +132,12 @@ def internal_redirect_path(value):
     return target
 
 
-def create_app(settings=None, repository=None, steam_client=None, reward_submission=None, asset_client=None):
+def create_app(settings=None, repository=None, steam_client=None, reward_submission=None,
+               asset_client=None, feed_database=None):
     settings = settings or Settings.from_env()
     db = ReadDatabase(settings.db_url)
     reward_db = reward_submission or RewardSubmissionDatabase(settings.reward_db_url)
+    feed_db = feed_database or FeedIngressDatabase(settings.feed_db_url)
     repo = repository or Repository(db)
     visitors = VisitorTracker(ROOT / 'data' / 'unique_visitors.json', settings.session_secret)
     # API keys and OpenID signatures must not appear in request logs.
@@ -144,11 +149,26 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
 
     @asynccontextmanager
     async def lifespan(app):
+        feed_client = httpx.AsyncClient(timeout=12, follow_redirects=False)
+        forward_task = None
+        if settings.feed_enabled and settings.feed_db_url and all(settings.feed_tokens):
+            forward_task = asyncio.create_task(forwarding_loop(feed_db, settings.feed_tokens, feed_client))
         try:
             await asyncio.to_thread(prune_artillery_cache, ARTILLERY_CACHE_ROOT)
         except OSError:
             logger.warning('Artillery asset cache unavailable')
-        yield
+        try:
+            yield
+        finally:
+            if forward_task:
+                forward_task.cancel()
+                try:
+                    await forward_task
+                except asyncio.CancelledError:
+                    pass
+            await feed_client.aclose()
+            if feed_database is None:
+                await feed_db.close()
         await db.close()
         if reward_submission is None:
             await reward_db.close()
@@ -159,6 +179,36 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.repo, app.state.steam, app.state.reward_db, app.state.visitors = repo, steam, reward_db, visitors
+
+    @app.post('/api/ingest/events', include_in_schema=False)
+    async def ingest_events(request: Request):
+        if not settings.feed_enabled or not settings.feed_db_url or not all(settings.feed_tokens):
+            raise HTTPException(503)
+        server_id = token_server(request.headers.get('authorization', ''), settings.feed_tokens)
+        if server_id is None:
+            raise HTTPException(401)
+        try:
+            if int(request.headers.get('content-length', '0')) > MAX_BODY_BYTES:
+                raise HTTPException(413)
+        except ValueError:
+            raise HTTPException(400)
+        chunks, size = [], 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > MAX_BODY_BYTES:
+                raise HTTPException(413)
+            chunks.append(chunk)
+        raw = b''.join(chunks)
+        try:
+            validate_batch(raw)
+        except ValueError:
+            raise HTTPException(400)
+        try:
+            await feed_db.receive(server_id, raw)
+        except (aiomysql.Error, OSError, RuntimeError, TimeoutError):
+            logger.error('Feed ingress database unavailable for %s', server_id)
+            raise HTTPException(503)
+        return Response(status_code=202)
     app.add_middleware(ConsentSessionMiddleware, secret_key=settings.session_secret,
                        session_cookie='kartell_session', max_age=43200,
                        same_site='lax', https_only=settings.secure)
@@ -420,7 +470,8 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         # No Steam ID from URL, forms, or query parameters is ever consulted.
         data = await repo.profile(user['steam_id'])
         return render(request, 'profile.html', profile=data,
-                      display_name=user.get('name') or (data['names'][0] if data['names'] else 'Dein Profil'))
+                      display_name=user.get('name') or (data['names'][0] if data['names'] else 'Dein Profil'),
+                      refresh=True)
 
     @app.get('/quests')
     async def quests(request: Request):

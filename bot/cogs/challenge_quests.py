@@ -62,7 +62,7 @@ def valid_counters(player):
                for value in values)
 
 
-def advance_round(row, player, faction, observed_at, *, first_sample=False):
+def advance_round(row, player, faction, observed_at, *, first_sample=False, feed_streak=False):
     """Conservatively advance one persisted round row; never infer through gaps."""
     values = {key: int(player[key]) for key in ('kills', 'deaths', 'cash')}
     result = dict(row)
@@ -83,8 +83,13 @@ def advance_round(row, player, faction, observed_at, *, first_sample=False):
         for key in ('kills', 'deaths', 'cash'):
             result[key] = int(row[key]) + delta[key]
         result['active_seconds'] = int(row['active_seconds']) + seconds
-        result['streak'] = 0 if delta['deaths'] else int(row['streak']) + delta['kills']
-        result['best_streak'] = max(int(row['best_streak']), result['streak'])
+        if feed_streak and delta['deaths']:
+            # A missing/delayed death feed must not preserve a possible streak.
+            # Never *add* RCON kill deltas to a feed-owned streak.
+            result['streak'] = 0
+        elif not feed_streak:
+            result['streak'] = 0 if delta['deaths'] else int(row['streak']) + delta['kills']
+            result['best_streak'] = max(int(row['best_streak']), result['streak'])
     else:
         result['streak'] = 0
     return result, delta, seconds, previous_at if safe else None
@@ -163,7 +168,8 @@ class ChallengeQuests(commands.Cog):
             return
 
         row, delta, seconds, interval_start = advance_round(
-            previous, player, faction, observed_at, first_sample=first_sample)
+            previous, player, faction, observed_at, first_sample=first_sample,
+            feed_streak=config.COMBAT_FEED_ENABLED)
         day = berlin_day(observed_at)
         additions = defaultdict(lambda: {'kills': 0, 'cash': 0, 'seconds': 0})
         # Counters have no event timestamps. When a polling interval spans

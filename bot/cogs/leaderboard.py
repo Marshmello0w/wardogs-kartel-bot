@@ -176,6 +176,7 @@ class Leaderboard(commands.Cog):
                         await challenges.process_sample(srv.id, state, players)
                     except Exception as exc:
                         self.bot.health.error(challenges.health_key, exc)
+                self.bot.dispatch('player_sampled', srv.id, state, players)
                 self.last_sample[srv.id] = time.monotonic()
                 self.bot.health.ok(f'Leaderboard-Erfassung {srv.title}')
         except Exception as exc:

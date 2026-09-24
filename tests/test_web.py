@@ -73,6 +73,18 @@ class FixtureDatabase:
             return [{'amount': 5, 'kind': 'weekly_team', 'created_at': datetime(2026, 9, 20, 10)},
                     {'amount': 1, 'kind': 'challenge_round', 'reference_key': 'server1:round-1:streak',
                      'created_at': datetime(2026, 9, 20, 9)}] if args and args[0] == STEAM_ID else []
+        if 'FROM combat_player_stats' in sql:
+            return [{'server_id': 'server1', 'kills': 10, 'deaths': 2,
+                     'headshots': 4, 'longest_kill_m': 166.5}] if args[0] == STEAM_ID else []
+        if 'FROM combat_weapon_stats' in sql:
+            return [{'server_id': 'server1', 'weapon': 'Id.Item.Rifle', 'kills': 7}] if args[0] == STEAM_ID else []
+        if 'FROM combat_events' in sql:
+            return [{'server_id': 'server1', 'occurred_at': datetime(2026, 9, 24, 12),
+                     'killer_steam_id': STEAM_ID, 'victim_steam_id': OTHER_ID,
+                     'map_name': 'Kavkazi', 'cause': '<script>unsafe</script>',
+                     'distance_m': 166.5, 'headshot': 1}] if args[0] == STEAM_ID else []
+        if 'FROM combat_daily_quests' in sql or 'FROM combat_round_quests' in sql:
+            return []
         if 'FROM challenge_daily_progress' in sql:
             return []
         if 'FROM challenge_round_progress' in sql:
@@ -195,8 +207,11 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result['bans']), 1)
         self.assertEqual(result['servers'][2]['kills_7d'], 5)
         self.assertEqual(result['quest_points'], 17)
+        self.assertEqual(result['combat']['headshots'], 4)
+        self.assertEqual(result['combat']['headshot_percent'], 40)
+        self.assertEqual(result['combat']['longest_kill_m'], 166.5)
         for sql, args in db.calls:
-            self.assertEqual(args, (STEAM_ID,))
+            self.assertEqual(args, (STEAM_ID, STEAM_ID) if 'FROM combat_events' in sql else (STEAM_ID,))
             self.assertNotIn('admin_mention', sql)
             self.assertNotIn('admin_jobs', sql)
 
@@ -320,6 +335,9 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertIn(STEAM_ID, result.text)
         self.assertNotIn(OTHER_ID, result.text)
+        self.assertIn('Kampfstatistiken', result.text)
+        self.assertIn('&lt;script&gt;unsafe&lt;/script&gt;', result.text)
+        self.assertNotIn('<script>unsafe</script>', result.text)
         self.assertIn('&lt;script&gt;secret&lt;/script&gt;', result.text)
         self.assertNotIn('<script>secret</script>', result.text)
         quests = self.client.get('/quests')
@@ -364,6 +382,7 @@ class RouteTests(unittest.TestCase):
         response = self.client.post('/language', data={'csrf': csrf, 'language': 'en', 'next': '///attacker.example'},
                                     headers={'origin': SETTINGS.base_url}, follow_redirects=False)
         self.assertEqual(response.headers['location'], '/')
+        self.assertIn('Combat statistics', self.client.get('/me').text)
 
     def test_challenge_quests_are_translated_on_private_page(self):
         self.login()

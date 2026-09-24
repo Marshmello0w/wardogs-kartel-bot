@@ -257,6 +257,40 @@ class Repository:
         bans = await self.db.query('''SELECT reason,duration_str,issued_at,expires_at,status
             FROM global_bans WHERE steam_id=%s ORDER BY issued_at DESC,id DESC''', args)
         quest_points = await self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', args)
+        combat_stats, combat_weapons, combat_recent = await asyncio.gather(
+            self.db.query('''SELECT server_id,kills,deaths,headshots,longest_kill_m
+                FROM combat_player_stats WHERE steam_id=%s''', args),
+            self.db.query('''SELECT server_id,weapon,kills FROM combat_weapon_stats
+                WHERE steam_id=%s ORDER BY kills DESC,weapon''', args),
+            self.db.query('''SELECT server_id,occurred_at,killer_steam_id,victim_steam_id,
+                map_name,cause,distance_m,headshot FROM combat_events
+                WHERE killer_steam_id=%s OR victim_steam_id=%s
+                ORDER BY occurred_at DESC,batch_index DESC LIMIT 10''', (steam_id, steam_id)),
+        )
+        combat_servers = []
+        for key, title in SERVERS.items():
+            row = next((value for value in combat_stats if value['server_id'] == key), {})
+            kills = int(row.get('kills') or 0)
+            combat_servers.append({'id': key, 'title': title, 'kills': kills,
+                'deaths': int(row.get('deaths') or 0),
+                'headshots': int(row.get('headshots') or 0),
+                'headshot_percent': (100 * int(row.get('headshots') or 0) / kills) if kills else 0,
+                'longest_kill_m': row.get('longest_kill_m') or 0,
+                'weapons': [value for value in combat_weapons if value['server_id'] == key][:3]})
+        weapon_totals = {}
+        for value in combat_weapons:
+            weapon_totals[value['weapon']] = weapon_totals.get(value['weapon'], 0) + int(value['kills'])
+        total_kills = sum(row['kills'] for row in combat_servers)
+        combat = {'servers': combat_servers, 'kills': total_kills,
+                  'deaths': sum(row['deaths'] for row in combat_servers),
+                  'headshots': sum(row['headshots'] for row in combat_servers),
+                  'headshot_percent': (100 * sum(row['headshots'] for row in combat_servers) / total_kills)
+                                      if total_kills else 0,
+                  'longest_kill_m': max((row['longest_kill_m'] for row in combat_servers), default=0),
+                  'weapons': sorted(weapon_totals.items(), key=lambda item: (-item[1], item[0]))[:3],
+                  'recent': [{**row, 'kind': 'kill' if row['killer_steam_id'] == steam_id
+                              and row['victim_steam_id'] != steam_id else 'death'}
+                             for row in combat_recent]}
         servers = {key: {'id': key, 'title': title, 'factions': [], 'ping': None,
                          'playtime_seconds': 0, 'last_seen': None, 'has_data': False} for key, title in SERVERS.items()}
         known_names = {r['name'] for r in names if r['name']}
@@ -283,14 +317,16 @@ class Repository:
         return {'steam_id': steam_id, 'names': sorted(known_names, key=str.casefold),
                 'servers': list(servers.values()), 'totals': totals, 'bans': bans,
                 'quest_points': int(quest_points[0]['points']) if quest_points else 0,
-                'has_data': any(s['has_data'] for s in servers.values()) or bool(bans) or bool(quest_points)}
+                'combat': combat,
+                'has_data': any(s['has_data'] for s in servers.values()) or bool(bans)
+                            or bool(quest_points) or bool(combat_stats)}
 
     async def quests(self, steam_id):
         """Return only the authenticated player's read-only quest state."""
         args = (steam_id,)
         week_start = berlin_week_start()
         today = datetime.now(timezone.utc).astimezone(BERLIN).date()
-        points, progress, cash, teams, history, seed_sessions, daily_rows, round_rows, round_counts = await asyncio.gather(
+        points, progress, cash, teams, history, seed_sessions, daily_rows, round_rows, round_counts, combat_daily_rows = await asyncio.gather(
             self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', args),
             self.db.query('''SELECT eligible_playtime_seconds,awarded_eligible_hours,awarded_cash_blocks
                 FROM quest_progress WHERE steam_id=%s''', args),
@@ -312,6 +348,8 @@ class Repository:
                 ORDER BY last_seen DESC LIMIT 1''', args),
             self.db.query('''SELECT COUNT(*) AS count FROM challenge_daily_round_kills
                 WHERE day=%s AND steam_id=%s AND kills>=5''', (today, steam_id)),
+            self.db.query('''SELECT headshots,long_kills,completed_mask,awarded_mask
+                FROM combat_daily_quests WHERE day=%s AND steam_id=%s''', (today, steam_id)),
         )
         eligible_seconds = int(progress[0]['eligible_playtime_seconds']) if progress else 0
         lifetime_cash = int(cash[0]['lifetime_cash']) if cash else 0
@@ -331,6 +369,12 @@ class Repository:
             })
         daily = daily_rows[0] if daily_rows else {}
         latest_round = round_rows[0] if round_rows else {}
+        combat_round_rows = await self.db.query('''SELECT headshots,long_kills,
+            completed_mask,awarded_mask FROM combat_round_quests
+            WHERE server_id=%s AND round_id=%s AND steam_id=%s''',
+            (latest_round.get('server_id', ''), latest_round.get('round_id', ''), steam_id)) if latest_round else []
+        combat_round = combat_round_rows[0] if combat_round_rows else {}
+        combat_daily = combat_daily_rows[0] if combat_daily_rows else {}
         seen_at = latest_round.get('last_seen')
         if seen_at and seen_at.tzinfo is None:
             seen_at = seen_at.replace(tzinfo=timezone.utc)
@@ -348,6 +392,8 @@ class Repository:
             card('round_time', latest_round.get('active_seconds'), 40 * 60, latest_round, 3),
             card('fighter', latest_round.get('kills'), 10, latest_round, 4,
                  secondary=(max(0, int(latest_round.get('deaths') or 0)), 3)),
+            card('round_feed_headshots', combat_round.get('headshots'), 3, combat_round, 0),
+            card('round_feed_long_kills', combat_round.get('long_kills'), 1, combat_round, 1),
         ]
         qualified_rounds = int(round_counts[0]['count']) if round_counts else 0
         daily_cards = [
@@ -356,6 +402,8 @@ class Repository:
             card('daily_cash', daily.get('cash'), 200_000, daily, 2),
             card('daily_time', daily.get('active_seconds'), 90 * 60, daily, 3),
             card('consistency', qualified_rounds, 3, daily, 4),
+            card('daily_feed_headshots', combat_daily.get('headshots'), 10, combat_daily, 0),
+            card('daily_feed_long_kills', combat_daily.get('long_kills'), 3, combat_daily, 1),
         ]
         round_keys = {'first', 'streak', 'cash', 'time', 'fighter'}
         daily_keys = {'hunter', 'big_hunt', 'cash', 'time', 'consistency'}
@@ -366,6 +414,8 @@ class Repository:
                 entry['source_key'] = f'challenge_{"round_" if key in ("cash", "time") else ""}{key}'
             elif kind == 'challenge_daily' and key in daily_keys:
                 entry['source_key'] = f'challenge_{"daily_" if key in ("cash", "time") else ""}{key}'
+            elif kind in ('challenge_round', 'challenge_daily') and key in ('feed_headshots', 'feed_long_kills'):
+                entry['source_key'] = f'challenge_{"round" if kind == "challenge_round" else "daily"}_{key}'
         return {
             'points': int(points[0]['points']) if points else 0,
             'eligible_seconds': eligible_seconds,

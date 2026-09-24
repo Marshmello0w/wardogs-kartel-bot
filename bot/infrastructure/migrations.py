@@ -183,6 +183,63 @@ CHALLENGE_QUESTS = (
     ) ENGINE=InnoDB""",
 )
 
+# The web ingress account can INSERT batches and SELECT/UPDATE only forwarding
+# columns. The bot owns normalized events, aggregates and quest progress.
+COMBAT_FEED = (
+    """CREATE TABLE IF NOT EXISTS combat_feed_batches (
+        id CHAR(36) PRIMARY KEY, server_id VARCHAR(50) NOT NULL,
+        payload LONGBLOB NOT NULL, received_at DATETIME(6) NOT NULL,
+        forwarded_at DATETIME(6) NULL, processed_at DATETIME(6) NULL,
+        forward_attempts INT NOT NULL DEFAULT 0, next_forward_at DATETIME(6) NOT NULL,
+        last_forward_error VARCHAR(100) NULL,
+        INDEX(next_forward_at, forwarded_at), INDEX(processed_at, received_at)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS combat_events (
+        server_id VARCHAR(50) NOT NULL, event_id VARCHAR(100) NOT NULL,
+        instance_id VARCHAR(100) NULL, round_id CHAR(36) NULL,
+        occurred_at DATETIME(6) NOT NULL, batch_index SMALLINT NOT NULL DEFAULT 0,
+        event_time DOUBLE NULL,
+        killer_steam_id VARCHAR(50) NULL, victim_steam_id VARCHAR(50) NULL,
+        killer_name VARCHAR(100) NULL, victim_name VARCHAR(100) NULL,
+        map_name VARCHAR(100) NULL, cause VARCHAR(160) NULL,
+        distance_m DOUBLE NULL, headshot TINYINT(1) NOT NULL DEFAULT 0,
+        suicide TINYINT(1) NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id,event_id),
+        INDEX(killer_steam_id,occurred_at), INDEX(victim_steam_id,occurred_at),
+        INDEX(server_id,killer_steam_id,occurred_at), INDEX(occurred_at)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS combat_player_stats (
+        server_id VARCHAR(50) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        kills BIGINT NOT NULL DEFAULT 0, deaths BIGINT NOT NULL DEFAULT 0,
+        headshots BIGINT NOT NULL DEFAULT 0, longest_kill_m DOUBLE NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id,steam_id)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS combat_weapon_stats (
+        server_id VARCHAR(50) NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        weapon VARCHAR(160) NOT NULL, kills BIGINT NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id,steam_id,weapon)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS combat_round_quests (
+        server_id VARCHAR(50) NOT NULL,round_id CHAR(36) NOT NULL,
+        steam_id VARCHAR(50) NOT NULL,headshots INT NOT NULL DEFAULT 0,
+        long_kills INT NOT NULL DEFAULT 0,completed_mask INT NOT NULL DEFAULT 0,
+        awarded_mask INT NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id,round_id,steam_id),INDEX(steam_id,round_id)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS combat_daily_quests (
+        day DATE NOT NULL,steam_id VARCHAR(50) NOT NULL,
+        headshots INT NOT NULL DEFAULT 0,long_kills INT NOT NULL DEFAULT 0,
+        completed_mask INT NOT NULL DEFAULT 0,awarded_mask INT NOT NULL DEFAULT 0,
+        PRIMARY KEY(day,steam_id),INDEX(steam_id,day)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS combat_alert_state (
+        server_id VARCHAR(50) NOT NULL,steam_id VARCHAR(50) NOT NULL,
+        rapid_last_at DATETIME(6) NULL,teamkill_count INT NOT NULL DEFAULT 0,
+        teamkill_first_at DATETIME(6) NULL,teamkill_last_at DATETIME(6) NULL,
+        PRIMARY KEY(server_id,steam_id)
+    ) ENGINE=InnoDB""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
@@ -197,6 +254,7 @@ MIGRATIONS = (
     (8, SEED_QUEST),
     (9, DAILY_PLAYTIME),
     (10, CHALLENGE_QUESTS),
+    (11, COMBAT_FEED),
 )
 
 
