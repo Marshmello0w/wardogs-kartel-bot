@@ -358,9 +358,11 @@ class ForwardingTests(unittest.IsolatedAsyncioTestCase):
             def __init__(self):
                 self.rows = [{'id': 'a', 'server_id': 'server2', 'payload': raw,
                               'forward_attempts': 0, 'received_at': datetime.now(timezone.utc)}]
+                self.limits = []
                 self.failed = AsyncMock()
                 self.forwarded = AsyncMock()
             async def pending(self, limit=20):
+                self.limits.append(limit)
                 return self.rows
         queue = Queue()
         sent = []
@@ -375,6 +377,7 @@ class ForwardingTests(unittest.IsolatedAsyncioTestCase):
             await forward_once(queue, ('one', 'two', 'three'), client)
             queue.forwarded.assert_awaited_once_with('a')
         self.assertEqual(sent, [('Bearer two', raw), ('Bearer two', raw)])
+        self.assertEqual(queue.limits, [1, 1])
 
 
 class IngressTests(unittest.TestCase):

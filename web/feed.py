@@ -128,7 +128,9 @@ class FeedIngressDatabase:
 
 async def forward_once(db, tokens, client):
     """At-least-once delivery; never discard a failed batch."""
-    rows = await db.pending()
+    # Avoid bursting up to 20 requests into the provider at once. The outer
+    # loop already spaces calls by two seconds, while the queue retains retries.
+    rows = await db.pending(limit=1)
     for row in rows:
         token = tokens[int(row['server_id'][-1]) - 1]
         try:
