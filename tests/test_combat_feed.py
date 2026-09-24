@@ -370,6 +370,7 @@ class ForwardingTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             await forward_once(queue, ('one', 'two', 'three'), client)
             queue.failed.assert_awaited_once()
+            self.assertEqual(queue.failed.call_args.args[2], 'HTTP 503')
             queue.forwarded.assert_not_awaited()
             await forward_once(queue, ('one', 'two', 'three'), client)
             queue.forwarded.assert_awaited_once_with('a')

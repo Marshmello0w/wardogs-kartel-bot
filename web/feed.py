@@ -138,7 +138,9 @@ async def forward_once(db, tokens, client):
             response.raise_for_status()
         except (httpx.HTTPError, ValueError) as exc:
             # No URL/headers/body in logs: they may contain a bearer credential.
-            await db.failed(row['id'], row['forward_attempts'], type(exc).__name__)
+            reason = (f'HTTP {exc.response.status_code}'
+                      if isinstance(exc, httpx.HTTPStatusError) else type(exc).__name__)
+            await db.failed(row['id'], row['forward_attempts'], reason)
             age = datetime.now(timezone.utc) - row['received_at'].replace(tzinfo=timezone.utc)
             if age > timedelta(minutes=5):
                 logger.error('Feed forwarding backlog: %s, age %d seconds',
