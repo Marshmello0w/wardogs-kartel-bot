@@ -9,6 +9,20 @@ from cogs.quest_tracker import round_is_active_for_quests
 HEADSHOT_TAG = 'Meta.Progression.Context.Player.KillContext.Headshot'
 
 
+def map_identity(value):
+    """Resolve the public map name and the game-internal map/experience aliases."""
+    name = str(value or '').strip().casefold()
+    for public_name, option in config.MAP_VOTE_OPTIONS.items():
+        aliases = {
+            public_name.casefold(),
+            str(option['Map']).casefold(),
+            str(option['Experience']).split('_', 1)[0].casefold(),
+        }
+        if name in aliases:
+            return public_name.casefold()
+    return name
+
+
 def steam_id(value):
     candidate = str(value or '')
     return candidate if valid_steam_id(candidate) else None
@@ -55,7 +69,7 @@ def roster_for_event(sample, received_at, event_map=None):
     if state.get('uncertain') or not round_is_active_for_quests(state):
         return None
     observed_map = state.get('snapshot', {}).get('map')
-    if event_map and observed_map and str(event_map).casefold() != str(observed_map).casefold():
+    if event_map and observed_map and map_identity(event_map) != map_identity(observed_map):
         return None
     try:
         observed = datetime.fromisoformat(state['observed_at'])

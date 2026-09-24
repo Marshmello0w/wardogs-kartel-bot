@@ -85,6 +85,21 @@ class ContractTests(unittest.TestCase):
         self.assertIsNotNone(roster_for_event(sample(score=0, players=21), NOW))
         self.assertIsNone(roster_for_event(sample(), NOW, 'Ozeti'))
 
+    def test_feed_and_rcon_map_aliases_match_without_accepting_other_maps(self):
+        self.assertIsNotNone(roster_for_event(sample(), NOW, 'Kavkazi'))
+        self.assertIsNotNone(roster_for_event(sample(), NOW, 'Bakurani'))
+        bakurani_sample = sample()
+        bakurani_sample[0]['snapshot']['map'] = 'Bakurani'
+        self.assertIsNotNone(roster_for_event(bakurani_sample, NOW, 'Kavkazi'))
+        madrid_sample = sample()
+        madrid_sample[0]['snapshot']['map'] = 'Ozeti'
+        for feed_name in ('Madrid', 'Europe', 'Ozeti'):
+            with self.subTest(feed_name=feed_name):
+                self.assertIsNotNone(roster_for_event(madrid_sample, NOW, feed_name))
+        madrid_sample[0]['snapshot']['map'] = 'Europe'
+        self.assertIsNotNone(roster_for_event(madrid_sample, NOW, 'Madrid'))
+        self.assertIsNone(roster_for_event(madrid_sample, NOW, 'Kavkazi'))
+
     def test_feed_streak_disables_rcon_kill_guessing(self):
         previous = {'last_seen': NOW.replace(tzinfo=None), 'last_kills': 0,
                     'last_deaths': 0, 'last_cash': 0, 'last_faction': 'Valkyra',
