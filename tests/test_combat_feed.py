@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 from cogs.challenge_quests import advance_round
 from cogs.combat_feed import (CombatFeed, ROUND_GOALS, DAILY_GOALS,
                               award_round, record_combat_quests, record_feed_streak,
-                              teamkill_log, teamkill_messages, MAX_ALERT_CHARS)
+                              teamkill_log, teamkill_messages, weapon_label, MAX_ALERT_CHARS)
 from cogs.discord_logger import DiscordLogger
 from cogs.kill_feed import BATCH_SIZE, MAX_MESSAGE_CHARS, KillFeed, kill_line, recent_batch
 from domain.combat_feed import normalized_kill, relation, roster_for_event
@@ -49,9 +49,13 @@ class ContractTests(unittest.TestCase):
     def test_teamkill_log_has_review_details_without_mentions(self):
         event = normalized_kill(dict(batch()['events'][0],
                                      killerName='@everyone **bad**\nname',
-                                     victimName='Victim', mapName='Kavkazi'), 'boot', NOW)
-        message = teamkill_log('server1', event, 'Valkyra')
+                                     victimName='Victim', mapName='Kavkazi',
+                                     cause='Id.Item.MP43'), 'boot', NOW)
+        message = teamkill_log('server1', event, 'Valkyra',
+                               {STEAM_1: 'Steam Killer', STEAM_2: 'Steam Victim'})
         self.assertIn('Möglicher Teamkill · Server 1', message)
+        self.assertIn('**Steam Killer** hat **Steam Victim** mit **MP43** getötet.', message)
+        self.assertNotIn('Id.Item.', message)
         self.assertIn(STEAM_1, message)
         self.assertIn(STEAM_2, message)
         self.assertIn('Fraktion: Valkyra', message)
@@ -60,6 +64,14 @@ class ContractTests(unittest.TestCase):
         self.assertIn(f'<t:{int(NOW.timestamp())}:F>', message)
         self.assertNotIn('@everyone', message)
         self.assertNotIn('bad**\nname', message)
+
+    def test_teamkill_name_fallback_and_unknown_weapon(self):
+        event = normalized_kill(dict(batch()['events'][0], killerName='Feed Killer',
+                                     victimName='Feed Victim', cause=''), 'boot', NOW)
+        message = teamkill_log('server1', event, 'Valkyra')
+        self.assertIn('**Feed Killer** hat **Feed Victim** mit **Unbekannt** getötet.', message)
+        self.assertEqual(weapon_label('Id.Item.SKS'), 'SKS')
+        self.assertEqual(weapon_label('Id.Item.M4'), 'M4')
 
     def test_teamkill_logs_are_batched_without_dropping_events(self):
         event = normalized_kill(dict(batch()['events'][0], mapName='Kavkazi'), 'boot', NOW)
@@ -266,8 +278,10 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         cog = CombatFeed(bot)
         cog.rosters['server1'] = sample(team2='Valkyra')
         cog.rosters['server1'][0]['snapshot']['map'] = 'Bakurani'
+        cog.rosters['server1'][1][0]['name'] = 'RCON Killer'
+        cog.rosters['server1'][1][1]['name'] = 'RCON Victim'
         cur = self.Cursor([{'rapid_last_at': None}, {'count': 1}])
-        raw = dict(batch()['events'][0], mapName='Kavkazi')
+        raw = dict(batch()['events'][0], mapName='Kavkazi', cause='Id.Item.MP43')
         teamkills = []
         with patch('cogs.combat_feed.record_combat_quests', new_callable=AsyncMock) as quests:
             await cog._event(cur, 'server1', 'boot', raw, NOW, teamkills=teamkills)
@@ -276,6 +290,7 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Valkyra', teamkills[0])
         self.assertIn(STEAM_1, teamkills[0])
         self.assertIn(STEAM_2, teamkills[0])
+        self.assertIn('**RCON Killer** hat **RCON Victim** mit **MP43** getötet.', teamkills[0])
         self.assertFalse(any('teamkill_count' in sql for sql, _ in cur.statements))
 
     async def test_stale_or_unknown_faction_does_not_raise_teamkill_alert(self):

@@ -19,20 +19,34 @@ DAILY_GOALS = (('headshots', 10, 'Headshots'), ('long_kills', 3, 'Distanzkills')
 MAX_ALERT_CHARS = 1800
 
 
-def teamkill_log(server_id, event, faction):
+def weapon_label(cause):
+    """Show the feed's weapon identifier without its technical item prefix."""
+    value = str(cause or '').strip()
+    if value.startswith('Id.Item.'):
+        value = value.removeprefix('Id.Item.').replace('_', ' ')
+    return clean(value, 'Unbekannt', limit=80)
+
+
+def sample_names(players, steam_ids):
+    """Use the names observed with the same fresh faction sample."""
+    return {str(player.get('steamId')): player.get('name')
+            for player in players
+            if str(player.get('steamId')) in steam_ids and player.get('name')}
+
+
+def teamkill_log(server_id, event, faction, names=None):
     """Format a reviewable, mention-safe alert for one confirmed same-team sample."""
-    killer = clean(event['killer_name'], event['killer'])
-    victim = clean(event['victim_name'], event['victim'])
+    names = names or {}
+    killer = clean(names.get(event['killer']) or event['killer_name'], event['killer'])
+    victim = clean(names.get(event['victim']) or event['victim_name'], event['victim'])
     details = [f"Fraktion: {clean(faction)}"]
     if event['map_name']:
         details.append(f"Karte: {clean(event['map_name'])}")
-    if event['cause']:
-        details.append(f"Waffe: {clean(event['cause'], limit=80)}")
     if event['distance_m'] is not None:
         details.append(f"Distanz: {event['distance_m']:.0f} m")
     return (f"Möglicher Teamkill · {config.server(server_id).title}\n"
-            f"Täter: {killer} (`{event['killer']}`)\n"
-            f"Opfer: {victim} (`{event['victim']}`)\n"
+            f"**{killer}** hat **{victim}** mit **{weapon_label(event['cause'])}** getötet.\n"
+            f"Täter-Steam64: `{event['killer']}` · Opfer-Steam64: `{event['victim']}`\n"
             f"{' · '.join(details)}\n"
             f"Erfasst: <t:{int(event['received_at'].timestamp())}:F>\n"
             "Einstufung anhand frischer RCON-Fraktionsdaten. Bitte prüfen; "
@@ -232,7 +246,9 @@ class CombatFeed(commands.Cog):
                     server_id=%s AND round_id=%s AND steam_id=%s''',
                                   (server_id, round_id, item['victim']))
         if relation_value == 'teamkill' and teamkills is not None:
-            teamkills.append(teamkill_log(server_id, item, roster[1][item['killer']]))
+            players = self.rosters[server_id][1]
+            names = sample_names(players, {item['killer'], item['victim']})
+            teamkills.append(teamkill_log(server_id, item, roster[1][item['killer']], names))
         if is_player_kill:
             await cur.execute('''INSERT IGNORE INTO combat_alert_state(server_id,steam_id)
                 VALUES (%s,%s)''', (server_id, item['killer']))
