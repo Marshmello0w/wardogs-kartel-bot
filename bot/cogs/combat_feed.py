@@ -11,10 +11,48 @@ from core import config
 from domain.combat_feed import normalized_kill, relation, roster_for_event
 from infrastructure import database
 from cogs.challenge_quests import berlin_day
+from cogs.kill_feed import clean
 
 logger = logging.getLogger(__name__)
 ROUND_GOALS = (('headshots', 3, 'Headshots'), ('long_kills', 1, 'Distanzkill'))
 DAILY_GOALS = (('headshots', 10, 'Headshots'), ('long_kills', 3, 'Distanzkills'))
+MAX_ALERT_CHARS = 1800
+
+
+def teamkill_log(server_id, event, faction):
+    """Format a reviewable, mention-safe alert for one confirmed same-team sample."""
+    killer = clean(event['killer_name'], event['killer'])
+    victim = clean(event['victim_name'], event['victim'])
+    details = [f"Fraktion: {clean(faction)}"]
+    if event['map_name']:
+        details.append(f"Karte: {clean(event['map_name'])}")
+    if event['cause']:
+        details.append(f"Waffe: {clean(event['cause'], limit=80)}")
+    if event['distance_m'] is not None:
+        details.append(f"Distanz: {event['distance_m']:.0f} m")
+    return (f"Möglicher Teamkill · {config.server(server_id).title}\n"
+            f"Täter: {killer} (`{event['killer']}`)\n"
+            f"Opfer: {victim} (`{event['victim']}`)\n"
+            f"{' · '.join(details)}\n"
+            f"Erfasst: <t:{int(event['received_at'].timestamp())}:F>\n"
+            "Einstufung anhand frischer RCON-Fraktionsdaten. Bitte prüfen; "
+            "keine automatische Strafe.")
+
+
+def teamkill_messages(alerts):
+    """Batch all alerts without dropping events or exceeding Discord's text limit."""
+    batch = []
+    length = 0
+    for alert in alerts:
+        extra = len(alert) + (2 if batch else 0)
+        if batch and length + extra > MAX_ALERT_CHARS:
+            yield '\n\n'.join(batch)
+            batch = []
+            length = 0
+        batch.append(alert)
+        length += len(alert) + (2 if len(batch) > 1 else 0)
+    if batch:
+        yield '\n\n'.join(batch)
 
 
 async def credit(cur, steam_id, amount, kind, reference, reason):
@@ -147,7 +185,7 @@ class CombatFeed(commands.Cog):
             self.rosters[server_id] = (state, players)
 
     async def _event(self, cur, server_id, instance_id, event, received_at, batch_index=0,
-                     published=None):
+                     published=None, teamkills=None):
         item = normalized_kill(event, instance_id, received_at)
         if item is None:
             return None
@@ -193,14 +231,8 @@ class CombatFeed(commands.Cog):
                 await cur.execute('''UPDATE challenge_round_progress SET streak=0 WHERE
                     server_id=%s AND round_id=%s AND steam_id=%s''',
                                   (server_id, round_id, item['victim']))
-        if relation_value == 'teamkill':
-            await cur.execute('''INSERT INTO combat_alert_state
-                (server_id,steam_id,teamkill_count,teamkill_first_at,teamkill_last_at)
-                VALUES (%s,%s,1,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
-                ON DUPLICATE KEY UPDATE
-                teamkill_first_at=IF(teamkill_count=0,UTC_TIMESTAMP(6),teamkill_first_at),
-                teamkill_last_at=UTC_TIMESTAMP(6),teamkill_count=teamkill_count+1''',
-                              (server_id, item['killer']))
+        if relation_value == 'teamkill' and teamkills is not None:
+            teamkills.append(teamkill_log(server_id, item, roster[1][item['killer']]))
         if is_player_kill:
             await cur.execute('''INSERT IGNORE INTO combat_alert_state(server_id,steam_id)
                 VALUES (%s,%s)''', (server_id, item['killer']))
@@ -227,6 +259,7 @@ class CombatFeed(commands.Cog):
     async def process_one(self):
         alerts = []
         public_kills = []
+        teamkills = []
         async with database.transaction() as cur:
             await cur.execute('''SELECT id,server_id,payload,received_at FROM combat_feed_batches
                 WHERE processed_at IS NULL ORDER BY received_at LIMIT 1 FOR UPDATE''')
@@ -244,7 +277,7 @@ class CombatFeed(commands.Cog):
             # that match clock resets on map changes within one game instance.
             for index, event in enumerate(events):
                 alert = await self._event(cur, batch['server_id'], instance_id, event,
-                                          received_at, index, public_kills)
+                                          received_at, index, public_kills, teamkills)
                 if alert:
                     alerts.append(alert)
             await cur.execute('''UPDATE combat_feed_batches SET processed_at=UTC_TIMESTAMP(6)
@@ -254,28 +287,12 @@ class CombatFeed(commands.Cog):
                               f'{server_id}: {steam_id} erzielte mindestens {count} Spielerkills '
                               'innerhalb von 60 Sekunden. Bitte prüfen; keine automatische Strafe.',
                               discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID)
+        for message in teamkill_messages(teamkills):
+            self.bot.dispatch('bot_log', 'Möglicher Teamkill – prüfen', message,
+                              discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID, True)
         if public_kills:
             self.bot.dispatch('combat_kill_batch', batch['server_id'], public_kills, received_at)
         return True
-
-    async def flush_teamkills(self):
-        alerts = []
-        async with database.transaction() as cur:
-            await cur.execute('''SELECT server_id,steam_id,teamkill_count FROM combat_alert_state
-                WHERE teamkill_count>0 AND teamkill_first_at<=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 30 SECOND)
-                LIMIT 30 FOR UPDATE''')
-            alerts = list(await cur.fetchall())
-            for row in alerts:
-                await cur.execute('''UPDATE combat_alert_state SET teamkill_count=0,
-                    teamkill_first_at=NULL,teamkill_last_at=NULL
-                    WHERE server_id=%s AND steam_id=%s''',
-                                  (row['server_id'], row['steam_id']))
-        for row in alerts:
-            self.bot.dispatch('bot_log', 'Möglicher Teamkill – prüfen',
-                              f"{row['server_id']}: {row['steam_id']} – {row['teamkill_count']} "
-                              'Ereignis(se) in 30 Sekunden. Einstufung nur anhand zeitnaher '
-                              'RCON-Fraktionsdaten; keine automatische Strafe.',
-                              discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID)
 
     async def maintenance(self):
         now = time.monotonic()
@@ -294,7 +311,6 @@ class CombatFeed(commands.Cog):
             for _ in range(10):
                 if not await self.process_one():
                     break
-            await self.flush_teamkills()
             await self.maintenance()
             self.bot.health.ok(self.health_key)
         except Exception as exc:

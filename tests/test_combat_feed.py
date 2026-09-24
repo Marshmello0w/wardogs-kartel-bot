@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 
 from cogs.challenge_quests import advance_round
 from cogs.combat_feed import (CombatFeed, ROUND_GOALS, DAILY_GOALS,
-                              award_round, record_combat_quests, record_feed_streak)
+                              award_round, record_combat_quests, record_feed_streak,
+                              teamkill_log, teamkill_messages, MAX_ALERT_CHARS)
 from cogs.discord_logger import DiscordLogger
 from cogs.kill_feed import BATCH_SIZE, MAX_MESSAGE_CHARS, KillFeed, kill_line, recent_batch
 from domain.combat_feed import normalized_kill, relation, roster_for_event
@@ -45,6 +46,30 @@ def sample(at=NOW, *, team2='Manticore', score=1, players=12):
 
 
 class ContractTests(unittest.TestCase):
+    def test_teamkill_log_has_review_details_without_mentions(self):
+        event = normalized_kill(dict(batch()['events'][0],
+                                     killerName='@everyone **bad**\nname',
+                                     victimName='Victim', mapName='Kavkazi'), 'boot', NOW)
+        message = teamkill_log('server1', event, 'Valkyra')
+        self.assertIn('Möglicher Teamkill · Server 1', message)
+        self.assertIn(STEAM_1, message)
+        self.assertIn(STEAM_2, message)
+        self.assertIn('Fraktion: Valkyra', message)
+        self.assertIn('Karte: Kavkazi', message)
+        self.assertIn('Distanz: 150 m', message)
+        self.assertIn(f'<t:{int(NOW.timestamp())}:F>', message)
+        self.assertNotIn('@everyone', message)
+        self.assertNotIn('bad**\nname', message)
+
+    def test_teamkill_logs_are_batched_without_dropping_events(self):
+        event = normalized_kill(dict(batch()['events'][0], mapName='Kavkazi'), 'boot', NOW)
+        alert = teamkill_log('server1', event, 'Valkyra')
+        messages = list(teamkill_messages([alert] * 20))
+        self.assertGreater(len(messages), 1)
+        self.assertTrue(all(len(message) <= MAX_ALERT_CHARS for message in messages))
+        self.assertEqual(sum(message.count('Möglicher Teamkill · Server 1')
+                             for message in messages), 20)
+
     def test_token_identity_is_server_specific_not_instance_specific(self):
         tokens = ('one', 'two', 'three')
         for index, token in enumerate(tokens, 1):
@@ -201,13 +226,15 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         cog.rosters['server1'] = sample()
         cur = self.Cursor(rowcount=0)
         published = []
+        teamkills = []
         with patch('cogs.combat_feed.record_combat_quests', new_callable=AsyncMock) as quests:
             result = await cog._event(cur, 'server1', 'boot', batch()['events'][0], NOW,
-                                      published=published)
+                                      published=published, teamkills=teamkills)
             self.assertIsNone(result)
             quests.assert_not_awaited()
         self.assertEqual(len(cur.statements), 1)
         self.assertEqual(published, [])
+        self.assertEqual(teamkills, [])
 
     async def test_rapid_window_and_cooldown_excludes_suicide(self):
         bot = type('Bot', (), {})()
@@ -238,28 +265,62 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         bot = type('Bot', (), {})()
         cog = CombatFeed(bot)
         cog.rosters['server1'] = sample(team2='Valkyra')
+        cog.rosters['server1'][0]['snapshot']['map'] = 'Bakurani'
         cur = self.Cursor([{'rapid_last_at': None}, {'count': 1}])
+        raw = dict(batch()['events'][0], mapName='Kavkazi')
+        teamkills = []
         with patch('cogs.combat_feed.record_combat_quests', new_callable=AsyncMock) as quests:
-            await cog._event(cur, 'server1', 'boot', batch()['events'][0], NOW)
+            await cog._event(cur, 'server1', 'boot', raw, NOW, teamkills=teamkills)
             quests.assert_not_awaited()
-        self.assertTrue(any('teamkill_count' in sql for sql, _ in cur.statements))
+        self.assertEqual(len(teamkills), 1)
+        self.assertIn('Valkyra', teamkills[0])
+        self.assertIn(STEAM_1, teamkills[0])
+        self.assertIn(STEAM_2, teamkills[0])
+        self.assertFalse(any('teamkill_count' in sql for sql, _ in cur.statements))
 
-    async def test_teamkills_are_bundled_before_central_dispatch(self):
+    async def test_stale_or_unknown_faction_does_not_raise_teamkill_alert(self):
+        bot = type('Bot', (), {})()
+        cog = CombatFeed(bot)
+        for roster in (sample(team2='White'), sample(at=NOW-timedelta(seconds=21)),
+                       sample(team2='Valkyra')):
+            with self.subTest(roster=roster):
+                cog.rosters['server1'] = roster
+                if roster[1][1]['faction'] == 'Valkyra':
+                    roster[0]['snapshot']['map'] = 'Ozeti'
+                cur = self.Cursor([{'rapid_last_at': NOW.replace(tzinfo=None)}])
+                teamkills = []
+                raw = dict(batch()['events'][0], mapName='Kavkazi')
+                await cog._event(cur, 'server1', 'boot', raw, NOW, teamkills=teamkills)
+                self.assertEqual(teamkills, [])
+
+    async def test_teamkill_alert_is_sent_through_central_logger_after_commit(self):
         bot = MagicMock()
         cog = CombatFeed(bot)
-        row = {'server_id': 'server1', 'steam_id': STEAM_1, 'teamkill_count': 3}
-        cur = self.Cursor([row])
-        async def fetchall():
-            return [row]
-        cur.fetchall = fetchall
+        committed = False
+        class BatchCursor:
+            async def execute(self, sql, args=()):
+                pass
+            async def fetchone(self):
+                return {'id': 'batch-1', 'server_id': 'server1',
+                        'payload': json.dumps(batch()).encode(),
+                        'received_at': NOW.replace(tzinfo=None)}
         @asynccontextmanager
         async def transaction():
-            yield cur
-        with patch('cogs.combat_feed.database.transaction', transaction):
-            await cog.flush_teamkills()
-        self.assertTrue(any('teamkill_count=0' in sql for sql, _ in cur.statements))
+            nonlocal committed
+            yield BatchCursor()
+            committed = True
+        async def event(cur, server_id, instance_id, raw, received_at, index,
+                        published, teamkills):
+            teamkills.append('Möglicher Teamkill · Server 1')
+        bot.dispatch.side_effect = lambda *args: self.assertTrue(committed)
+        with patch('cogs.combat_feed.database.transaction', transaction), \
+             patch.object(cog, '_event', side_effect=event):
+            self.assertTrue(await cog.process_one())
         bot.dispatch.assert_called_once()
-        self.assertIn('3 Ereignis', bot.dispatch.call_args.args[2])
+        args = bot.dispatch.call_args.args
+        self.assertEqual(args[0], 'bot_log')
+        self.assertEqual(args[4], '1552623993553690634')
+        self.assertIs(args[5], True)
 
 
 class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):
@@ -328,7 +389,8 @@ class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):
         @asynccontextmanager
         async def transaction():
             yield Cursor()
-        async def event(cur, server_id, instance_id, raw, received_at, index, published):
+        async def event(cur, server_id, instance_id, raw, received_at, index,
+                        published, teamkills):
             published.append({'killer': STEAM_1, 'victim': STEAM_2})
         with patch('cogs.combat_feed.database.transaction', transaction), \
              patch.object(cog, '_event', side_effect=event):
