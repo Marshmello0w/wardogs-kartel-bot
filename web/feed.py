@@ -81,13 +81,14 @@ class FeedIngressDatabase:
 
     async def receive(self, server_id, raw):
         batch_id = str(uuid4())
-        pool = await self.connect()
-        async with pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute('''INSERT INTO combat_feed_batches
-                    (id,server_id,payload,received_at,next_forward_at)
-                    VALUES (%s,%s,%s,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))''',
-                                  (batch_id, server_id, raw))
+        async with asyncio.timeout(8):
+            pool = await self.connect()
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute('''INSERT INTO combat_feed_batches
+                        (id,server_id,payload,received_at,next_forward_at)
+                        VALUES (%s,%s,%s,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))''',
+                                      (batch_id, server_id, raw))
         return batch_id
 
     async def pending(self, limit=20):

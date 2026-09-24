@@ -1,11 +1,12 @@
 """No live game/API calls: synthetic feed contract and conservative decisions."""
 import json
+from contextlib import asynccontextmanager
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 from fastapi.testclient import TestClient
@@ -134,6 +135,7 @@ class QuestWriteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_both_round_and_daily_targets_can_complete_on_same_kill(self):
         event = normalized_kill(batch()['events'][0], 'boot', NOW)
+        event['received_at'] = datetime(2026, 9, 24, 22, 30, tzinfo=timezone.utc)
         cur = self.Cursor([{'headshots': 3, 'long_kills': 1,
                             'completed_mask': 0, 'awarded_mask': 0},
                            {'headshots': 10, 'long_kills': 3,
@@ -147,6 +149,9 @@ class QuestWriteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(daily_pay.await_count, 2)
         masks = [args[:2] for sql, args in cur.statements if 'SET completed_mask=' in sql]
         self.assertEqual(masks, [(3, 3), (3, 3)])
+        daily_insert = next(args for sql, args in cur.statements
+                            if 'INSERT INTO combat_daily_quests' in sql)
+        self.assertEqual(daily_insert[0].isoformat(), '2026-09-25')
 
     async def test_ordered_kill_streak_and_victim_reset(self):
         event = normalized_kill(batch()['events'][0], 'boot', NOW)
@@ -219,6 +224,23 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
             await cog._event(cur, 'server1', 'boot', batch()['events'][0], NOW)
             quests.assert_not_awaited()
         self.assertTrue(any('teamkill_count' in sql for sql, _ in cur.statements))
+
+    async def test_teamkills_are_bundled_before_central_dispatch(self):
+        bot = MagicMock()
+        cog = CombatFeed(bot)
+        row = {'server_id': 'server1', 'steam_id': STEAM_1, 'teamkill_count': 3}
+        cur = self.Cursor([row])
+        async def fetchall():
+            return [row]
+        cur.fetchall = fetchall
+        @asynccontextmanager
+        async def transaction():
+            yield cur
+        with patch('cogs.combat_feed.database.transaction', transaction):
+            await cog.flush_teamkills()
+        self.assertTrue(any('teamkill_count=0' in sql for sql, _ in cur.statements))
+        bot.dispatch.assert_called_once()
+        self.assertIn('3 Ereignis', bot.dispatch.call_args.args[2])
 
 
 class ForwardingTests(unittest.IsolatedAsyncioTestCase):

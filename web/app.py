@@ -169,13 +169,13 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             await feed_client.aclose()
             if feed_database is None:
                 await feed_db.close()
-        await db.close()
-        if reward_submission is None:
-            await reward_db.close()
-        if steam_client is None:
-            await client.aclose()
-        if asset_client is None:
-            await artillery_client.aclose()
+            await db.close()
+            if reward_submission is None:
+                await reward_db.close()
+            if steam_client is None:
+                await client.aclose()
+            if asset_client is None:
+                await artillery_client.aclose()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.repo, app.state.steam, app.state.reward_db, app.state.visitors = repo, steam, reward_db, visitors
