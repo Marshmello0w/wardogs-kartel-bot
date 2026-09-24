@@ -66,7 +66,15 @@ class FixtureDatabase:
         if 'FROM quest_team_playtime' in sql:
             return [{'team': 'Valkyra', 'playtime_seconds': 7_200}] if args and args[0] == STEAM_ID else []
         if 'FROM quest_point_ledger' in sql:
-            return [{'amount': 5, 'kind': 'weekly_team', 'created_at': datetime(2026, 9, 20, 10)}] if args and args[0] == STEAM_ID else []
+            return [{'amount': 5, 'kind': 'weekly_team', 'created_at': datetime(2026, 9, 20, 10)},
+                    {'amount': 1, 'kind': 'challenge_round', 'reference_key': 'server1:round-1:streak',
+                     'created_at': datetime(2026, 9, 20, 9)}] if args and args[0] == STEAM_ID else []
+        if 'FROM challenge_daily_progress' in sql:
+            return []
+        if 'FROM challenge_round_progress' in sql:
+            return []
+        if 'FROM challenge_daily_round_kills' in sql:
+            return [{'count': 0}]
         if 'FROM seed_server_state' in sql:
             return [{'server_id': 'server2'}]
         if 'FROM vip_memberships' in sql:
@@ -197,6 +205,7 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['teams'][1]['two_hours_done'])
         self.assertFalse(result['teams'][1]['four_hours_done'])
         self.assertEqual(result['history'][0]['kind'], 'weekly_team')
+        self.assertEqual(result['history'][1]['source_key'], 'challenge_streak')
         self.assertEqual(result['active_seeds'], [{'server_id': 'server2', 'title': 'Server 2'}])
 
     async def test_unknown_user_empty(self):
@@ -313,6 +322,9 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(quests.status_code, 200)
         self.assertIn('17', quests.text)
         self.assertNotIn('White', quests.text)
+        self.assertIn('Killserie', quests.text)
+        self.assertIn('Rundenquests', quests.text)
+        self.assertIn('Tagesquests', quests.text)
         self.assertIn('no-store', result.headers['cache-control'])
         csrf = re.search(r'name="csrf" value="([^"]+)"', result.text).group(1)
         self.assertEqual(result.headers['referrer-policy'], 'strict-origin')
@@ -348,6 +360,16 @@ class RouteTests(unittest.TestCase):
         response = self.client.post('/language', data={'csrf': csrf, 'language': 'en', 'next': '///attacker.example'},
                                     headers={'origin': SETTINGS.base_url}, follow_redirects=False)
         self.assertEqual(response.headers['location'], '/')
+
+    def test_challenge_quests_are_translated_on_private_page(self):
+        self.login()
+        self.client.get('/language/en', params={'next': '/quests'}, follow_redirects=False)
+        page = self.client.get('/quests')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('Round quests', page.text)
+        self.assertIn('Daily quests', page.text)
+        self.assertIn('Kill streak', page.text)
+        self.assertNotIn('Killserie', page.text)
 
     def test_reward_request_is_not_created_when_red(self):
         self.login()

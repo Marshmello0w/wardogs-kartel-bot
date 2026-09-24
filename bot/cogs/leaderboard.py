@@ -170,6 +170,12 @@ class Leaderboard(commands.Cog):
             if result is not None:
                 state, players = result
                 await stats.update_players(srv.id, state, players)
+                challenges = self.bot.get_cog('ChallengeQuests')
+                if challenges is not None:
+                    try:
+                        await challenges.process_sample(srv.id, state, players)
+                    except Exception as exc:
+                        self.bot.health.error(challenges.health_key, exc)
                 self.last_sample[srv.id] = time.monotonic()
                 self.bot.health.ok(f'Leaderboard-Erfassung {srv.title}')
         except Exception as exc:

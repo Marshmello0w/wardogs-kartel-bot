@@ -25,6 +25,8 @@ POINT_KIND_LABELS = {
     'reward_faction_refund': 'Fraktionswechsel-Erstattung',
     'vip_purchase': 'VIP-Einlösung',
     'vip_refund': 'VIP-Erstattung',
+    'challenge_round': 'Rundenquest',
+    'challenge_daily': 'Tagesquest',
 }
 
 

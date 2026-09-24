@@ -23,6 +23,7 @@ REWARD_FACTION_COST = 20
 VIP_COSTS = {'week': 150, 'month': 550}
 VIP_SLOT_LIMIT = 20
 LIVE_PRESENCE_SECONDS = 90
+ROUND_QUEST_POINT_LIMIT = 15
 
 
 class DataUnavailable(RuntimeError):
@@ -288,7 +289,8 @@ class Repository:
         """Return only the authenticated player's read-only quest state."""
         args = (steam_id,)
         week_start = berlin_week_start()
-        points, progress, cash, teams, history, seed_sessions = await asyncio.gather(
+        today = datetime.now(timezone.utc).astimezone(BERLIN).date()
+        points, progress, cash, teams, history, seed_sessions, daily_rows, round_rows, round_counts = await asyncio.gather(
             self.db.query('SELECT points FROM quest_points WHERE steam_id=%s', args),
             self.db.query('''SELECT eligible_playtime_seconds,awarded_eligible_hours,awarded_cash_blocks
                 FROM quest_progress WHERE steam_id=%s''', args),
@@ -296,11 +298,20 @@ class Repository:
                 FROM leaderboard WHERE steam_id=%s''', args),
             self.db.query('''SELECT team,playtime_seconds FROM quest_team_playtime
                 WHERE steam_id=%s AND week_start=%s ORDER BY team''', (steam_id, week_start)),
-            self.db.query('''SELECT amount,kind,created_at FROM quest_point_ledger
+            self.db.query('''SELECT amount,kind,reference_key,created_at FROM quest_point_ledger
                 WHERE steam_id=%s ORDER BY created_at DESC,id DESC LIMIT 12''', args),
             self.db.query('''SELECT session.server_id FROM seed_server_state state
                 JOIN seed_sessions session ON session.id=state.session_id
                 WHERE session.status='active' ORDER BY session.server_id'''),
+            self.db.query('''SELECT kills,cash,active_seconds,round_points_awarded,
+                completed_mask,awarded_mask FROM challenge_daily_progress
+                WHERE day=%s AND steam_id=%s''', (today, steam_id)),
+            self.db.query('''SELECT server_id,round_id,last_seen,kills,deaths,cash,
+                active_seconds,best_streak,active,completed_mask,awarded_mask
+                FROM challenge_round_progress WHERE steam_id=%s
+                ORDER BY last_seen DESC LIMIT 1''', args),
+            self.db.query('''SELECT COUNT(*) AS count FROM challenge_daily_round_kills
+                WHERE day=%s AND steam_id=%s AND kills>=5''', (today, steam_id)),
         )
         eligible_seconds = int(progress[0]['eligible_playtime_seconds']) if progress else 0
         lifetime_cash = int(cash[0]['lifetime_cash']) if cash else 0
@@ -318,6 +329,43 @@ class Repository:
                 'two_hours_done': seconds >= QUEST_TEAM_MILESTONES[0][0],
                 'four_hours_done': seconds >= QUEST_TEAM_MILESTONES[1][0],
             })
+        daily = daily_rows[0] if daily_rows else {}
+        latest_round = round_rows[0] if round_rows else {}
+        seen_at = latest_round.get('last_seen')
+        if seen_at and seen_at.tzinfo is None:
+            seen_at = seen_at.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - seen_at).total_seconds() if seen_at else None
+        fresh = age is not None and 0 <= age < 45
+        round_active = bool(latest_round.get('active') and fresh)
+        def card(key, current, target, mask, index, *, secondary=None):
+            return {'key': key, 'current': max(0, int(current or 0)), 'target': target,
+                    'secondary': secondary, 'completed': bool(int(mask.get('completed_mask') or 0) & (1 << index)),
+                    'awarded': bool(int(mask.get('awarded_mask') or 0) & (1 << index))}
+        round_cards = [
+            card('first', latest_round.get('kills'), 5, latest_round, 0),
+            card('streak', latest_round.get('best_streak'), 5, latest_round, 1),
+            card('round_cash', latest_round.get('cash'), 50_000, latest_round, 2),
+            card('round_time', latest_round.get('active_seconds'), 40 * 60, latest_round, 3),
+            card('fighter', latest_round.get('kills'), 10, latest_round, 4,
+                 secondary=(max(0, int(latest_round.get('deaths') or 0)), 3)),
+        ]
+        qualified_rounds = int(round_counts[0]['count']) if round_counts else 0
+        daily_cards = [
+            card('hunter', daily.get('kills'), 25, daily, 0),
+            card('big_hunt', daily.get('kills'), 50, daily, 1),
+            card('daily_cash', daily.get('cash'), 200_000, daily, 2),
+            card('daily_time', daily.get('active_seconds'), 90 * 60, daily, 3),
+            card('consistency', qualified_rounds, 3, daily, 4),
+        ]
+        round_keys = {'first', 'streak', 'cash', 'time', 'fighter'}
+        daily_keys = {'hunter', 'big_hunt', 'cash', 'time', 'consistency'}
+        for entry in history:
+            kind = entry['kind']
+            key = str(entry.get('reference_key') or '').rsplit(':', 1)[-1]
+            if kind == 'challenge_round' and key in round_keys:
+                entry['source_key'] = f'challenge_{"round_" if key in ("cash", "time") else ""}{key}'
+            elif kind == 'challenge_daily' and key in daily_keys:
+                entry['source_key'] = f'challenge_{"daily_" if key in ("cash", "time") else ""}{key}'
         return {
             'points': int(points[0]['points']) if points else 0,
             'eligible_seconds': eligible_seconds,
@@ -333,6 +381,13 @@ class Repository:
                               'title': SERVERS.get(row['server_id'], row['server_id'])}
                              for row in seed_sessions],
             'history': history,
+            'challenge_day': today,
+            'round_points_awarded': min(ROUND_QUEST_POINT_LIMIT, int(daily.get('round_points_awarded') or 0)),
+            'round_point_limit': ROUND_QUEST_POINT_LIMIT,
+            'round_server': SERVERS.get(latest_round.get('server_id'), latest_round.get('server_id')),
+            'round_active': round_active,
+            'round_cards': round_cards,
+            'daily_cards': daily_cards,
         }
 
     async def rewards(self, steam_id):

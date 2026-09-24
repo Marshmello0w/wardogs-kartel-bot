@@ -1,7 +1,7 @@
 """Opt-in tests against a disposable LOCAL MariaDB, never the project's .env."""
 import asyncio
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import sys
@@ -26,6 +26,7 @@ from services.ban_service import BanService
 from cogs.round_tracker import RoundTracker
 from cogs.map_vote import MapVoteCog
 from cogs.quest_tracker import QuestTracker, berlin_week_start
+from cogs.challenge_quests import ChallengeQuests, berlin_day
 from services.rcon import RconError, Reply
 
 STEAM = '76561190000000001'
@@ -92,7 +93,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
         await database.init_db(self.pool)
         self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)
-        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 9)
+        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 10)
 
     async def test_daily_playtime_backfill_runs_once(self):
         await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
@@ -155,6 +156,34 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 25)
         with self.assertRaises(ValueError):
             await quest.set_points(STEAM, -1, admin_user_id='123', admin_mention='<@123>', reason='Event')
+
+    async def test_challenge_rewards_and_round_daily_limit_are_idempotent(self):
+        quest = ChallengeQuests.__new__(ChallengeQuests)
+        quest.bot = self.bot
+        quest.locks = defaultdict(asyncio.Lock)
+        quest.started_servers = set()
+        start = datetime.now(timezone.utc).replace(microsecond=0)
+        quest.last_day = berlin_day(start)
+        def state(at, round_id='round-1'):
+            return {'round_id': round_id, 'observed_at': at.isoformat(), 'ended': False,
+                    'snapshot': {'highest': 1, 'players': {'current': 30}}}
+        def roster(kills, deaths=0, cash=0, faction='Valkyra'):
+            return [{'steamId': STEAM, 'faction': faction, 'kills': kills,
+                     'deaths': deaths, 'cash': cash}]
+
+        await quest.process_sample('server1', state(start), roster(0))
+        self.assertFalse(await self.rows('SELECT * FROM quest_points WHERE steam_id=%s', (STEAM,)))
+        day = berlin_day(start)
+        await self.rows('''INSERT INTO challenge_daily_progress(day,steam_id,round_points_awarded)
+            VALUES (%s,%s,14) ON DUPLICATE KEY UPDATE round_points_awarded=14''', (day, STEAM))
+        await quest.process_sample('server1', state(start + timedelta(seconds=15)), roster(5))
+        self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 1)
+        round_row = (await self.rows('SELECT completed_mask,awarded_mask FROM challenge_round_progress'))[0]
+        self.assertEqual((round_row['completed_mask'], round_row['awarded_mask']), (3, 1))
+        await quest.process_sample('server1', state(start + timedelta(seconds=20)), roster(5))
+        self.assertEqual(len(await self.rows("SELECT * FROM quest_point_ledger WHERE kind='challenge_round'")), 1)
+        await quest.process_sample('server1', state(start + timedelta(seconds=25)), roster(5, faction='White'))
+        self.assertEqual((await self.rows('SELECT streak FROM challenge_round_progress'))[0]['streak'], 0)
 
     async def test_faction_counter_migration_removes_legacy_poll_samples_once(self):
         await self.rows("""INSERT INTO player_faction_stats(server_id,steam_id,faction,times_seen)

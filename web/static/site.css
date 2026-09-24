@@ -176,6 +176,17 @@ progress::-webkit-progress-bar { background: var(--color-control); }
 progress::-webkit-progress-value { background: var(--color-accent); }
 progress::-moz-progress-bar { background: var(--color-accent); }
 .quest-section { padding-block: var(--space-xl); border-block-start: var(--rule-thin) solid var(--color-rule); }
+.challenge-context { margin-block: var(--space-md); color: var(--color-muted); }
+.challenge-context strong { color: var(--color-ink); }
+.challenge-grid { display: grid; gap: var(--space-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); margin-block: var(--space-lg); }
+.challenge-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg); background: var(--color-paper-2); color: var(--color-ink); border-inline-start: 3px solid var(--color-rule); }
+.challenge-card.completed { border-inline-start-color: var(--color-accent); }
+.challenge-card-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-xs); }
+.challenge-card h3 { margin: 0; }
+.challenge-card p { margin: 0; color: var(--color-muted); }
+.challenge-card strong { margin-block-start: auto; font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+.challenge-badge { color: var(--color-muted); font-size: var(--text-sm); }
+.challenge-card.completed .challenge-badge { color: var(--color-accent); }
 .team-quest { display: grid; gap: var(--space-lg); margin-block-end: var(--space-xs); }
 .team-progress { min-width: 0; }
 .milestones { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-lg); margin-block-start: var(--space-sm); color: var(--color-muted); font-size: var(--text-sm); }

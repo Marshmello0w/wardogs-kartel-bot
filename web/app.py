@@ -379,7 +379,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
             return RedirectResponse('/auth/steam', status_code=303)
         data = await repo.quests(user['steam_id'])
         return render(request, 'quests.html', quests=data,
-                      display_name=user.get('name') or 'Deine Quests')
+                      display_name=user.get('name') or 'Deine Quests', refresh=True)
 
     @app.get('/rewards')
     async def rewards(request: Request):

@@ -153,6 +153,36 @@ DAILY_PLAYTIME = (
         FROM player_playtime""",
 )
 
+CHALLENGE_QUESTS = (
+    """CREATE TABLE IF NOT EXISTS challenge_round_progress (
+        server_id VARCHAR(50) NOT NULL, round_id CHAR(36) NOT NULL,
+        steam_id VARCHAR(50) NOT NULL, last_seen DATETIME NULL,
+        last_kills INT NOT NULL DEFAULT 0, last_deaths INT NOT NULL DEFAULT 0,
+        last_cash BIGINT NOT NULL DEFAULT 0, last_faction VARCHAR(50) NULL,
+        kills INT NOT NULL DEFAULT 0, deaths INT NOT NULL DEFAULT 0,
+        cash BIGINT NOT NULL DEFAULT 0, active_seconds BIGINT NOT NULL DEFAULT 0,
+        streak INT NOT NULL DEFAULT 0, best_streak INT NOT NULL DEFAULT 0,
+        active TINYINT(1) NOT NULL DEFAULT 0,
+        completed_mask INT NOT NULL DEFAULT 0, awarded_mask INT NOT NULL DEFAULT 0,
+        PRIMARY KEY(server_id, round_id, steam_id),
+        INDEX(steam_id, last_seen), INDEX(server_id, active)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS challenge_daily_progress (
+        day DATE NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        kills INT NOT NULL DEFAULT 0, cash BIGINT NOT NULL DEFAULT 0,
+        active_seconds BIGINT NOT NULL DEFAULT 0,
+        round_points_awarded INT NOT NULL DEFAULT 0,
+        completed_mask INT NOT NULL DEFAULT 0, awarded_mask INT NOT NULL DEFAULT 0,
+        PRIMARY KEY(day, steam_id), INDEX(steam_id, day)
+    ) ENGINE=InnoDB""",
+    """CREATE TABLE IF NOT EXISTS challenge_daily_round_kills (
+        day DATE NOT NULL, steam_id VARCHAR(50) NOT NULL,
+        server_id VARCHAR(50) NOT NULL, round_id CHAR(36) NOT NULL,
+        kills INT NOT NULL DEFAULT 0,
+        PRIMARY KEY(day, steam_id, server_id, round_id), INDEX(steam_id, day)
+    ) ENGINE=InnoDB""",
+)
+
 MIGRATIONS = (
     (1, TABLES),
     (2, FACTION_ENTRY_CORRECTION),
@@ -166,6 +196,7 @@ MIGRATIONS = (
     (7, REWARD_SHOP_HARDENING),
     (8, SEED_QUEST),
     (9, DAILY_PLAYTIME),
+    (10, CHALLENGE_QUESTS),
 )
 
 
