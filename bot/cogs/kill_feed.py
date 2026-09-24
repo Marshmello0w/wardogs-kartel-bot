@@ -9,7 +9,7 @@ from core import config
 
 MAX_BUFFER = 600
 BATCH_SIZE = 20
-MAX_MESSAGE_CHARS = 3800
+MAX_MESSAGE_CHARS = 1800
 MAX_AGE = timedelta(minutes=2)
 
 
@@ -75,20 +75,20 @@ class KillFeed(commands.Cog):
             length = 0
             while queue and len(lines) < BATCH_SIZE:
                 line = queue[0]
-                if lines and length + len(line) + 1 > MAX_MESSAGE_CHARS:
+                if lines and length + len(line) + 2 > MAX_MESSAGE_CHARS:
                     break
                 queue.popleft()
                 lines.append(line)
-                length += len(line) + 1
+                length += len(line) + 2
             dropped = self.dropped.pop(server_id, 0)
             if dropped:
                 note = f'{dropped} weitere Ereignisse wegen hoher Last ausgelassen.'
-                if length + len(note) + 1 <= MAX_MESSAGE_CHARS:
+                if length + len(note) + 2 <= MAX_MESSAGE_CHARS:
                     lines.append(note)
                 else:
                     self.dropped[server_id] = dropped
             self.bot.dispatch('bot_log', f'Kill-Feed · {config.server(server_id).title}',
-                              '\n'.join(lines), discord.Color.orange(), channel_id)
+                              '\n\n'.join(lines), discord.Color.orange(), channel_id, True)
 
     @tasks.loop(seconds=10)
     async def flush_loop(self):

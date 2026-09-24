@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 from cogs.challenge_quests import advance_round
 from cogs.combat_feed import (CombatFeed, ROUND_GOALS, DAILY_GOALS,
                               award_round, record_combat_quests, record_feed_streak)
+from cogs.discord_logger import DiscordLogger
 from cogs.kill_feed import BATCH_SIZE, MAX_MESSAGE_CHARS, KillFeed, kill_line, recent_batch
 from domain.combat_feed import normalized_kill, relation, roster_for_event
 from web.app import create_app
@@ -278,6 +279,8 @@ class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):
         first, second = (call.args for call in bot.dispatch.call_args_list)
         self.assertEqual(first[0], 'bot_log')
         self.assertEqual(first[4], '1552646581646393374')
+        self.assertIs(first[5], True)
+        self.assertIn('\n\n', first[2])
         self.assertEqual(second[4], '1552646711514497115')
         self.assertEqual(first[2].count('**A**'), BATCH_SIZE)
         self.assertEqual(len(cog.pending['server1']), 1)
@@ -319,6 +322,33 @@ class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):
         bot.dispatch.assert_called_once()
         self.assertEqual(bot.dispatch.call_args.args[0], 'combat_kill_batch')
         self.assertEqual(bot.dispatch.call_args.args[1], 'server3')
+
+
+class DiscordPlainLogTests(unittest.IsolatedAsyncioTestCase):
+    async def test_kill_feed_uses_plain_message_without_embed_or_mentions(self):
+        bot = MagicMock()
+        channel = MagicMock()
+        channel.send = AsyncMock()
+        bot.get_channel.return_value = channel
+        logger = DiscordLogger(bot)
+        await logger.on_bot_log('Kill-Feed · Server 1', '**A** → **B**',
+                                channel_id='1552646581646393374', plain=True)
+        channel.send.assert_awaited_once()
+        kwargs = channel.send.call_args.kwargs
+        self.assertEqual(kwargs['content'], '**A** → **B**')
+        self.assertNotIn('embed', kwargs)
+        self.assertFalse(kwargs['allowed_mentions'].everyone)
+
+    async def test_other_bot_logs_remain_embeds(self):
+        bot = MagicMock()
+        channel = MagicMock()
+        channel.send = AsyncMock()
+        bot.get_channel.return_value = channel
+        logger = DiscordLogger(bot)
+        await logger.on_bot_log('Status', 'Bereit', channel_id='1552646581646393374')
+        kwargs = channel.send.call_args.kwargs
+        self.assertEqual(kwargs['embed'].description, 'Bereit')
+        self.assertNotIn('content', kwargs)
 
 
 class ForwardingTests(unittest.IsolatedAsyncioTestCase):

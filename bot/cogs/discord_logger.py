@@ -18,7 +18,7 @@ class DiscordLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_bot_log(self, title: str, description: str, color: discord.Color = discord.Color.blue(),
-                         channel_id: str | None = None):
+                         channel_id: str | None = None, plain: bool = False):
         """
         Custom event listener. 
         Kann im gesamten Bot aufgerufen werden per:
@@ -28,13 +28,16 @@ class DiscordLogger(commands.Cog):
         if not target_channel_id:
             return
 
-        embed = discord.Embed(
-            title=title[:256],
-            description=description[:4096],
-            color=color
-        )
-        embed.set_footer(text="Event Timestamp")
-        embed.timestamp = discord.utils.utcnow()
+        if plain:
+            content = description[:2000]
+        else:
+            embed = discord.Embed(
+                title=title[:256],
+                description=description[:4096],
+                color=color
+            )
+            embed.set_footer(text="Event Timestamp")
+            embed.timestamp = discord.utils.utcnow()
 
         try:
             # Serialise messages per channel and leave a safety margin below
@@ -51,7 +54,10 @@ class DiscordLogger(commands.Cog):
                     except Exception as e:
                         logging.error(f"Konnte Log-Channel nicht finden: {e}")
                         return
-                await channel.send(embed=embed)
+                if plain:
+                    await channel.send(content=content, allowed_mentions=discord.AllowedMentions.none())
+                else:
+                    await channel.send(embed=embed)
                 self._last_log_sent_at[str(target_channel_id)] = monotonic()
         except Exception as e:
             logging.error(f"Konnte Bot-Log nicht in Discord senden: {e}")
