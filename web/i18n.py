@@ -127,7 +127,6 @@ TEXT['en'].update({
 
 TEXT['de'].update({
     'combat_title': 'Kampfstatistiken',
-    'combat_since': 'Seit Beginn der Feed-Erfassung; getrennt von den bisherigen RCON-Gesamtwerten.',
     'combat_kills': 'Erfasste Kills', 'combat_deaths': 'Erfasste Tode',
     'combat_headshots': 'Headshots', 'combat_headshot': 'Headshot',
     'combat_longest': 'Weitester Kill', 'combat_weapons': 'Häufigste Waffen',
@@ -144,7 +143,6 @@ TEXT['de'].update({
 })
 TEXT['en'].update({
     'combat_title': 'Combat statistics',
-    'combat_since': 'Since feed tracking began; separate from existing RCON lifetime totals.',
     'combat_kills': 'Recorded kills', 'combat_deaths': 'Recorded deaths',
     'combat_headshots': 'Headshots', 'combat_headshot': 'Headshot',
     'combat_longest': 'Longest kill', 'combat_weapons': 'Most used weapons',

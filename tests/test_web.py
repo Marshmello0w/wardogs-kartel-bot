@@ -336,6 +336,7 @@ class RouteTests(unittest.TestCase):
         self.assertIn(STEAM_ID, result.text)
         self.assertNotIn(OTHER_ID, result.text)
         self.assertIn('Kampfstatistiken', result.text)
+        self.assertNotIn('Seit Beginn der Feed-Erfassung', result.text)
         self.assertIn('&lt;script&gt;unsafe&lt;/script&gt;', result.text)
         self.assertNotIn('<script>unsafe</script>', result.text)
         self.assertIn('&lt;script&gt;secret&lt;/script&gt;', result.text)
@@ -383,6 +384,7 @@ class RouteTests(unittest.TestCase):
                                     headers={'origin': SETTINGS.base_url}, follow_redirects=False)
         self.assertEqual(response.headers['location'], '/')
         self.assertIn('Combat statistics', self.client.get('/me').text)
+        self.assertNotIn('Since feed tracking began', self.client.get('/me').text)
 
     def test_challenge_quests_are_translated_on_private_page(self):
         self.login()
