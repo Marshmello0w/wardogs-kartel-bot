@@ -18,6 +18,11 @@ REGION_GUARD_LOG_CHANNEL_ID = os.getenv("REGION_GUARD_LOG_CHANNEL_ID", "")
 VIP_CHANNEL_ID = os.getenv("VIP_CHANNEL_ID", "1550791504455532554")
 COMBAT_ALERT_CHANNEL_ID = os.getenv("COMBAT_ALERT_CHANNEL_ID", "1552623993553690634")
 COMBAT_FEED_ENABLED = os.getenv("COMBAT_FEED_ENABLED", "false").strip().casefold() in ("1", "true", "yes")
+KILL_FEED_CHANNEL_IDS = {
+    f"server{i}": os.getenv(f"KILL_FEED_SERVER{i}_CHANNEL_ID", default)
+    for i, default in enumerate(("1552646581646393374", "1552646711514497115",
+                                 "1552646738798715021"), 1)
+}
 
 
 def _bounded_int(name, default, minimum, maximum):
@@ -198,6 +203,11 @@ def validate():
         if value and (not str(value).isascii() or not str(value).isdigit() or int(value) <= 0):
             logging.error("Invalid %s; associated surface disabled", key)
             globals()[key] = ""
+    for server_id, channel_id in KILL_FEED_CHANNEL_IDS.items():
+        if channel_id and (not str(channel_id).isascii() or not str(channel_id).isdigit()
+                           or int(channel_id) <= 0):
+            logging.error("Invalid kill feed channel for %s; disabled", server_id)
+            KILL_FEED_CHANNEL_IDS[server_id] = ""
     if not GUILD_ID:
         logging.error("GUILD_ID is required; refusing to expose privileged commands globally")
     for srv in servers():

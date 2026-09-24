@@ -147,7 +147,8 @@ class CombatFeed(commands.Cog):
         if config.COMBAT_FEED_ENABLED:
             self.rosters[server_id] = (state, players)
 
-    async def _event(self, cur, server_id, instance_id, event, received_at, batch_index=0):
+    async def _event(self, cur, server_id, instance_id, event, received_at, batch_index=0,
+                     published=None):
         item = normalized_kill(event, instance_id, received_at)
         if item is None:
             return None
@@ -166,6 +167,8 @@ class CombatFeed(commands.Cog):
         if not cur.rowcount:
             return None
         is_player_kill = bool(item['killer'] and item['victim'] and not item['suicide'])
+        if is_player_kill and published is not None:
+            published.append(item)
         if is_player_kill:
             await cur.execute('''INSERT INTO combat_player_stats
                 (server_id,steam_id,kills,headshots,longest_kill_m) VALUES (%s,%s,1,%s,%s)
@@ -224,6 +227,7 @@ class CombatFeed(commands.Cog):
 
     async def process_one(self):
         alerts = []
+        public_kills = []
         async with database.transaction() as cur:
             await cur.execute('''SELECT id,server_id,payload,received_at FROM combat_feed_batches
                 WHERE processed_at IS NULL ORDER BY received_at LIMIT 1 FOR UPDATE''')
@@ -241,7 +245,7 @@ class CombatFeed(commands.Cog):
             # that match clock resets on map changes within one game instance.
             for index, event in enumerate(events):
                 alert = await self._event(cur, batch['server_id'], instance_id, event,
-                                          received_at, index)
+                                          received_at, index, public_kills)
                 if alert:
                     alerts.append(alert)
             await cur.execute('''UPDATE combat_feed_batches SET processed_at=UTC_TIMESTAMP(6)
@@ -251,6 +255,8 @@ class CombatFeed(commands.Cog):
                               f'{server_id}: {steam_id} erzielte mindestens {count} Spielerkills '
                               'innerhalb von 60 Sekunden. Bitte prüfen; keine automatische Strafe.',
                               discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID)
+        if public_kills:
+            self.bot.dispatch('combat_kill_batch', batch['server_id'], public_kills, received_at)
         return True
 
     async def flush_teamkills(self):

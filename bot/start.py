@@ -21,7 +21,7 @@ class KartelBot(commands.Bot):
         for name in ('discord_logger', 'round_tracker', 'server_status', 'leaderboard',
                      'match_events', 'ban_tracker', 'map_vote', 'admin_panel', 'stats_tracker',
                      'server_recap', 'quest_tracker', 'challenge_quests', 'player_lookup', 'low_population_guard', 'reward_shop',
-                     'seed_tracker', 'region_guard', 'combat_feed'):
+                     'seed_tracker', 'region_guard', 'combat_feed', 'kill_feed'):
             await self.load_extension(f'cogs.{name}')
         try:
             # ``config.validate`` requires this identifier before login. Never

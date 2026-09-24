@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 from cogs.challenge_quests import advance_round
 from cogs.combat_feed import (CombatFeed, ROUND_GOALS, DAILY_GOALS,
                               award_round, record_combat_quests, record_feed_streak)
+from cogs.kill_feed import BATCH_SIZE, MAX_MESSAGE_CHARS, KillFeed, kill_line, recent_batch
 from domain.combat_feed import normalized_kill, relation, roster_for_event
 from web.app import create_app
 from web.feed import MAX_BODY_BYTES, forward_once, token_server, validate_batch
@@ -184,11 +185,14 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         cog = CombatFeed(bot)
         cog.rosters['server1'] = sample()
         cur = self.Cursor(rowcount=0)
+        published = []
         with patch('cogs.combat_feed.record_combat_quests', new_callable=AsyncMock) as quests:
-            result = await cog._event(cur, 'server1', 'boot', batch()['events'][0], NOW)
+            result = await cog._event(cur, 'server1', 'boot', batch()['events'][0], NOW,
+                                      published=published)
             self.assertIsNone(result)
             quests.assert_not_awaited()
         self.assertEqual(len(cur.statements), 1)
+        self.assertEqual(published, [])
 
     async def test_rapid_window_and_cooldown_excludes_suicide(self):
         bot = type('Bot', (), {})()
@@ -241,6 +245,80 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any('teamkill_count=0' in sql for sql, _ in cur.statements))
         bot.dispatch.assert_called_once()
         self.assertIn('3 Ereignis', bot.dispatch.call_args.args[2])
+
+
+class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):
+    def test_old_batches_are_not_published(self):
+        self.assertTrue(recent_batch(NOW, NOW + timedelta(minutes=2)))
+        self.assertFalse(recent_batch(NOW, NOW + timedelta(minutes=2, seconds=1)))
+        self.assertFalse(recent_batch(NOW, NOW - timedelta(seconds=1)))
+
+    def test_untrusted_names_are_escaped(self):
+        line = kill_line({'killer_name': '@everyone **bad**\nname',
+                          'victim_name': 'victim', 'cause': 'Id.Item.Rifle',
+                          'distance_m': 150, 'headshot': True})
+        self.assertNotIn('@everyone', line)
+        self.assertIn('150 m', line)
+        self.assertIn('Headshot', line)
+        self.assertNotIn('\n', line)
+
+    async def test_routes_and_batches_by_server_without_suicides(self):
+        bot = MagicMock()
+        with patch('cogs.kill_feed.config.COMBAT_FEED_ENABLED', False):
+            cog = KillFeed(bot)
+        event = {'killer': STEAM_1, 'victim': STEAM_2,
+                 'killer_name': 'A', 'victim_name': 'B', 'suicide': False}
+        await cog.on_combat_kill_batch('server1', [event] * (BATCH_SIZE + 1),
+                                       datetime.now(timezone.utc))
+        await cog.on_combat_kill_batch('server2', [event], datetime.now(timezone.utc))
+        await cog.on_combat_kill_batch('server3', [dict(event, suicide=True)],
+                                       datetime.now(timezone.utc))
+        await cog.flush()
+        self.assertEqual(bot.dispatch.call_count, 2)
+        first, second = (call.args for call in bot.dispatch.call_args_list)
+        self.assertEqual(first[0], 'bot_log')
+        self.assertEqual(first[4], '1552646581646393374')
+        self.assertEqual(second[4], '1552646711514497115')
+        self.assertEqual(first[2].count('**A**'), BATCH_SIZE)
+        self.assertEqual(len(cog.pending['server1']), 1)
+        await cog.flush()
+        self.assertEqual(bot.dispatch.call_count, 3)
+        self.assertEqual(bot.dispatch.call_args.args[4], '1552646581646393374')
+
+    async def test_long_names_stay_within_discord_embed_limit(self):
+        bot = MagicMock()
+        with patch('cogs.kill_feed.config.COMBAT_FEED_ENABLED', False):
+            cog = KillFeed(bot)
+        event = {'killer': STEAM_1, 'victim': STEAM_2,
+                 'killer_name': 'K' * 64, 'victim_name': 'V' * 64,
+                 'cause': 'W' * 80, 'distance_m': 1234, 'suicide': False}
+        await cog.on_combat_kill_batch('server1', [event] * BATCH_SIZE,
+                                       datetime.now(timezone.utc))
+        await cog.flush()
+        self.assertLessEqual(len(bot.dispatch.call_args.args[2]), MAX_MESSAGE_CHARS)
+        self.assertGreater(len(cog.pending['server1']), 0)
+
+    async def test_new_kills_are_dispatched_only_after_batch_commit(self):
+        bot = MagicMock()
+        cog = CombatFeed(bot)
+        class Cursor:
+            async def execute(self, sql, args=()):
+                pass
+            async def fetchone(self):
+                return {'id': 'batch-1', 'server_id': 'server3',
+                        'payload': json.dumps(batch()).encode(),
+                        'received_at': datetime.now(timezone.utc).replace(tzinfo=None)}
+        @asynccontextmanager
+        async def transaction():
+            yield Cursor()
+        async def event(cur, server_id, instance_id, raw, received_at, index, published):
+            published.append({'killer': STEAM_1, 'victim': STEAM_2})
+        with patch('cogs.combat_feed.database.transaction', transaction), \
+             patch.object(cog, '_event', side_effect=event):
+            self.assertTrue(await cog.process_one())
+        bot.dispatch.assert_called_once()
+        self.assertEqual(bot.dispatch.call_args.args[0], 'combat_kill_batch')
+        self.assertEqual(bot.dispatch.call_args.args[1], 'server3')
 
 
 class ForwardingTests(unittest.IsolatedAsyncioTestCase):
