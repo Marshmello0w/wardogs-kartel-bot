@@ -48,9 +48,7 @@ def teamkill_log(server_id, event, faction, names=None):
             f"**{killer}** hat **{victim}** mit **{weapon_label(event['cause'])}** getötet.\n"
             f"Täter-Steam64: `{event['killer']}` · Opfer-Steam64: `{event['victim']}`\n"
             f"{' · '.join(details)}\n"
-            f"Erfasst: <t:{int(event['received_at'].timestamp())}:F>\n"
-            "Einstufung anhand frischer RCON-Fraktionsdaten. Bitte prüfen; "
-            "keine automatische Strafe.")
+            f"Erfasst: <t:{int(event['received_at'].timestamp())}:F>")
 
 
 def teamkill_messages(alerts):

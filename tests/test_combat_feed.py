@@ -64,6 +64,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn(f'<t:{int(NOW.timestamp())}:F>', message)
         self.assertNotIn('@everyone', message)
         self.assertNotIn('bad**\nname', message)
+        self.assertNotIn('Einstufung', message)
+        self.assertNotIn('keine automatische Strafe', message)
 
     def test_teamkill_name_fallback_and_unknown_weapon(self):
         event = normalized_kill(dict(batch()['events'][0], killerName='Feed Killer',
