@@ -55,7 +55,7 @@ TEXT['de'].update({
     'challenge_round_active': 'Aktive Runde', 'challenge_round_last': 'Letzte erfasste Runde · inaktiv',
     'challenge_round_none': 'Noch keine Runde für dich erfasst.',
     'challenge_round_limit': 'Rundenquest-Punkte heute: {earned} von {limit}',
-    'challenge_day_reset': 'Neustart täglich um 00:00 Uhr (Berlin)',
+    'challenge_day_reset': 'Neustart täglich um 00:00 Uhr',
     'challenge_rewarded': 'Belohnt', 'challenge_done_no_reward': 'Erfüllt · Tageslimit erreicht',
     'challenge_open': 'In Arbeit', 'challenge_point_round': 'Je 1 Punkt pro Runde',
     'challenge_point_daily': 'Je 2 Punkte pro Tag',
@@ -102,7 +102,7 @@ TEXT['en'].update({
     'challenge_round_active': 'Active round', 'challenge_round_last': 'Last recorded round · inactive',
     'challenge_round_none': 'No round has been recorded for you yet.',
     'challenge_round_limit': 'Round-quest points today: {earned} of {limit}',
-    'challenge_day_reset': 'Resets daily at 00:00 (Berlin)',
+    'challenge_day_reset': 'Resets daily at 00:00',
     'challenge_rewarded': 'Rewarded', 'challenge_done_no_reward': 'Completed · daily limit reached',
     'challenge_open': 'In progress', 'challenge_point_round': '1 point each per round',
     'challenge_point_daily': '2 points each per day',
@@ -137,9 +137,9 @@ TEXT['de'].update({
     'challenge_round_feed_long_kills': 'Fernschütze',
     'challenge_desc_round_feed_long_kills': 'Ein Kill aus mindestens 150 m in derselben Runde.',
     'challenge_daily_feed_headshots': 'Präzisionstag',
-    'challenge_desc_daily_feed_headshots': '10 Headshots an einem Berliner Kalendertag.',
+    'challenge_desc_daily_feed_headshots': '10 Headshots an einem Tag.',
     'challenge_daily_feed_long_kills': 'Distanzjäger',
-    'challenge_desc_daily_feed_long_kills': '3 Kills aus mindestens 150 m an einem Berliner Kalendertag.',
+    'challenge_desc_daily_feed_long_kills': '3 Kills aus mindestens 150 m an einem Tag.',
 })
 TEXT['en'].update({
     'combat_title': 'Combat statistics',
@@ -153,9 +153,9 @@ TEXT['en'].update({
     'challenge_round_feed_long_kills': 'Long-range shot',
     'challenge_desc_round_feed_long_kills': 'Get one kill from at least 150 m in the same round.',
     'challenge_daily_feed_headshots': 'Precision day',
-    'challenge_desc_daily_feed_headshots': 'Get 10 headshots in one Berlin calendar day.',
+    'challenge_desc_daily_feed_headshots': 'Get 10 headshots in one day.',
     'challenge_daily_feed_long_kills': 'Distance hunter',
-    'challenge_desc_daily_feed_long_kills': 'Get 3 kills from at least 150 m in one Berlin calendar day.',
+    'challenge_desc_daily_feed_long_kills': 'Get 3 kills from at least 150 m in one day.',
 })
 
 
