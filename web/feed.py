@@ -85,10 +85,12 @@ class FeedIngressDatabase:
             pool = await self.connect()
             async with pool.acquire() as conn:
                 async with conn.cursor() as cur:
+                    # aiomysql/PyMySQL on the AMP runtime cannot bind bytes here;
+                    # UNHEX preserves the original payload for exact forwarding.
                     await cur.execute('''INSERT INTO combat_feed_batches
                         (id,server_id,payload,received_at,next_forward_at)
-                        VALUES (%s,%s,%s,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))''',
-                                      (batch_id, server_id, raw))
+                        VALUES (%s,%s,UNHEX(%s),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))''',
+                                      (batch_id, server_id, raw.hex()))
         return batch_id
 
     async def pending(self, limit=20):

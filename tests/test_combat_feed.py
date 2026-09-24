@@ -20,7 +20,7 @@ from cogs.combat_feed import (CombatFeed, ROUND_GOALS, DAILY_GOALS,
 from cogs.kill_feed import BATCH_SIZE, MAX_MESSAGE_CHARS, KillFeed, kill_line, recent_batch
 from domain.combat_feed import normalized_kill, relation, roster_for_event
 from web.app import create_app
-from web.feed import MAX_BODY_BYTES, forward_once, token_server, validate_batch
+from web.feed import FeedIngressDatabase, MAX_BODY_BYTES, forward_once, token_server, validate_batch
 from web.settings import Settings
 
 STEAM_1 = '76561199711897930'
@@ -377,6 +377,34 @@ class IngressTests(unittest.TestCase):
         off = create_app(settings_off, repository=Repo(), feed_database=queue)
         with TestClient(off, base_url=settings_off.base_url) as client:
             self.assertEqual(client.post('/api/ingest/events', content=raw).status_code, 503)
+
+
+class IngressDatabaseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_receive_preserves_original_bytes_without_binding_bytes(self):
+        statements = []
+
+        class Cursor:
+            async def execute(self, sql, args):
+                statements.append((sql, args))
+
+        class Connection:
+            @asynccontextmanager
+            async def cursor(self):
+                yield Cursor()
+
+        class Pool:
+            @asynccontextmanager
+            async def acquire(self):
+                yield Connection()
+
+        ingress = FeedIngressDatabase('mysql://unused:unused@localhost/unused')
+        raw = b'{"events":[{"name":"\xc3\xa4"}]}'
+        with patch.object(ingress, 'connect', new=AsyncMock(return_value=Pool())):
+            await ingress.receive('server1', raw)
+        sql, args = statements[0]
+        self.assertIn('UNHEX(%s)', sql)
+        self.assertIsInstance(args[2], str)
+        self.assertEqual(bytes.fromhex(args[2]), raw)
 
 
 if __name__ == '__main__':
