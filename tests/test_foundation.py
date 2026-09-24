@@ -65,7 +65,7 @@ class BanReasonTests(unittest.TestCase):
     def test_temporary_ingame_ban_shows_berlin_expiry(self):
         expiry = datetime(2026, 9, 22, 12, 30)  # Stored as naive UTC in MySQL.
         self.assertEqual(ingame_ban_reason('Cheating', expiry),
-                         'Cheating | Entbannung: 22.09.2026 um 14:30 Uhr (Europe/Berlin)')
+                         'Cheating | Entbannung: 22.09.2026 um 14:30 Uhr (Europe/Berlin) Discord.gg/dkwd')
 
     def test_permanent_ingame_ban_keeps_the_original_reason(self):
         self.assertEqual(ingame_ban_reason('Cheating', None), 'Cheating')

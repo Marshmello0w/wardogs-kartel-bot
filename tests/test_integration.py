@@ -55,6 +55,17 @@ class FakeRcon:
         return {'text': '', 'revision': '1'}
 
 
+class OfflineRoundTrackerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_round_change_during_player_fetch_discards_sample(self):
+        bot = SimpleNamespace(rcon=FakeRcon())
+        tracker = RoundTracker.__new__(RoundTracker)
+        tracker.bot = bot
+        tracker.observe = AsyncMock(side_effect=[dict(round_id='a', uncertain=False),
+                                                 dict(round_id='b', uncertain=False)])
+        bot.rcon.players = AsyncMock(return_value=[dict(steamId=STEAM)])
+        self.assertIsNone(await tracker.sample_players('server1'))
+
+
 @unittest.skipUnless(os.getenv('KARTEL_TEST_DB_PORT'), 'Set KARTEL_TEST_DB_PORT for isolated local MariaDB tests')
 class MysqlTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -404,13 +415,6 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await tracker.observe('server1')
         self.assertEqual(len(await self.rows('SELECT * FROM round_history')), 1)
         self.assertEqual(len(await self.rows("SELECT * FROM round_events WHERE kind='round_ended'")), 1)
-
-    async def test_round_change_during_player_fetch_discards_sample(self):
-        tracker = RoundTracker.__new__(RoundTracker)
-        tracker.bot = self.bot
-        tracker.observe = AsyncMock(side_effect=[dict(round_id='a', uncertain=False), dict(round_id='b', uncertain=False)])
-        self.bot.rcon.players = AsyncMock(return_value=[dict(steamId=STEAM)])
-        self.assertIsNone(await tracker.sample_players('server1'))
 
     async def test_voting_retry_retains_applied_change_until_cleanup_succeeds(self):
         cog = MapVoteCog.__new__(MapVoteCog)

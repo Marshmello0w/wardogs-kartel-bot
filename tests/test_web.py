@@ -1,10 +1,12 @@
 """Portal tests run independently of Discord and of a production database."""
 import ast
+import importlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
+import tempfile
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
@@ -15,6 +17,8 @@ from web.app import create_app
 from web.repository import DataUnavailable, Repository, ranking_query, server_status
 from web.settings import Settings
 from web.steam import LoginError, OPENID_NS, OPENID_URL, SteamLogin
+
+web_app = importlib.import_module('web.app')
 
 STEAM_ID = '76561199711897930'
 OTHER_ID = '76561198000000001'
@@ -437,6 +441,66 @@ class RouteTests(unittest.TestCase):
     def test_forged_cookie_does_not_authenticate(self):
         self.client.cookies.set('kartell_session', 'forged', domain='kartell.marshmello0w.de')
         self.assertEqual(self.client.get('/me', follow_redirects=False).status_code, 303)
+
+
+class ArtilleryAssetTests(unittest.TestCase):
+    def test_existing_cache_is_pruned_at_startup(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(web_app, 'ARTILLERY_CACHE_ROOT', Path(directory)), \
+             patch.object(web_app, 'ARTILLERY_CACHE_MAX_BYTES', 100), \
+             patch.object(web_app, 'ARTILLERY_CACHE_MAX_FILES', 2):
+            for number in range(3):
+                (Path(directory) / f'old-{number}.webp').write_bytes(b'x')
+            app = create_app(SETTINGS, Repository(FixtureDatabase()))
+            with TestClient(app, base_url=SETTINGS.base_url):
+                self.assertEqual(len(list(Path(directory).glob('*.webp'))), 2)
+
+    def test_cache_is_bounded_and_reuses_cached_assets(self):
+        requested = []
+
+        def upstream(request):
+            requested.append(request.url.path)
+            return httpx.Response(200, content=b'tile')
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(web_app, 'ARTILLERY_CACHE_ROOT', Path(directory)), \
+             patch.object(web_app, 'ARTILLERY_CACHE_MAX_BYTES', 8), \
+             patch.object(web_app, 'ARTILLERY_CACHE_MAX_FILES', 2):
+            asset_client = httpx.AsyncClient(transport=httpx.MockTransport(upstream))
+            app = create_app(SETTINGS, Repository(FixtureDatabase()), asset_client=asset_client)
+            paths = [f'/artillery-assets/maps/tiles/bakurani/zoom_1/{x}_{y}.webp'
+                     for x, y in ((0, 0), (1, 0), (0, 1))]
+            with TestClient(app, base_url=SETTINGS.base_url) as client:
+                for path in paths:
+                    self.assertEqual(client.get(path).content, b'tile')
+                self.assertEqual(client.get(paths[-1]).content, b'tile')
+            files = [path for path in Path(directory).rglob('*') if path.is_file()]
+            self.assertLessEqual(len(files), 2)
+            self.assertLessEqual(sum(path.stat().st_size for path in files), 8)
+            self.assertEqual(len(requested), 3)
+
+    def test_oversized_stream_stops_before_full_upstream_body(self):
+        chunks_read = []
+
+        class UpstreamBody(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                for chunk in (b'12345', b'67890', b'ignored'):
+                    chunks_read.append(chunk)
+                    yield chunk
+
+        def upstream(request):
+            return httpx.Response(200, stream=UpstreamBody())
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(web_app, 'ARTILLERY_CACHE_ROOT', Path(directory)), \
+             patch.object(web_app, 'ARTILLERY_ASSET_MAX_BYTES', 8):
+            asset_client = httpx.AsyncClient(transport=httpx.MockTransport(upstream))
+            app = create_app(SETTINGS, Repository(FixtureDatabase()), asset_client=asset_client)
+            with TestClient(app, base_url=SETTINGS.base_url) as client:
+                result = client.get('/artillery-assets/maps/tiles/bakurani/zoom_0/0_0.webp')
+            self.assertEqual(result.status_code, 503)
+            self.assertEqual(chunks_read, [b'12345', b'67890'])
+            self.assertFalse(list(Path(directory).rglob('*.webp')))
 
 
 if __name__ == '__main__':

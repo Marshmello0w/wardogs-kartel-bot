@@ -26,7 +26,7 @@ def ingame_ban_reason(reason, expires_at):
     expires_at = (expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None
                   else expires_at.astimezone(timezone.utc))
     local = expires_at.astimezone(BERLIN)
-    return f'{reason} | Entbannung: {local:%d.%m.%Y um %H:%M Uhr} (Europe/Berlin)'
+    return f'{reason} | Entbannung: {local:%d.%m.%Y um %H:%M Uhr} (Europe/Berlin) Discord.gg/dkwd'
 
 
 def config_banned_ids(text):

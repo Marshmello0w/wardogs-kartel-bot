@@ -38,15 +38,44 @@ ARTILLERY_ASSET_PATH = re.compile(
 )
 ARTILLERY_ASSET_ORIGIN = 'https://assets.wardogs-artillery.com/releases/assets-v1/'
 ARTILLERY_CACHE_ROOT = ROOT / 'data' / 'artillery_assets'
+ARTILLERY_ASSET_MAX_BYTES = 8_000_000
+ARTILLERY_CACHE_MAX_BYTES = 256_000_000
+ARTILLERY_CACHE_MAX_FILES = 512
 
 
-def cache_artillery_asset(path, content):
-    """Keep immutable upstream release files locally after their first request."""
+def prune_artillery_cache(root):
+    """Bound both disk usage and inode count, including files from older releases."""
+    if not root.exists():
+        return
+    files = []
+    for path in root.rglob('*'):
+        if path.is_file() and not path.name.endswith('.tmp'):
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue
+            files.append((stat.st_mtime_ns, path, stat.st_size))
+    total = sum(size for _, _, size in files)
+    count = len(files)
+    for _, path, size in sorted(files):
+        if total <= ARTILLERY_CACHE_MAX_BYTES and count <= ARTILLERY_CACHE_MAX_FILES:
+            break
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        total -= size
+        count -= 1
+
+
+def cache_artillery_asset(path, content, root):
+    """Cache an immutable upstream file, evicting older entries when full."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.' + secrets.token_hex(6) + '.tmp')
     try:
         temporary.write_bytes(content)
         os.replace(temporary, path)
+        prune_artillery_cache(root)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -100,7 +129,7 @@ def internal_redirect_path(value):
     return target
 
 
-def create_app(settings=None, repository=None, steam_client=None, reward_submission=None):
+def create_app(settings=None, repository=None, steam_client=None, reward_submission=None, asset_client=None):
     settings = settings or Settings.from_env()
     db = ReadDatabase(settings.db_url)
     reward_db = reward_submission or RewardSubmissionDatabase(settings.reward_db_url)
@@ -109,18 +138,24 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     # API keys and OpenID signatures must not appear in request logs.
     logging.getLogger('httpx').setLevel(logging.WARNING)
     client = steam_client or httpx.AsyncClient(timeout=10, follow_redirects=False)
-    artillery_client = httpx.AsyncClient(timeout=12, follow_redirects=False)
+    artillery_client = asset_client or httpx.AsyncClient(timeout=12, follow_redirects=False)
+    artillery_cache_lock = asyncio.Lock()
     steam = SteamLogin(settings, client)
 
     @asynccontextmanager
     async def lifespan(app):
+        try:
+            await asyncio.to_thread(prune_artillery_cache, ARTILLERY_CACHE_ROOT)
+        except OSError:
+            logger.warning('Artillery asset cache unavailable')
         yield
         await db.close()
         if reward_submission is None:
             await reward_db.close()
         if steam_client is None:
             await client.aclose()
-        await artillery_client.aclose()
+        if asset_client is None:
+            await artillery_client.aclose()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.repo, app.state.steam, app.state.reward_db, app.state.visitors = repo, steam, reward_db, visitors
@@ -197,20 +232,35 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
         media_type = ('image/webp' if asset_path.endswith('.webp') else
                       'application/json' if asset_path.endswith('.json') else 'application/octet-stream')
         cached = ARTILLERY_CACHE_ROOT / asset_path
-        if cached.is_file():
-            return FileResponse(cached, media_type=media_type)
+        async with artillery_cache_lock:
+            try:
+                if cached.is_file() and cached.stat().st_size <= ARTILLERY_ASSET_MAX_BYTES:
+                    content = await asyncio.to_thread(cached.read_bytes)
+                    await asyncio.to_thread(os.utime, cached, None)
+                    return Response(content, media_type=media_type)
+            except OSError:
+                logger.warning('Artillery asset cache unavailable')
         try:
-            upstream = await artillery_client.get(ARTILLERY_ASSET_ORIGIN + asset_path)
+            async with artillery_client.stream('GET', ARTILLERY_ASSET_ORIGIN + asset_path) as upstream:
+                if upstream.status_code != 200:
+                    raise HTTPException(404 if upstream.status_code == 404 else 503)
+                length = upstream.headers.get('content-length', '')
+                if length.isdecimal() and (len(length) > 12 or int(length) > ARTILLERY_ASSET_MAX_BYTES):
+                    raise HTTPException(503)
+                content = bytearray()
+                async for chunk in upstream.aiter_bytes():
+                    if len(content) + len(chunk) > ARTILLERY_ASSET_MAX_BYTES:
+                        raise HTTPException(503)
+                    content.extend(chunk)
         except httpx.HTTPError:
             raise HTTPException(503)
-        if upstream.status_code != 200 or len(upstream.content) > 8_000_000:
-            raise HTTPException(404 if upstream.status_code == 404 else 503)
         try:
-            await asyncio.to_thread(cache_artillery_asset, cached, upstream.content)
+            async with artillery_cache_lock:
+                await asyncio.to_thread(cache_artillery_asset, cached, content, ARTILLERY_CACHE_ROOT)
         except OSError:
             # A read-only deployment still serves the requested asset.
             logger.warning('Artillery asset cache unavailable')
-        return Response(upstream.content, media_type=media_type)
+        return Response(bytes(content), media_type=media_type)
 
     def render(request, template, status=200, **context):
         user = request.session.get('user')
