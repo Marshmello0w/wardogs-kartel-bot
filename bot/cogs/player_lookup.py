@@ -48,6 +48,12 @@ def relative_when(value):
     return discord.utils.format_dt(stamp, 'R')
 
 
+def headshot_summary(kills, headshots):
+    """Use feed kills as the denominator, never older RCON lifetime kills."""
+    kills, headshots = int(kills or 0), int(headshots or 0)
+    return f'{headshots}/{kills} Feed-Kills · {100 * headshots / kills:.1f} %' if kills else '— (keine Feed-Kills)'
+
+
 def title_for(server_id):
     try:
         return config.server(server_id).title
@@ -129,6 +135,8 @@ class PlayerLookupCog(commands.Cog):
             factions = await cur.fetchall()
             await cur.execute('SELECT server_id,total_ping,ping_samples FROM player_ping_stats WHERE steam_id=%s ORDER BY server_id', (steam_id,))
             pings = await cur.fetchall()
+            await cur.execute('SELECT server_id,kills,headshots FROM combat_player_stats WHERE steam_id=%s ORDER BY server_id', (steam_id,))
+            combat_stats = await cur.fetchall()
             await cur.execute('SELECT * FROM global_bans WHERE steam_id=%s ORDER BY issued_at DESC,id DESC', (steam_id,))
             bans = await cur.fetchall()
             await cur.execute('SELECT * FROM banned_players WHERE steam_id=%s ORDER BY server_id', (steam_id,))
@@ -163,10 +171,15 @@ class PlayerLookupCog(commands.Cog):
             servers.setdefault(row['server_id'], {}).setdefault('factions', []).append(row)
         for row in pings:
             servers.setdefault(row['server_id'], {}).update(ping=row)
+        for row in combat_stats:
+            servers.setdefault(row['server_id'], {}).update(combat=row)
         for row in observed_bans:
             servers.setdefault(row['server_id'], {}).update(observed_ban=row)
+        feed_kills = sum(int(row.get('kills') or 0) for row in combat_stats)
+        feed_headshots = sum(int(row.get('headshots') or 0) for row in combat_stats)
         return dict(steam_id=steam_id, names=sorted(names), servers=servers, bans=bans,
                     target=target, jobs=jobs,
+                    feed_kills=feed_kills, feed_headshots=feed_headshots,
                     points=int(quest_points['points']) if quest_points else 0,
                     vip_memberships=vip_memberships, point_ledger=point_ledger,
                     exists=bool(servers or bans or target or jobs or quest_points or vip_memberships or point_ledger))
@@ -195,7 +208,8 @@ class PlayerLookupCog(commands.Cog):
         shown_names = all_names if len(all_names) <= 1000 else all_names[:990] + ' …'
         overview.description = (
             f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {shown_names}\n'
-            f'**Quest-Punkte:** {profile.get("points", 0)}')
+            f'**Quest-Punkte:** {profile.get("points", 0)}\n'
+            f'**Headshot-Quote gesamt:** {headshot_summary(profile.get("feed_kills"), profile.get("feed_headshots"))}')
         overview.add_field(name='⭐ VIP', value=self.vip_summary(profile.get('vip_memberships', [])), inline=False)
         if profile['target']:
             target = profile['target']
@@ -215,7 +229,7 @@ class PlayerLookupCog(commands.Cog):
 
         for server_id, values in sorted(servers.items()):
             board, play, daily = values.get('leaderboard', {}), values.get('playtime', {}), values.get('daily', {})
-            current, ping = values.get('counter', {}), values.get('ping', {})
+            current, ping, combat = values.get('counter', {}), values.get('ping', {}), values.get('combat', {})
             kills, deaths, cash = board.get('lifetime_kills', 0), board.get('lifetime_deaths', 0), board.get('lifetime_cash', 0)
             average_ping = (int(ping['total_ping']) / int(ping['ping_samples'])) if ping.get('ping_samples') else None
             factions = values.get('factions', [])
@@ -230,6 +244,7 @@ class PlayerLookupCog(commands.Cog):
                 f"Qualität {current.get('quality', '—')}\n"
                 f"**7/30 Tage:** K {daily.get('kills_7d', 0)}/{daily.get('kills_30d', 0)} · "
                 f"T {daily.get('deaths_7d', 0)}/{daily.get('deaths_30d', 0)} · Cash {daily.get('cash_7d', 0)}/{daily.get('cash_30d', 0)}\n"
+                f"**Headshot-Quote:** {headshot_summary(combat.get('kills'), combat.get('headshots'))}\n"
                 f"**Ping:** {ping_text} · **Server-Ban:** {'ja' if values.get('observed_ban') else 'nein'}\n"
                 f"**Fraktionsbeitritte:** {faction_summary}")
             overview.add_field(name=f'📊 {title_for(server_id)}', value=server_text, inline=False)

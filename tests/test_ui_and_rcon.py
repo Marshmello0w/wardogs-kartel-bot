@@ -1,5 +1,6 @@
 import asyncio
 import copy
+from contextlib import asynccontextmanager
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,7 +18,7 @@ from cogs.admin_panel import AdminPanelCog
 from cogs.leaderboard import Leaderboard, PublicLeaderboardDropdown, following_sort
 from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
-from cogs.player_lookup import PlayerLookupCog, unique_matches
+from cogs.player_lookup import PlayerLookupCog, headshot_summary, unique_matches
 from cogs.server_recap import current_day_window, player_graph, previous_day_window
 from cogs.server_status import format_scores
 from cogs.stats_tracker import daily_playtime_slices
@@ -207,6 +208,49 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
         ]))
         self.assertIn('+5 Punkte · Seed-Start', ledger_pages[0].fields[0].value)
         self.assertIn('-150 Punkte · VIP-Einlösung', ledger_pages[0].fields[0].value)
+
+    def test_lookup_headshot_rate_uses_feed_kills_and_handles_no_kills(self):
+        cog = PlayerLookupCog.__new__(PlayerLookupCog)
+        profile = dict(steam_id='76561190000000001', names=['Tester'], target=None,
+                       bans=[], jobs=[], points=0, vip_memberships=[], feed_kills=30,
+                       feed_headshots=8, servers={
+                           'server1': {'leaderboard': {'lifetime_kills': 100},
+                                       'combat': {'kills': 20, 'headshots': 5}},
+                           'server2': {'combat': {'kills': 10, 'headshots': 3}},
+                       })
+        page = PlayerLookupCog.pages(cog, profile)[0]
+        self.assertIn('8/30 Feed-Kills · 26.7 %', page.description)
+        server_fields = [field.value for field in page.fields if field.name.startswith('📊')]
+        self.assertIn('5/20 Feed-Kills · 25.0 %', server_fields[0])
+        self.assertIn('3/10 Feed-Kills · 30.0 %', server_fields[1])
+        self.assertEqual(headshot_summary(0, 0), '— (keine Feed-Kills)')
+
+    async def test_lookup_profile_reads_headshots_for_all_servers(self):
+        class Cursor:
+            sql = ''
+
+            async def execute(self, sql, args=()):
+                self.sql = sql
+
+            async def fetchall(self):
+                if 'FROM combat_player_stats' in self.sql:
+                    return [{'server_id': 'server1', 'kills': 20, 'headshots': 5},
+                            {'server_id': 'server2', 'kills': 10, 'headshots': 3}]
+                return []
+
+            async def fetchone(self):
+                return None
+
+        @asynccontextmanager
+        async def transaction():
+            yield Cursor()
+
+        with patch('cogs.player_lookup.database.transaction', transaction):
+            profile = await PlayerLookupCog.profile(PlayerLookupCog.__new__(PlayerLookupCog),
+                                                    '76561190000000001')
+        self.assertEqual((profile['feed_kills'], profile['feed_headshots']), (30, 8))
+        self.assertEqual(profile['servers']['server1']['combat']['headshots'], 5)
+        self.assertTrue(profile['exists'])
 
     def test_live_status_formats_team_scores(self):
         self.assertEqual(format_scores({'factionScores': [
