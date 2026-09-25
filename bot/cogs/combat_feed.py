@@ -303,7 +303,7 @@ class CombatFeed(commands.Cog):
                               discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID)
         for message in teamkill_messages(teamkills):
             self.bot.dispatch('bot_log', 'Möglicher Teamkill – prüfen', message,
-                              discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID, True)
+                              discord.Color.orange(), config.TEAMKILL_ALERT_CHANNEL_ID, True)
         if public_kills:
             self.bot.dispatch('combat_kill_batch', batch['server_id'], public_kills, received_at)
         return True

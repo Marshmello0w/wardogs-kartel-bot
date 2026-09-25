@@ -336,8 +336,32 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         bot.dispatch.assert_called_once()
         args = bot.dispatch.call_args.args
         self.assertEqual(args[0], 'bot_log')
-        self.assertEqual(args[4], '1552623993553690634')
+        self.assertEqual(args[4], '1553108089425891379')
         self.assertIs(args[5], True)
+
+    async def test_rapid_kill_alert_stays_in_cheater_channel(self):
+        bot = MagicMock()
+        cog = CombatFeed(bot)
+        class BatchCursor:
+            async def execute(self, sql, args=()):
+                pass
+            async def fetchone(self):
+                return {'id': 'batch-1', 'server_id': 'server1',
+                        'payload': json.dumps(batch()).encode(),
+                        'received_at': NOW.replace(tzinfo=None)}
+        @asynccontextmanager
+        async def transaction():
+            yield BatchCursor()
+        async def event(cur, server_id, instance_id, raw, received_at, index,
+                        published, teamkills):
+            return ('rapid', server_id, STEAM_1, 10)
+        with patch('cogs.combat_feed.database.transaction', transaction), \
+             patch.object(cog, '_event', side_effect=event):
+            self.assertTrue(await cog.process_one())
+        bot.dispatch.assert_called_once()
+        args = bot.dispatch.call_args.args
+        self.assertEqual(args[0], 'bot_log')
+        self.assertEqual(args[4], '1552623993553690634')
 
 
 class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):

@@ -17,6 +17,7 @@ DISCORD_LOG_CHANNEL_ID = os.getenv("DISCORD_LOG_CHANNEL_ID")
 REGION_GUARD_LOG_CHANNEL_ID = os.getenv("REGION_GUARD_LOG_CHANNEL_ID", "")
 VIP_CHANNEL_ID = os.getenv("VIP_CHANNEL_ID", "1550791504455532554")
 COMBAT_ALERT_CHANNEL_ID = os.getenv("COMBAT_ALERT_CHANNEL_ID", "1552623993553690634")
+TEAMKILL_ALERT_CHANNEL_ID = os.getenv("TEAMKILL_ALERT_CHANNEL_ID", "1553108089425891379")
 COMBAT_FEED_ENABLED = os.getenv("COMBAT_FEED_ENABLED", "false").strip().casefold() in ("1", "true", "yes")
 KILL_FEED_CHANNEL_IDS = {
     f"server{i}": os.getenv(f"KILL_FEED_SERVER{i}_CHANNEL_ID", default)
@@ -198,7 +199,8 @@ def validate():
     """Disable only the misconfigured surface; never print credentials."""
     for key in ("GUILD_ID", "SERVER_STATUS_CHANNEL_ID", "SERVER_RECAP_CHANNEL_ID", "DISCORD_LOG_CHANNEL_ID", "REGION_GUARD_LOG_CHANNEL_ID",
                 "LEADERBOARD_CHANNEL_ID", "ADMIN_PANEL_CHANNEL_ID", "VIP_CHANNEL_ID",
-                "SERVER2_VOTE_CHANNEL_ID", "SERVER3_VOTE_CHANNEL_ID", "COMBAT_ALERT_CHANNEL_ID"):
+                "SERVER2_VOTE_CHANNEL_ID", "SERVER3_VOTE_CHANNEL_ID", "COMBAT_ALERT_CHANNEL_ID",
+                "TEAMKILL_ALERT_CHANNEL_ID"):
         value = globals()[key]
         if value and (not str(value).isascii() or not str(value).isdigit() or int(value) <= 0):
             logging.error("Invalid %s; associated surface disabled", key)
