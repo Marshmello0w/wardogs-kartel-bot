@@ -255,6 +255,13 @@ MIGRATIONS = (
     (9, DAILY_PLAYTIME),
     (10, CHALLENGE_QUESTS),
     (11, COMBAT_FEED),
+    (12, (
+        """CREATE TABLE IF NOT EXISTS ingame_quest_delivery (
+            ledger_id BIGINT PRIMARY KEY, server_id VARCHAR(50) NULL,
+            status VARCHAR(20) NOT NULL, attempted_at DATETIME NULL,
+            INDEX(status, attempted_at)
+        ) ENGINE=InnoDB""",
+    )),
 )
 
 

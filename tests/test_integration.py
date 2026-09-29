@@ -22,6 +22,7 @@ from core.runtime import Health
 from domain import stats
 from domain.rounds import advance
 from infrastructure import database, storage
+from infrastructure.migrations import MIGRATIONS
 from services.ban_service import BanService
 from cogs.round_tracker import RoundTracker
 from cogs.map_vote import MapVoteCog
@@ -104,7 +105,7 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         await self.service.decide(STEAM, 'ban', 'reason', 'admin', 24, '24 Stunden')
         await database.init_db(self.pool)
         self.assertEqual(len(await self.rows('SELECT * FROM global_bans')), 1)
-        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), 10)
+        self.assertEqual(len(await self.rows('SELECT * FROM schema_migrations')), len(MIGRATIONS))
 
     async def test_daily_playtime_backfill_runs_once(self):
         await self.rows("""INSERT INTO player_playtime(server_id,steam_id,name,playtime_seconds)
@@ -148,6 +149,12 @@ class MysqlTests(unittest.IsolatedAsyncioTestCase):
         quest = QuestTracker.__new__(QuestTracker)
         quest.bot = SimpleNamespace(dispatch=Mock())
 
+        await self.rows("""INSERT INTO player_faction_state(server_id,steam_id,faction,last_seen)
+            VALUES (%s,%s,'White',UTC_TIMESTAMP())""", ('server1', STEAM))
+        await quest.sync_permanent()
+        self.assertFalse(await self.rows('SELECT * FROM quest_points WHERE steam_id=%s', (STEAM,)))
+        await self.rows("""UPDATE player_faction_state SET faction='Valkyra',last_seen=UTC_TIMESTAMP()
+            WHERE server_id=%s AND steam_id=%s""", ('server1', STEAM))
         await quest.sync_permanent()
         self.assertEqual((await self.rows('SELECT points FROM quest_points WHERE steam_id=%s', (STEAM,)))[0]['points'], 4)
         await quest.sync_permanent()

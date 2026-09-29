@@ -15,7 +15,6 @@ from infrastructure import database, storage
 
 BERLIN = ZoneInfo('Europe/Berlin')
 UTC = timezone.utc
-NON_TEAM_FACTIONS = frozenset({'white', 'unknown'})
 
 
 def as_utc(value):
@@ -26,8 +25,9 @@ def as_utc(value):
 
 
 def valid_team(value):
-    team = str(value or '').strip()[:50]
-    return team if team and team.casefold() not in NON_TEAM_FACTIONS else None
+    candidate = str(value or '').strip()
+    return next((team for team in config.QUEST_TEAMS
+                 if candidate.casefold() == team.casefold()), None)
 
 
 def round_is_active_for_quests(state):
@@ -202,7 +202,13 @@ class QuestTracker(commands.Cog):
         await self.apply_team_seconds(additions)
 
     async def sync_permanent(self):
-        """Import existing totals once, then award only valid future team time."""
+        """Pay automatic rewards only after a fresh real-faction observation.
+
+        Lifetime cash remains accumulated while unassigned. Its pending blocks
+        become payable once a real faction is observed; historical awards stay
+        untouched. Future playtime is already accrued only in valid teams.
+        """
+        cutoff = storage.utcnow() - timedelta(seconds=config.QUEST_MAX_OBSERVATION_GAP_SECONDS)
         async with database.transaction() as cur:
             await cur.execute("""SELECT players.steam_id,
                 COALESCE(playtime.playtime_seconds, 0) AS legacy_playtime_seconds,
@@ -213,9 +219,13 @@ class QuestTracker(commands.Cog):
                 LEFT JOIN (SELECT steam_id,SUM(lifetime_cash) AS lifetime_cash
                     FROM leaderboard GROUP BY steam_id) cash ON cash.steam_id=players.steam_id""")
             players = await cur.fetchall()
+            await cur.execute("""SELECT DISTINCT steam_id FROM player_faction_state
+                WHERE last_seen >= %s AND LOWER(TRIM(faction)) IN (%s,%s,%s)""",
+                              (cutoff, *(team.casefold() for team in config.QUEST_TEAMS)))
+            eligible_ids = {str(row['steam_id']) for row in await cur.fetchall()}
             for player in players:
                 steam_id = str(player['steam_id'])
-                if not valid_steam_id(steam_id):
+                if not valid_steam_id(steam_id) or steam_id not in eligible_ids:
                     continue
                 await cur.execute("""INSERT INTO quest_progress(steam_id) VALUES (%s)
                     ON DUPLICATE KEY UPDATE steam_id=steam_id""", (steam_id,))
