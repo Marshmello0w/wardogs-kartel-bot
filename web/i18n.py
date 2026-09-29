@@ -158,6 +158,23 @@ TEXT['en'].update({
     'challenge_desc_daily_feed_long_kills': 'Get 3 kills from at least 150 m in one day.',
 })
 
+TEXT['de'].update({
+    'privacy_link': 'Datenschutz', 'imprint_link': 'Impressum',
+    'cookie_title': 'Cookies und Steam-Anmeldung',
+    'cookie_required': 'Für Formulare und die Steam-Anmeldung verwenden wir ein notwendiges, sicheres Sitzungscookie. Ohne die freiwillige Option „Angemeldet bleiben“ endet es mit der Browsersitzung.',
+    'cookie_optional': 'Mit „Akzeptieren und angemeldet bleiben“ bleibt die Steam-Anmeldung auf diesem Gerät höchstens 12 Stunden erhalten. Ablehnen verhindert die Anmeldung nicht.',
+    'cookie_counter': 'Ein serverseitiger Zähler speichert einen pseudonymen Fingerabdruck deiner IP-Adresse; dabei wird keine rohe IP-Adresse in der Zählerdatei gespeichert. Der Artillerie-Rechner speichert Einstellungen lokal im Browser. Einzelheiten stehen in der Datenschutzerklärung.',
+    'cookie_reject': 'Ablehnen und fortfahren', 'cookie_accept': 'Akzeptieren und angemeldet bleiben',
+})
+TEXT['en'].update({
+    'privacy_link': 'Privacy policy', 'imprint_link': 'Legal notice',
+    'cookie_title': 'Cookies and Steam sign-in',
+    'cookie_required': 'We use a necessary, secure session cookie for forms and Steam sign-in. Without the optional “Stay signed in” choice it ends with your browser session.',
+    'cookie_optional': 'Choosing “Accept and stay signed in” keeps your Steam sign-in on this device for up to 12 hours. Rejecting does not prevent sign-in.',
+    'cookie_counter': 'A server-side counter stores a pseudonymous fingerprint of your IP address; no raw IP address is stored in the counter file. The artillery calculator saves settings locally in your browser. See the privacy policy for details.',
+    'cookie_reject': 'Reject and continue', 'cookie_accept': 'Accept and stay signed in',
+})
+
 
 def translate(language: str, key: str, **values) -> str:
     text = TEXT.get(language, TEXT['de']).get(key, TEXT['de'].get(key, key))

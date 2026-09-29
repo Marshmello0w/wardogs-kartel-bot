@@ -26,18 +26,18 @@
       <a href="/rewards"{% if path == '/rewards' %} aria-current="page"{% endif %}>{{ t('nav_rewards') }}{% if not user %}<span class="private-tag">Steam</span>{% endif %}</a>
     </nav>
     <main id="content">{% block content %}{% endblock %}</main>
-    <footer class="footer"><span>Das Kartell <span class="muted">/ {{ t('footer_tagline') }}</span></span><span>{{ t('footer_portal') }}</span></footer>
+    <footer class="footer"><span>Das Kartell <span class="muted">/ {{ t('footer_tagline') }}</span></span><nav class="footer-links" aria-label="Legal"><a href="/impressum">{{ t('imprint_link') }}</a><a href="/datenschutz">{{ t('privacy_link') }}</a></nav><span>{{ t('footer_portal') }}</span></footer>
   </div>
   <section id="cookie-banner" class="cookie-banner" role="dialog" aria-modal="false" aria-labelledby="cookie-title"{% if not show_cookie_banner %} hidden{% endif %}>
     <div class="cookie-banner__content">
-      <h2 id="cookie-title">Cookies and Steam sign-in</h2>
-      <p>We use a required, secure session cookie to protect forms and complete Steam OpenID sign-in. It expires when you close your browser.</p>
-      <p>Choose “Accept and stay signed in” if you want us to remember your Steam sign-in on this device for up to 12 hours. Rejecting does not block Steam sign-in; it only keeps the login temporary.</p>
-      <p>Rejecting does not save your choice, profile, or Steam login beyond the current browser session. To count unique visits, the portal keeps a server-side keyed identifier derived from your IP address; no raw IP address is stored. This portal does not use analytics, advertising, or tracking cookies.</p>
+      <h2 id="cookie-title">{{ t('cookie_title') }}</h2>
+      <p>{{ t('cookie_required') }}</p>
+      <p>{{ t('cookie_optional') }}</p>
+      <p>{{ t('cookie_counter') }} <a href="/datenschutz">{{ t('privacy_link') }}</a></p>
     </div>
     <div class="cookie-banner__actions" aria-live="polite">
-      <button class="button" type="button" data-cookie-choice="rejected">Reject and continue</button>
-      <button class="button" type="button" data-cookie-choice="accepted">Accept and stay signed in</button>
+      <button class="button" type="button" data-cookie-choice="rejected">{{ t('cookie_reject') }}</button>
+      <button class="button" type="button" data-cookie-choice="accepted">{{ t('cookie_accept') }}</button>
     </div>
   </section>
 </body>

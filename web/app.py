@@ -411,6 +411,14 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     async def artillery(request: Request):
         return render(request, 'artillery.html')
 
+    @app.get('/datenschutz')
+    async def privacy(request: Request):
+        return render(request, 'privacy.html')
+
+    @app.get('/impressum')
+    async def imprint(request: Request):
+        return render(request, 'imprint.html')
+
     @app.get('/auth/steam')
     async def login(request: Request):
         if request.session.get('user'):

@@ -318,6 +318,26 @@ class RouteTests(unittest.TestCase):
         state = parse_qs(urlsplit(return_to).query)['state'][0]
         return self.client.get('/auth/steam/callback', params=assertion(state), follow_redirects=False)
 
+    def test_legal_pages_are_public_linked_and_translated(self):
+        privacy = self.client.get('/datenschutz')
+        imprint = self.client.get('/impressum')
+        self.assertEqual(privacy.status_code, 200)
+        self.assertEqual(imprint.status_code, 200)
+        self.assertIn('Datenschutzerklärung', privacy.text)
+        self.assertIn('Besucherzählung', privacy.text)
+        self.assertIn('keine automatische Löschfrist', privacy.text)
+        self.assertIn('Vor Veröffentlichung ergänzen', imprint.text)
+        self.assertIn('href="/datenschutz"', self.client.get('/').text)
+        self.assertIn('href="/impressum"', self.client.get('/').text)
+        self.client.get('/language/en?next=/datenschutz', follow_redirects=False)
+        english_privacy = self.client.get('/datenschutz')
+        english_imprint = self.client.get('/impressum')
+        self.assertIn('Privacy policy', english_privacy.text)
+        self.assertIn('no automatic deletion period', english_privacy.text)
+        self.assertIn('Legal notice', english_imprint.text)
+        self.assertIn('Complete before publication', english_imprint.text)
+        self.assertIn('Reject and continue', english_privacy.text)
+
     def test_anonymous_private_route_and_bad_callback(self):
         result = self.client.get('/me?steam_id=' + OTHER_ID, follow_redirects=False)
         self.assertEqual(result.status_code, 303)

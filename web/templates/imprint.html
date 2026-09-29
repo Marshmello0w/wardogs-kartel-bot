@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}{{ t('imprint_link') }} · {{ t('portal_title') }}{% endblock %}
+{% block content %}
+<article class="legal-page">
+{% if language == 'de' %}
+  <h1>Impressum</h1>
+  <section><h2>Angaben zum Anbieter</h2>
+    <p class="legal-placeholder"><strong>Vor Veröffentlichung ergänzen:</strong><br>[Vollständiger Name beziehungsweise Organisation und Rechtsform]<br>[Straße und Hausnummer]<br>[Postleitzahl und Ort]<br>[Land]</p>
+  </section>
+  <section><h2>Kontakt</h2>
+    <p class="legal-placeholder">E-Mail: [Kontakt-E-Mail]<br>Weiterer schneller Kontaktweg, sofern erforderlich: [Telefon oder anderer unmittelbarer Kontaktweg]</p>
+  </section>
+  <section><h2>Weitere Pflichtangaben, sofern zutreffend</h2>
+    <p class="legal-placeholder">Vertretungsberechtigte Person: [Name / nicht zutreffend]<br>Register und Registernummer: [Angaben / nicht zutreffend]<br>Umsatzsteuer- oder Wirtschafts-Identifikationsnummer: [Angabe / nicht zutreffend]<br>Zuständige Aufsichtsbehörde bei erlaubnispflichtiger Tätigkeit: [Angabe / nicht zutreffend]</p>
+  </section>
+  <section><h2>Artillerie-Rechner</h2><p>Der eingebundene Rechner stammt von <a href="https://wardogs-artillery.com/" target="_blank" rel="noopener noreferrer">wardogs-artillery.com</a>. Das Kartell ist nicht der ursprüngliche Ersteller dieses Rechners.</p></section>
+  <section><h2>Datenschutz</h2><p>Informationen zur Verarbeitung personenbezogener Daten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></section>
+{% else %}
+  <h1>Legal notice</h1>
+  <section><h2>Provider</h2>
+    <p class="legal-placeholder"><strong>Complete before publication:</strong><br>[Full name or organisation and legal form]<br>[Street and house number]<br>[Postal code and city]<br>[Country]</p>
+  </section>
+  <section><h2>Contact</h2>
+    <p class="legal-placeholder">Email: [contact email]<br>Additional prompt contact method, where required: [phone or other direct contact method]</p>
+  </section>
+  <section><h2>Further mandatory details, if applicable</h2>
+    <p class="legal-placeholder">Authorised representative: [name / not applicable]<br>Register and registration number: [details / not applicable]<br>VAT or business identification number: [details / not applicable]<br>Supervisory authority for activities requiring authorisation: [details / not applicable]</p>
+  </section>
+  <section><h2>Artillery calculator</h2><p>The embedded calculator was created by <a href="https://wardogs-artillery.com/" target="_blank" rel="noopener noreferrer">wardogs-artillery.com</a>. Das Kartell is not its original creator.</p></section>
+  <section><h2>Privacy</h2><p>For information on personal data processing, see our <a href="/datenschutz">privacy policy</a>.</p></section>
+{% endif %}
+</article>
+{% endblock %}
