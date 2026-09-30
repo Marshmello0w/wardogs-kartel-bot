@@ -29,6 +29,7 @@ from .i18n import LANGUAGES, translate
 from .session import ConsentSessionMiddleware
 from .visitor_tracker import VisitorTracker
 from .feed import FeedIngressDatabase, MAX_BODY_BYTES, token_server, validate_batch
+from .causes import cause_label
 
 logger = logging.getLogger('kartell.web')
 PERIODS = {'de': {'7d': '7 Tage', '30d': '30 Tage', 'all': 'Gesamt'},
@@ -204,7 +205,8 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
     app.mount('/static', StaticFiles(directory=ROOT / 'static'), name='static')
     app.mount('/artillery-app', StaticFiles(directory=ROOT / 'artillery_app', html=True), name='artillery-app')
     templates = Jinja2Templates(directory=ROOT / 'templates')
-    templates.env.filters.update(number=number, duration=duration, when=when, date=date, iso=iso)
+    templates.env.filters.update(number=number, duration=duration, when=when, date=date,
+                                 iso=iso, cause_label=cause_label)
     static_versions = {
         name: hashlib.sha256((ROOT / 'static' / name).read_bytes()).hexdigest()[:12]
         for name in ('site.css', 'site.js')

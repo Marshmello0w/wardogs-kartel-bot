@@ -75,6 +75,20 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(weapon_label('Id.Item.SKS'), 'SKS')
         self.assertEqual(weapon_label('Id.Item.M4'), 'M4')
 
+    def test_public_feed_and_teamkill_use_the_same_display_names(self):
+        for cause, label in (('ID.Item.WEPN_029', 'Galil'),
+                             ('Id.Item.AK74M', 'AK-74M'),
+                             ('Id.Vehicle.WeaponExtension.TNK_01.Heavy', 'L2A6 cannon')):
+            event = normalized_kill(dict(batch()['events'][0], cause=cause), 'boot', NOW)
+            with self.subTest(cause=cause):
+                self.assertIn(f' · {label}', kill_line(event))
+                self.assertIn(f'mit **{label}**', teamkill_log('server1', event, 'Valkyra'))
+                self.assertEqual(event['cause'], cause)
+        line = kill_line({'cause': '@everyone **weapon**\nname'})
+        self.assertNotIn('@everyone', line)
+        self.assertNotIn('**weapon**', line)
+        self.assertNotIn('\n', line)
+
     def test_teamkill_logs_are_batched_without_dropping_events(self):
         event = normalized_kill(dict(batch()['events'][0], mapName='Kavkazi'), 'boot', NOW)
         alert = teamkill_log('server1', event, 'Valkyra')

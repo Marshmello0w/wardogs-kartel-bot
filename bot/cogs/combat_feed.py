@@ -9,6 +9,7 @@ from discord.ext import commands, tasks
 
 from core import config
 from domain.combat_feed import normalized_kill, relation, roster_for_event
+from domain.causes import cause_label
 from infrastructure import database
 from cogs.challenge_quests import berlin_day
 from cogs.kill_feed import clean
@@ -20,11 +21,8 @@ MAX_ALERT_CHARS = 1800
 
 
 def weapon_label(cause):
-    """Show the feed's weapon identifier without its technical item prefix."""
-    value = str(cause or '').strip()
-    if value.startswith('Id.Item.'):
-        value = value.removeprefix('Id.Item.').replace('_', ' ')
-    return clean(value, 'Unbekannt', limit=80)
+    """Use the same cause names as the public feed and the player portal."""
+    return clean(cause_label(cause), 'Unbekannt', limit=80)
 
 
 def sample_names(players, steam_ids):

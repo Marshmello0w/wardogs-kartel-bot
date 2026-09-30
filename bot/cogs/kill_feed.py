@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands, tasks
 
 from core import config
+from domain.causes import cause_label
 
 MAX_BUFFER = 600
 BATCH_SIZE = 20
@@ -33,7 +34,7 @@ def kill_line(event):
     victim = clean(event.get('victim_name'), event.get('victim') or 'Unbekannt')
     details = []
     if event.get('cause'):
-        details.append(clean(event['cause'], limit=80))
+        details.append(clean(cause_label(event['cause']), limit=80))
     if event.get('distance_m') is not None:
         details.append(f"{event['distance_m']:.0f} m")
     if event.get('headshot'):

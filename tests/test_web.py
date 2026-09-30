@@ -406,6 +406,32 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(result.status_code, 303)
         self.assertEqual(self.client.get('/me', follow_redirects=False).headers['location'], '/auth/steam')
 
+    def test_weapon_labels_for_totals_servers_recent_events_and_both_languages(self):
+        self.login()
+        original_query = self.db.query
+
+        async def query(sql, args=()):
+            if 'FROM combat_weapon_stats' in sql:
+                return [{'server_id': 'server1', 'weapon': 'ID.Item.WEPN_029', 'kills': 7}]
+            if 'FROM combat_events' in sql:
+                return [{'server_id': 'server1', 'occurred_at': datetime(2026, 9, 24, 12),
+                         'killer_steam_id': STEAM_ID, 'victim_steam_id': OTHER_ID,
+                         'map_name': 'Kavkazi', 'cause': 'Id.Vehicle.WeaponExtension.TNK_01.Heavy',
+                         'distance_m': 166.5, 'headshot': 1}]
+            return await original_query(sql, args)
+
+        with patch.object(self.db, 'query', side_effect=query):
+            for lang in ('de', 'en'):
+                self.client.get('/language/' + lang, params={'next': '/me'}, follow_redirects=False)
+                page = self.client.get('/me')
+                with self.subTest(lang=lang):
+                    self.assertIn('Kampfstatistiken' if lang == 'de' else 'Combat statistics', page.text)
+                    self.assertEqual(page.status_code, 200)
+                    self.assertEqual(page.text.count('Galil (7)'), 2)
+                    self.assertIn('L2A6 cannon', page.text)
+                    self.assertNotIn('WEPN_029', page.text)
+                    self.assertNotIn('Id.Vehicle.', page.text)
+
     def test_rewards_use_only_session_steam_id_and_csrf(self):
         self.login()
         self.db.points = 50
