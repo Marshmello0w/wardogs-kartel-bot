@@ -67,6 +67,9 @@ class ServerStatus(commands.Cog):
                 except Exception as exc:
                     self.bot.health.error('Status-Datenbank', exc)
                 text = '**Status:** 🟢 Online' if state else '**Status:** 🟠 Status veraltet / nicht erreichbar'
+                # SERVER_IDS stores the join codes, not the changing game instance IDs.
+                join_id = str(srv.uuid or '').strip()
+                text += f'\n**Join-ID:** `{join_id}`' if join_id else '\n**Join-ID:** nicht konfiguriert'
                 if data:
                     counts = data.get('players', {})
                     modes = ', '.join(data['experiences'])

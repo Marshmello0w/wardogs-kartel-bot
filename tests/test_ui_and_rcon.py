@@ -20,7 +20,7 @@ from cogs.map_vote import MapVoteCog, _panel_changed
 from cogs.round_tracker import RoundTracker
 from cogs.player_lookup import PlayerLookupCog, headshot_summary, unique_matches
 from cogs.server_recap import current_day_window, player_graph, previous_day_window
-from cogs.server_status import format_scores
+from cogs.server_status import ServerStatus, format_scores
 from cogs.stats_tracker import daily_playtime_slices
 from core.runtime import Health
 from services.rcon import RconClient, RconError, Reply
@@ -100,6 +100,36 @@ class RconTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscordTests(unittest.IsolatedAsyncioTestCase):
+    async def test_status_join_ids_match_servers_including_offline_and_missing_id(self):
+        servers = [SimpleNamespace(id=f'server{i}', title=f'Server {i}', enabled=True,
+                                   uuid=f'join-code-{i}' if i < 3 else '') for i in (1, 2, 3)]
+        snapshots = {srv.id: dict(serverName=srv.title, map='Bakurani', experiences=['KOTH'],
+                                 serverId=f'changing-instance-{srv.id}',
+                                 players={'current': 10, 'max': 100}, factionScores=[]) for srv in servers}
+        tracker = SimpleNamespace(
+            current=lambda sid: {'snapshot': snapshots[sid]} if sid == 'server1' else None,
+            states={sid: {'snapshot': data} for sid, data in snapshots.items()})
+        message = SimpleNamespace(edit=AsyncMock())
+        channel = SimpleNamespace(fetch_message=AsyncMock(return_value=message), send=AsyncMock())
+        cog = ServerStatus.__new__(ServerStatus)
+        cog.bot = SimpleNamespace(get_cog=lambda _: tracker, get_channel=lambda _: channel, health=Mock())
+        cog.region = AsyncMock(return_value='EU-CENTRAL')
+        loop_globals = ServerStatus.update_status_embed.coro.__globals__
+        with (patch.object(config, 'SERVER_STATUS_CHANNEL_ID', '123'),
+              patch('cogs.server_status.config.servers', return_value=servers),
+              patch('cogs.server_status.database.check_and_reconnect', new=AsyncMock(return_value=None)),
+              patch.dict(loop_globals, read_state=lambda path, default: {'message_id': 12}, write_state=Mock())):
+            await ServerStatus.update_status_embed.coro(cog)
+        cog.bot.health.error.assert_not_called()
+        channel.send.assert_not_awaited()
+        fields = message.edit.await_args.kwargs['embed'].fields
+        self.assertIn('**Join-ID:** `join-code-1`', fields[0].value)
+        self.assertIn('**Join-ID:** `join-code-2`', fields[1].value)
+        self.assertIn('Status veraltet', fields[1].value)
+        self.assertIn('**Join-ID:** nicht konfiguriert', fields[2].value)
+        self.assertNotIn('changing-instance', '\n'.join(field.value for field in fields))
+        self.assertTrue(all(len(field.value) <= 1024 for field in fields))
+
     async def test_leaderboard_embed_has_no_intro_notes(self):
         row = {'player_rank': 1, 'name': 'Spieler', 'kills': 10, 'deaths': 5,
                'kd': 2.0, 'cash': 1000, 'playtime_seconds': 3600,
