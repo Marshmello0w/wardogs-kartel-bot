@@ -1,6 +1,8 @@
 """Admin-only player lookup backed exclusively by persisted statistics."""
 from datetime import datetime, timezone
+import json
 import re
+from zoneinfo import ZoneInfo
 
 import discord
 from discord import app_commands
@@ -12,6 +14,7 @@ from infrastructure import database
 
 
 FOOTER_RE = re.compile(r"Steam64: ([0-9]{17}) · Seite ([0-9]+)/([0-9]+)")
+LOCAL_TIME = ZoneInfo('Europe/Berlin')
 
 POINT_KIND_LABELS = {
     'legacy_playtime': 'Spielzeit (Nachtrag)',
@@ -35,6 +38,37 @@ def duration(seconds):
     hours, seconds = divmod(seconds, 3600)
     minutes, seconds = divmod(seconds, 60)
     return f'{hours} Std. {minutes:02d} Min.' if hours else f'{minutes} Min. {seconds:02d} Sek.'
+
+
+def lookup_day(now=None):
+    return (now or datetime.now(timezone.utc)).astimezone(LOCAL_TIME).date()
+
+
+def round_playtime_text(row, now=None):
+    """Show only the server's persisted current round, never an older visit."""
+    if not row:
+        return '— (keine erfasste Zeit in der aktuellen Runde)'
+    now = now or datetime.now(timezone.utc)
+    try:
+        state = json.loads(row['round_state'])
+        if not isinstance(state, dict) or state.get('round_id') != row['round_id']:
+            return '— (Rundenstatus unbekannt)'
+        observed = datetime.fromisoformat(state['observed_at'])
+        observed = observed.replace(tzinfo=timezone.utc) if observed.tzinfo is None else observed
+    except (KeyError, TypeError, ValueError):
+        return '— (Rundenstatus unbekannt)'
+    text = duration(row.get('active_seconds'))
+    if state.get('uncertain') or not 0 <= (now - observed).total_seconds() <= 30:
+        return f'{text} · letzter Stand'
+    if state.get('ended'):
+        return f'{text} · Runde beendet'
+    last_seen = row.get('last_seen')
+    if isinstance(last_seen, datetime):
+        last_seen = last_seen.replace(tzinfo=timezone.utc) if last_seen.tzinfo is None else last_seen
+    if (not row.get('active') or not isinstance(last_seen, datetime)
+            or not 0 <= (now - last_seen).total_seconds() <= 30):
+        return f'{text} · Spieler inaktiv'
+    return text
 
 
 def when(value):
@@ -115,11 +149,21 @@ class PlayerLookupCog(commands.Cog):
 
     async def profile(self, steam_id):
         """Read every persisted player-related record without touching RCON."""
+        today = lookup_day()
         async with database.transaction() as cur:
             await cur.execute('SELECT * FROM leaderboard WHERE steam_id=%s ORDER BY server_id', (steam_id,))
             leaderboard = await cur.fetchall()
             await cur.execute('SELECT * FROM player_playtime WHERE steam_id=%s ORDER BY server_id', (steam_id,))
             playtime = await cur.fetchall()
+            await cur.execute('''SELECT active_seconds FROM challenge_daily_progress
+                WHERE steam_id=%s AND day=%s''', (steam_id, today))
+            today_playtime = await cur.fetchone()
+            await cur.execute('''SELECT c.server_id,c.round_id,c.active_seconds,c.active,
+                c.last_seen,s.payload AS round_state FROM challenge_round_progress c
+                JOIN durable_state s ON s.namespace='round' AND s.item_key=c.server_id
+                    AND c.round_id=JSON_UNQUOTE(JSON_EXTRACT(s.payload,'$.round_id'))
+                WHERE c.steam_id=%s ORDER BY c.server_id''', (steam_id,))
+            round_playtime = await cur.fetchall()
             await cur.execute("""SELECT server_id,
                 SUM(CASE WHEN date >= DATE_SUB(UTC_DATE(),INTERVAL 6 DAY) THEN kills ELSE 0 END) kills_7d,
                 SUM(CASE WHEN date >= DATE_SUB(UTC_DATE(),INTERVAL 6 DAY) THEN deaths ELSE 0 END) deaths_7d,
@@ -163,6 +207,8 @@ class PlayerLookupCog(commands.Cog):
         for row in playtime:
             servers.setdefault(row['server_id'], {}).update(playtime=row)
             names.add(row['name'])
+        for row in round_playtime:
+            servers.setdefault(row['server_id'], {}).update(round_playtime=row)
         for row in daily:
             servers.setdefault(row['server_id'], {}).update(daily=row)
         for row in counters:
@@ -180,9 +226,11 @@ class PlayerLookupCog(commands.Cog):
         return dict(steam_id=steam_id, names=sorted(names), servers=servers, bans=bans,
                     target=target, jobs=jobs,
                     feed_kills=feed_kills, feed_headshots=feed_headshots,
+                    today=today,
+                    today_active_seconds=int(today_playtime['active_seconds'] or 0) if today_playtime else 0,
                     points=int(quest_points['points']) if quest_points else 0,
                     vip_memberships=vip_memberships, point_ledger=point_ledger,
-                    exists=bool(servers or bans or target or jobs or quest_points or vip_memberships or point_ledger))
+                    exists=bool(servers or bans or target or jobs or quest_points or vip_memberships or point_ledger or today_playtime))
 
     @staticmethod
     def vip_summary(memberships):
@@ -209,6 +257,7 @@ class PlayerLookupCog(commands.Cog):
         overview.description = (
             f'**Steam64-ID:** `{steam_id}`\n**Bekannte Namen:** {shown_names}\n'
             f'**Quest-Punkte:** {profile.get("points", 0)}\n'
+            f'**Aktive Spielzeit heute (alle Server):** {duration(profile.get("today_active_seconds"))}\n'
             f'**Headshot-Quote gesamt:** {headshot_summary(profile.get("feed_kills"), profile.get("feed_headshots"))}')
         overview.add_field(name='⭐ VIP', value=self.vip_summary(profile.get('vip_memberships', [])), inline=False)
         if profile['target']:
@@ -238,6 +287,7 @@ class PlayerLookupCog(commands.Cog):
             ping_text = f'{average_ping:.0f} ms' if average_ping is not None else '—'
             server_text = (
                 f"**Spielzeit:** {duration(play.get('playtime_seconds'))} · **Zuletzt:** {when(play.get('last_seen') or board.get('last_seen'))}\n"
+                f"**Aktive Spielzeit diese Runde:** {round_playtime_text(values.get('round_playtime'))}\n"
                 f"**All-Time:** K {kills} · T {deaths} · K/D {kills / max(1, deaths):.2f} · Cash {cash}\n"
                 f"**Runde:** K {current.get('kills', board.get('current_match_kills', 0))} · "
                 f"T {current.get('deaths', board.get('current_match_deaths', 0))} · Cash {current.get('cash', board.get('current_match_cash', 0))} · "
