@@ -141,19 +141,6 @@ window.addEventListener('pageshow', () => {
   });
 });
 
-// Server and period changes submit with the currently selected sort button.
-// Delegation also covers leaderboard content replaced by the live refresh.
-document.addEventListener('change', event => {
-  if (!(event.target instanceof Element)) return;
-  const select = event.target.closest('select[name="server"], select[name="period"]');
-  // Accept both the current template and the previous one during deployment.
-  const form = select?.closest('form[data-leaderboard-filters], form.filters[action="/leaderboard"]');
-  if (!form) return;
-  const activeSort = form.querySelector('button[name="sort"].active');
-  if (activeSort) form.requestSubmit(activeSort);
-  else form.requestSubmit();
-});
-
 const rewardCopy = language === 'en'
   ? {ready: 'Redemption available', not_enough_points: 'Not enough quest points.', not_online: 'You must be online on a server.', same_faction: 'You are already in this faction.', balance_limit: 'Not available: team balance would differ by more than four players.', no_vip_slots: 'There are no VIP slots available on this server.', vip_exists: 'You already have a reserved or active VIP on this server.'}
   : {ready: 'Einlösung möglich', not_enough_points: 'Nicht genügend Quest-Punkte.', not_online: 'Du musst auf einem Server online sein.', same_faction: 'Du bist bereits in dieser Fraktion.', balance_limit: 'Nicht möglich: Die Team-Balance würde mehr als vier Spieler abweichen.', no_vip_slots: 'Auf diesem Server sind keine VIP-Plätze frei.', vip_exists: 'Du hast auf diesem Server bereits einen reservierten oder aktiven VIP.'};
@@ -186,3 +173,14 @@ document.querySelectorAll('[data-reward-form]').forEach(form => {
 });
 }
 bindRewardForms();
+
+// Keep the selected sort when a leaderboard filter changes.
+document.addEventListener('change', event => {
+  if (!(event.target instanceof Element)) return;
+  const select = event.target.closest('select[name="server"], select[name="period"]');
+  const form = select?.closest('form[data-leaderboard-filters], form.filters[action="/leaderboard"]');
+  if (!form) return;
+  const activeSort = form.querySelector('button[name="sort"].active');
+  if (activeSort) form.requestSubmit(activeSort);
+  else form.requestSubmit();
+});
