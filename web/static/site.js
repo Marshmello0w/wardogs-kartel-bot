@@ -8,22 +8,69 @@ languageToggle?.addEventListener('click', () => { const open = languageOptions.h
 document.addEventListener('click', event => { if (languageMenu && !languageMenu.contains(event.target)) closeLanguageMenu(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeLanguageMenu(); });
 const cookieBanner = document.querySelector('#cookie-banner');
+const cookieSettings = cookieBanner?.querySelector('#cookie-settings');
+const cookieSettingsToggle = cookieBanner?.querySelector('[data-cookie-settings]');
+const cookieRemember = cookieBanner?.querySelector('#cookie-remember');
+const cookieError = cookieBanner?.querySelector('[data-cookie-error]');
+const cookieStatus = cookieBanner?.querySelector('[data-cookie-status]');
+let cookieOpener = null;
+function setCookieSettings(open) {
+  if (!cookieSettings || !cookieSettingsToggle) return;
+  cookieSettings.hidden = !open;
+  cookieSettingsToggle.setAttribute('aria-expanded', String(open));
+}
+cookieSettingsToggle?.addEventListener('click', () => setCookieSettings(cookieSettings.hidden));
+document.querySelectorAll('[data-cookie-open]').forEach(button => {
+  button.addEventListener('click', () => {
+    if (!cookieBanner) return;
+    cookieOpener = button;
+    cookieBanner.hidden = false;
+    setCookieSettings(true);
+    cookieRemember?.focus({preventScroll: true});
+  });
+});
+cookieBanner?.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !cookieSettings.hidden) {
+    setCookieSettings(false);
+    cookieSettingsToggle.focus({preventScroll: true});
+  }
+});
 cookieBanner?.querySelectorAll('[data-cookie-choice]').forEach(button => {
   button.addEventListener('click', async () => {
-    const buttons = [...cookieBanner.querySelectorAll('[data-cookie-choice]')];
+    if (cookieBanner.getAttribute('aria-busy') === 'true') return;
+    const choice = button.dataset.cookieChoice === 'selected'
+      ? (cookieRemember.checked ? 'accepted' : 'rejected') : button.dataset.cookieChoice;
+    const buttons = [...cookieBanner.querySelectorAll('button')];
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     buttons.forEach(item => { item.disabled = true; });
+    cookieRemember.disabled = true;
+    cookieBanner.setAttribute('aria-busy', 'true');
+    cookieBanner.dataset.state = 'loading';
+    cookieError.hidden = true;
+    cookieStatus.textContent = cookieBanner.dataset.loading;
     try {
       const response = await fetch('/cookie-preferences', {
         method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({choice: button.dataset.cookieChoice})
+        body: new URLSearchParams({choice}), signal: controller.signal
       });
       if (!response.ok) throw new Error('Preference request failed');
+      cookieRemember.checked = choice === 'accepted';
+      cookieBanner.dataset.state = 'success';
+      setCookieSettings(false);
       cookieBanner.hidden = true;
+      (cookieOpener || document.querySelector('[data-cookie-open]'))?.focus({preventScroll: true});
     } catch {
-      const actions = cookieBanner.querySelector('.cookie-banner__actions');
-      if (actions) actions.setAttribute('aria-label', 'Your choice could not be saved. Please try again.');
+      cookieBanner.dataset.state = 'error';
+      cookieError.textContent = cookieBanner.dataset.error;
+      cookieError.hidden = false;
+    } finally {
+      clearTimeout(timeout);
+      cookieBanner.removeAttribute('aria-busy');
+      cookieStatus.textContent = '';
       buttons.forEach(item => { item.disabled = false; });
+      cookieRemember.disabled = false;
     }
   });
 });

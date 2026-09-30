@@ -160,19 +160,31 @@ TEXT['en'].update({
 
 TEXT['de'].update({
     'privacy_link': 'Datenschutz', 'imprint_link': 'Impressum',
-    'cookie_title': 'Cookies und Steam-Anmeldung',
-    'cookie_required': 'Für Formulare und die Steam-Anmeldung verwenden wir ein notwendiges, sicheres Sitzungscookie. Ohne die freiwillige Option „Angemeldet bleiben“ endet es mit der Browsersitzung.',
-    'cookie_optional': 'Mit „Akzeptieren und angemeldet bleiben“ bleibt die Steam-Anmeldung auf diesem Gerät höchstens 12 Stunden erhalten. Ablehnen verhindert die Anmeldung nicht.',
+    'cookie_title': 'Deine Cookie-Auswahl',
+    'cookie_intro': 'Ein notwendiges Sitzungscookie ermöglicht die Steam-Anmeldung und schützt Formulare. Optional kannst du bis zu 12 Stunden angemeldet bleiben. Auch nach dem Ablehnen kannst du dich anmelden.',
+    'cookie_required': 'Für Steam-Anmeldung, Sprachwahl und sichere Formulare. Ohne „Angemeldet bleiben“ ist das Cookie auf die Browsersitzung begrenzt.',
+    'cookie_optional': 'Speichert deine Anmeldung auf diesem Gerät für höchstens 12 Stunden, auch nach dem Schließen des Browsers. Diese Option ist freiwillig.',
     'cookie_counter': 'Ein serverseitiger Zähler speichert einen pseudonymen Fingerabdruck deiner IP-Adresse; dabei wird keine rohe IP-Adresse in der Zählerdatei gespeichert. Der Artillerie-Rechner speichert Einstellungen lokal im Browser. Einzelheiten stehen in der Datenschutzerklärung.',
-    'cookie_reject': 'Ablehnen und fortfahren', 'cookie_accept': 'Akzeptieren und angemeldet bleiben',
+    'cookie_reject': 'Ablehnen', 'cookie_accept': 'Akzeptieren',
+    'cookie_settings': 'Einstellungen', 'cookie_preferences': 'Cookie-Einstellungen',
+    'cookie_details': 'Weitere Informationen', 'cookie_necessary': 'Notwendig',
+    'cookie_always_active': 'Immer aktiv', 'cookie_remember': 'Angemeldet bleiben',
+    'cookie_save': 'Auswahl speichern', 'cookie_loading': 'Auswahl wird angewendet…',
+    'cookie_error': 'Deine Auswahl konnte nicht angewendet werden. Bitte versuche es erneut.',
 })
 TEXT['en'].update({
     'privacy_link': 'Privacy policy', 'imprint_link': 'Legal notice',
-    'cookie_title': 'Cookies and Steam sign-in',
-    'cookie_required': 'We use a necessary, secure session cookie for forms and Steam sign-in. Without the optional “Stay signed in” choice it ends with your browser session.',
-    'cookie_optional': 'Choosing “Accept and stay signed in” keeps your Steam sign-in on this device for up to 12 hours. Rejecting does not prevent sign-in.',
+    'cookie_title': 'Your cookie choices',
+    'cookie_intro': 'A necessary session cookie enables Steam sign-in and protects forms. You can optionally stay signed in for up to 12 hours. Rejecting does not prevent sign-in.',
+    'cookie_required': 'For Steam sign-in, language selection and secure forms. Without “Stay signed in”, the cookie is limited to your browser session.',
+    'cookie_optional': 'Keeps you signed in on this device for up to 12 hours, including after closing your browser. This option is voluntary.',
     'cookie_counter': 'A server-side counter stores a pseudonymous fingerprint of your IP address; no raw IP address is stored in the counter file. The artillery calculator saves settings locally in your browser. See the privacy policy for details.',
-    'cookie_reject': 'Reject and continue', 'cookie_accept': 'Accept and stay signed in',
+    'cookie_reject': 'Reject', 'cookie_accept': 'Accept',
+    'cookie_settings': 'Settings', 'cookie_preferences': 'Cookie settings',
+    'cookie_details': 'More information', 'cookie_necessary': 'Necessary',
+    'cookie_always_active': 'Always active', 'cookie_remember': 'Stay signed in',
+    'cookie_save': 'Save selection', 'cookie_loading': 'Applying your choice…',
+    'cookie_error': 'Your choice could not be applied. Please try again.',
 })
 
 

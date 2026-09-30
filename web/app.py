@@ -312,6 +312,7 @@ def create_app(settings=None, repository=None, steam_client=None, reward_submiss
                      'periods': PERIODS[language], 'path': request.url.path, 'language': language,
                      'languages': LANGUAGES, 'next_path': next_path,
                      'show_cookie_banner': request.session.get('remember_login') is not True,
+                     'remember_login': request.session.get('remember_login') is True,
                      'static_versions': static_versions,
                      't': lambda key, **values: translate(language, key, **values), **context})
 

@@ -33,5 +33,7 @@
   --dur-micro: 120ms;
   --dur-short: 220ms;
   --radius-sm: 0.25rem;
+  --radius-panel: 0.75rem;
+  --shadow-panel: 0 18px 48px rgb(0 0 0 / 0.45);
   --rule-thin: 1px;
 }

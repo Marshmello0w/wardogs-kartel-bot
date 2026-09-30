@@ -336,7 +336,36 @@ class RouteTests(unittest.TestCase):
         self.assertIn('no automatic deletion period', english_privacy.text)
         self.assertIn('Legal notice', english_imprint.text)
         self.assertIn('Complete before publication', english_imprint.text)
-        self.assertIn('Reject and continue', english_privacy.text)
+        self.assertIn('data-cookie-choice="rejected">Reject</button>', english_privacy.text)
+
+    def test_cookie_choice_controls_persistence_and_can_be_revoked(self):
+        self.client.get('/')
+        response = self.client.post('/cookie-preferences', data={'choice': 'accepted'},
+                                    headers={'origin': SETTINGS.base_url})
+        self.assertEqual(response.json(), {'accepted': True})
+        self.assertIn('Max-Age=43200', response.headers['set-cookie'])
+        self.assertIn('id="cookie-remember"', self.client.get('/').text)
+        self.login()
+        self.assertEqual(self.client.get('/me').status_code, 200)
+        response = self.client.post('/cookie-preferences', data={'choice': 'rejected'},
+                                    headers={'origin': SETTINGS.base_url})
+        self.assertEqual(response.json(), {'accepted': False})
+        session_header = next(value for value in response.headers.get_list('set-cookie')
+                              if value.startswith('kartell_session='))
+        self.assertNotIn('Max-Age=', session_header)
+        self.assertEqual(self.client.get('/me').status_code, 200)
+        # Rejection remains unrecorded: the notice returns on the next page.
+        page = self.client.get('/me').text
+        banner = re.search(r'<section id="cookie-banner"[^>]*>', page).group(0)
+        self.assertNotIn(' hidden', banner)
+        remember = re.search(r'<input id="cookie-remember"[^>]*>', page).group(0)
+        self.assertNotIn(' checked', remember)
+
+    def test_cookie_choice_rejects_invalid_or_cross_origin_requests(self):
+        self.assertEqual(self.client.post('/cookie-preferences', data={'choice': 'selected'}).status_code, 400)
+        self.assertEqual(self.client.post('/cookie-preferences', data={'choice': 'accepted'},
+                                        headers={'origin': 'https://evil.example'}).status_code, 403)
+        self.assertEqual(self.client.post('/cookie-preferences', content=b'x' * 129).status_code, 400)
 
     def test_anonymous_private_route_and_bad_callback(self):
         result = self.client.get('/me?steam_id=' + OTHER_ID, follow_redirects=False)
