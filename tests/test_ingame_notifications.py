@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bot'))
 from cogs.ingame_notifications import (IngameNotifications, join_notice,
                                        quest_notice, reached_thresholds, real_faction)
 from cogs.quest_tracker import QuestTracker, valid_team
+from services.rcon import RconError
 
 
 STEAM_ID = '76561198000000001'
@@ -52,6 +53,8 @@ class NotificationBehaviorTests(IsolatedAsyncioTestCase):
         cog.bot.rcon.request = AsyncMock()
         cog.bot.get_cog.return_value = None
         cog.rosters = {}
+        cog.join_visits = {}
+        cog.join_sequence = 0
         cog.queue = {}
         cog.workers = {}
         cog.sequence = 0
@@ -73,8 +76,100 @@ class NotificationBehaviorTests(IsolatedAsyncioTestCase):
         await cog.on_player_sampled('server1', state, [{'steamId': STEAM_ID}])
         cog._enqueue.assert_not_called()
         cog.rosters['server1'] = (time.monotonic(), {})
-        await cog.on_player_sampled('server1', state, [{'steamId': STEAM_ID}])
-        cog._enqueue.assert_called_once_with('server1', 2, 'join', STEAM_ID)
+        await cog.on_player_sampled('server1', state, [{'steamId': STEAM_ID, 'faction': 'Lonestar'}])
+        cog._enqueue.assert_called_once_with('server1', 2, 'join', (STEAM_ID, 1))
+
+    async def test_arrival_waits_for_faction_and_queues_only_once(self):
+        for faction in ('Lonestar', 'Valkyra', 'Manticore'):
+            cog = self.make_cog()
+            cog._enqueue = Mock(return_value=True)
+            state = {'uncertain': False}
+            await cog.on_player_sampled('server1', state, [])
+            for value in ('White', 'Unknown', None):
+                await cog.on_player_sampled('server1', state, [{'steamId': STEAM_ID, 'faction': value}])
+            cog._enqueue.assert_not_called()
+            for _ in range(3):
+                await cog.on_player_sampled('server1', state, [{'steamId': STEAM_ID, 'faction': faction}])
+            cog._enqueue.assert_called_once_with('server1', 2, 'join', (STEAM_ID, 1))
+
+    async def test_leave_rejoin_invalidates_old_queue_item(self):
+        cog = self.make_cog()
+        cog._enqueue = Mock(return_value=True)
+        state = {'uncertain': False}
+        player = {'steamId': STEAM_ID, 'faction': 'Lonestar'}
+        await cog.on_player_sampled('server1', state, [])
+        await cog.on_player_sampled('server1', state, [player])
+        await cog.on_player_sampled('server1', state, [])
+        await cog.on_player_sampled('server1', state, [player])
+        await cog._send_join('server1', (STEAM_ID, 1))
+        cog.bot.rcon.request.assert_not_called()
+        self.assertEqual(cog.join_visits['server1'][STEAM_ID]['token'], 2)
+
+    async def test_pending_arrival_is_cleared_after_gap_or_uncertain_sample(self):
+        for uncertain in (False, True):
+            cog = self.make_cog()
+            cog._enqueue = Mock(return_value=True)
+            await cog.on_player_sampled('server1', {}, [])
+            await cog.on_player_sampled('server1', {}, [{'steamId': STEAM_ID, 'faction': 'White'}])
+            if uncertain:
+                await cog.on_player_sampled('server1', {'uncertain': True}, [])
+            else:
+                cog.rosters['server1'] = (time.monotonic() - 91, {})
+            await cog.on_player_sampled('server1', {}, [{'steamId': STEAM_ID, 'faction': 'Lonestar'}])
+            cog._enqueue.assert_not_called()
+
+    async def test_full_queue_can_retry_on_next_sample(self):
+        cog = self.make_cog()
+        cog._enqueue = Mock(side_effect=[False, True])
+        await cog.on_player_sampled('server1', {}, [])
+        player = {'steamId': STEAM_ID, 'faction': 'Valkyra'}
+        await cog.on_player_sampled('server1', {}, [player])
+        await cog.on_player_sampled('server1', {}, [player])
+        self.assertEqual(cog._enqueue.call_count, 2)
+
+    async def test_join_private_stats_zero_defaults_and_no_uncertain_retry(self):
+        for failure in (None, RconError(404), RconError(uncertain=True, reason='timeout')):
+            cog = self.make_cog()
+            cog.rosters['server1'] = (time.monotonic(), {STEAM_ID: {'faction': 'Lonestar'}})
+            cog.join_visits['server1'] = {STEAM_ID: {'token': 1, 'queued': True, 'attempted': False}}
+            cog.bot.rcon.request.side_effect = failure
+            cursor = Mock(execute=AsyncMock(), fetchone=AsyncMock(return_value={
+                'lifetime_kills': None, 'lifetime_deaths': None,
+                'lifetime_cash': None, 'playtime_seconds': 3660}))
+
+            @asynccontextmanager
+            async def fake_transaction():
+                yield cursor
+
+            with patch('cogs.ingame_notifications.database.transaction', fake_transaction):
+                await cog._send_join('server1', (STEAM_ID, 1))
+                await cog._send_join('server1', (STEAM_ID, 1))
+            cog.bot.rcon.request.assert_awaited_once_with(
+                'server1', 'POST', f'/v1/players/{STEAM_ID}/message',
+                payload={'message': join_notice('server1', {'playtime_seconds': 3660})})
+            self.assertIn('LEFT JOIN leaderboard', cursor.execute.await_args.args[0])
+            if failure:
+                self.assertIn(failure.safe_message, cog.bot.dispatch.call_args.args[2])
+
+    async def test_join_rechecks_faction_after_database_read(self):
+        cog = self.make_cog()
+        cog.rosters['server1'] = (time.monotonic(), {STEAM_ID: {'faction': 'Lonestar'}})
+        visit = {'token': 1, 'queued': True, 'attempted': False}
+        cog.join_visits['server1'] = {STEAM_ID: visit}
+
+        async def fetchone():
+            cog.rosters['server1'][1][STEAM_ID]['faction'] = 'White'
+            return {}
+
+        @asynccontextmanager
+        async def fake_transaction():
+            yield Mock(execute=AsyncMock(), fetchone=AsyncMock(side_effect=fetchone))
+
+        with patch('cogs.ingame_notifications.database.transaction', fake_transaction):
+            await cog._send_join('server1', (STEAM_ID, 1))
+        cog.bot.rcon.request.assert_not_called()
+        self.assertFalse(visit['queued'])
+        self.assertFalse(visit['attempted'])
 
     async def test_quest_whisper_requires_real_faction(self):
         cog = self.make_cog()

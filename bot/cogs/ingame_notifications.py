@@ -16,6 +16,7 @@ from discord.ext import commands, tasks
 from core import config
 from core.permissions import valid_steam_id
 from infrastructure import database, storage
+from services.rcon import RconError
 
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ class IngameNotifications(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.rosters = {}
+        self.join_visits = {}
+        self.join_sequence = 0
         self.queue = {}
         self.workers = {}
         self.sequence = 0
@@ -95,6 +98,8 @@ class IngameNotifications(commands.Cog):
     @commands.Cog.listener()
     async def on_player_sampled(self, server_id, state, players):
         if not isinstance(state, dict) or state.get('uncertain'):
+            self.rosters.pop(server_id, None)
+            self.join_visits.pop(server_id, None)
             return
         now = time.monotonic()
         current = {str(player.get('steamId')): player for player in players
@@ -104,9 +109,20 @@ class IngameNotifications(commands.Cog):
         # A restart or a long sampling gap cannot distinguish old occupants
         # from new arrivals. Treat the current roster as a baseline.
         if previous is None or now - previous[0] > 90:
+            self.join_visits[server_id] = {}
             return
+        visits = self.join_visits.setdefault(server_id, {})
+        for steam_id in visits.keys() - current.keys():
+            del visits[steam_id]
         for steam_id in current.keys() - previous[1].keys():
-            self._enqueue(server_id, 2, 'join', steam_id)
+            self.join_sequence += 1
+            visits[steam_id] = {'token': self.join_sequence, 'queued': False, 'attempted': False}
+        # Keep an arrival pending while the player is in the selection menu.
+        # The roster ID does not change when they choose their faction.
+        for steam_id, visit in visits.items():
+            if (not visit['queued'] and not visit['attempted']
+                    and real_faction(current[steam_id].get('faction'))):
+                visit['queued'] = self._enqueue(server_id, 2, 'join', (steam_id, visit['token']))
 
     def _fresh_player_server(self, steam_id):
         now = time.monotonic()
@@ -244,26 +260,45 @@ class IngameNotifications(commands.Cog):
             await self._record_delivery(ledger_id, 'sent', server_id)
             self.delivered_counts[server_id]['quest'] += 1
 
-    async def _send_join(self, server_id, steam_id):
-        target = self._fresh_player_server(steam_id)
-        if not target or target[0] != server_id:
+    async def _send_join(self, server_id, arrival):
+        steam_id, token = arrival
+        visit = self.join_visits.get(server_id, {}).get(steam_id)
+        if not visit or visit['token'] != token or visit['attempted']:
             return
-        async with database.transaction() as cur:
-            await cur.execute('''SELECT l.lifetime_kills,l.lifetime_deaths,l.lifetime_cash,
-                p.playtime_seconds FROM leaderboard l LEFT JOIN player_playtime p
-                ON p.server_id=l.server_id AND p.steam_id=l.steam_id
-                WHERE l.server_id=%s AND l.steam_id=%s''', (server_id, steam_id))
-            row = await cur.fetchone()
-        if row is None:
+        target = self._fresh_player_server(steam_id)
+        if not target or target[0] != server_id or not real_faction(target[1].get('faction')):
+            visit['queued'] = False
             return
         try:
+            async with database.transaction() as cur:
+                # A new player may not have a leaderboard row yet. Still show
+                # zero counters and any independently recorded playtime.
+                await cur.execute('''SELECT l.lifetime_kills,l.lifetime_deaths,l.lifetime_cash,
+                    p.playtime_seconds FROM (SELECT %s AS server_id,%s AS steam_id) identity_row
+                    LEFT JOIN leaderboard l ON l.server_id=identity_row.server_id
+                        AND l.steam_id=identity_row.steam_id
+                    LEFT JOIN player_playtime p ON p.server_id=identity_row.server_id
+                        AND p.steam_id=identity_row.steam_id''', (server_id, steam_id))
+                row = await cur.fetchone()
+        except Exception:
+            visit['queued'] = False  # No RCON write happened; a later sample may retry.
+            raise
+        target = self._fresh_player_server(steam_id)
+        if (self.join_visits.get(server_id, {}).get(steam_id) is not visit
+                or not target or target[0] != server_id
+                or not real_faction(target[1].get('faction'))):
+            visit['queued'] = False
+            return
+        visit['attempted'] = True  # Never blindly retry an ambiguous write.
+        try:
             await self.bot.rcon.request(server_id, 'POST', f'/v1/players/{steam_id}/message',
-                                        payload={'message': join_notice(server_id, row)})
+                                        payload={'message': join_notice(server_id, row or {})})
         except Exception as exc:
             self.bot.health.error(self.health_key, exc)
             self.bot.dispatch('bot_log', 'Ingame-Beitrittsstatistik fehlgeschlagen',
                               f'{config.server(server_id).title}: Nachricht für `{steam_id}` nicht bestätigt '
-                              f'({type(exc).__name__}).', discord.Color.blue())
+                              f'({exc.safe_message if isinstance(exc, RconError) else type(exc).__name__}). '
+                              'Keine automatische Wiederholung.', discord.Color.blue())
         else:
             self.delivered_counts[server_id]['join'] += 1
 
