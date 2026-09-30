@@ -262,6 +262,14 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         window = next(args for sql, args in cur.statements if 'SELECT COUNT(*) AS count' in sql)
         self.assertEqual(window[-2:], ((NOW-timedelta(seconds=60)).replace(tzinfo=None),
                                        NOW.replace(tzinfo=None)))
+        count_sql = next(sql for sql, _ in cur.statements if 'SELECT COUNT(*) AS count' in sql)
+        self.assertIn('victim_steam_id IS NOT NULL AND suicide=0', count_sql)
+        for count in (9, 17):
+            cur = self.Cursor([{'rapid_last_at': None}, {'count': count}])
+            with patch('cogs.combat_feed.record_combat_quests', new_callable=AsyncMock), \
+                 patch('cogs.combat_feed.record_feed_streak', new_callable=AsyncMock):
+                result = await cog._event(cur, 'server1', 'boot', batch()['events'][0], NOW)
+            self.assertEqual(result, ('rapid', 'server1', STEAM_1, 17) if count == 17 else None)
         cur = self.Cursor([{'rapid_last_at': NOW.replace(tzinfo=None)-timedelta(minutes=1)}])
         with patch('cogs.combat_feed.record_combat_quests', new_callable=AsyncMock), \
              patch('cogs.combat_feed.record_feed_streak', new_callable=AsyncMock):
@@ -342,19 +350,32 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
     async def test_rapid_kill_alert_stays_in_cheater_channel(self):
         bot = MagicMock()
         cog = CombatFeed(bot)
+        payload = batch()
+        payload['events'] = [dict(payload['events'][0], eventId=f'event-{index}') for index in range(3)]
+        processed = []
+        committed = False
         class BatchCursor:
+            sql = ''
             async def execute(self, sql, args=()):
-                pass
+                self.sql = sql
             async def fetchone(self):
+                if 'SELECT COUNT(*) AS count' in self.sql:
+                    self_test.assertEqual(len(processed), 3)
+                    return {'count': 17}
                 return {'id': 'batch-1', 'server_id': 'server1',
-                        'payload': json.dumps(batch()).encode(),
+                        'payload': json.dumps(payload).encode(),
                         'received_at': NOW.replace(tzinfo=None)}
+        self_test = self
         @asynccontextmanager
         async def transaction():
+            nonlocal committed
             yield BatchCursor()
+            committed = True
         async def event(cur, server_id, instance_id, raw, received_at, index,
                         published, teamkills):
+            processed.append(raw)
             return ('rapid', server_id, STEAM_1, 10)
+        bot.dispatch.side_effect = lambda *args: self.assertTrue(committed)
         with patch('cogs.combat_feed.database.transaction', transaction), \
              patch.object(cog, '_event', side_effect=event):
             self.assertTrue(await cog.process_one())
@@ -362,6 +383,11 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         args = bot.dispatch.call_args.args
         self.assertEqual(args[0], 'bot_log')
         self.assertEqual(args[4], '1552623993553690634')
+        self.assertIn('**17 erfasste Spielerkills in 60 Sekunden.**', args[2])
+        self.assertNotIn('mindestens', args[2])
+        self.assertNotIn('10 erfasste', args[2])
+        end = int(NOW.timestamp())
+        self.assertIn(f'Zeitraum: <t:{end - 60}:T> – <t:{end}:T>', args[2])
 
 
 class DiscordKillFeedTests(unittest.IsolatedAsyncioTestCase):

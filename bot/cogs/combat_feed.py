@@ -196,6 +196,17 @@ class CombatFeed(commands.Cog):
         if config.COMBAT_FEED_ENABLED:
             self.rosters[server_id] = (state, players)
 
+    async def _rapid_count(self, cur, server_id, steam_id, window_end):
+        """Count the same deduplicated, non-suicide kills used by detection."""
+        await cur.execute('''SELECT COUNT(*) AS count FROM combat_events
+            WHERE server_id=%s AND killer_steam_id=%s
+            AND occurred_at>%s AND occurred_at<=%s
+            AND victim_steam_id IS NOT NULL AND suicide=0''',
+                          (server_id, steam_id,
+                           (window_end - timedelta(seconds=60)).replace(tzinfo=None),
+                           window_end.replace(tzinfo=None)))
+        return int((await cur.fetchone())['count'])
+
     async def _event(self, cur, server_id, instance_id, event, received_at, batch_index=0,
                      published=None, teamkills=None):
         item = normalized_kill(event, instance_id, received_at)
@@ -255,14 +266,7 @@ class CombatFeed(commands.Cog):
             rapid = await cur.fetchone()
             last = rapid['rapid_last_at']
             if last is None or received_at.replace(tzinfo=None) - last >= timedelta(minutes=5):
-                await cur.execute('''SELECT COUNT(*) AS count FROM combat_events
-                    WHERE server_id=%s AND killer_steam_id=%s
-                    AND occurred_at>%s AND occurred_at<=%s
-                    AND victim_steam_id IS NOT NULL AND suicide=0''',
-                                  (server_id, item['killer'],
-                                   (received_at - timedelta(seconds=60)).replace(tzinfo=None),
-                                   received_at.replace(tzinfo=None)))
-                count = int((await cur.fetchone())['count'])
+                count = await self._rapid_count(cur, server_id, item['killer'], received_at)
                 if count >= 10:
                     await cur.execute('''UPDATE combat_alert_state SET rapid_last_at=%s
                         WHERE server_id=%s AND steam_id=%s''',
@@ -272,6 +276,7 @@ class CombatFeed(commands.Cog):
 
     async def process_one(self):
         alerts = []
+        alert_players = set()
         public_kills = []
         teamkills = []
         async with database.transaction() as cur:
@@ -293,13 +298,21 @@ class CombatFeed(commands.Cog):
                 alert = await self._event(cur, batch['server_id'], instance_id, event,
                                           received_at, index, public_kills, teamkills)
                 if alert:
-                    alerts.append(alert)
+                    alert_players.add((alert[1], alert[2]))
+            # Detection can fire midway through a batch. Include its remaining
+            # accepted kills before reporting the exact observed window total.
+            for server_id, steam_id in sorted(alert_players):
+                count = await self._rapid_count(cur, server_id, steam_id, received_at)
+                alerts.append((server_id, steam_id, count))
             await cur.execute('''UPDATE combat_feed_batches SET processed_at=UTC_TIMESTAMP(6)
                 WHERE id=%s''', (batch['id'],))
-        for _, server_id, steam_id, count in alerts:
+        for server_id, steam_id, count in alerts:
+            window_end = int(received_at.timestamp())
             self.bot.dispatch('bot_log', 'Schnelle Kills – Hinweis',
-                              f'{server_id}: {steam_id} erzielte mindestens {count} Spielerkills '
-                              'innerhalb von 60 Sekunden. Bitte prüfen; keine automatische Strafe.',
+                              f'{config.server(server_id).title}: `{steam_id}`\n'
+                              f'**{count} erfasste Spielerkills in 60 Sekunden.**\n'
+                              f'Zeitraum: <t:{window_end - 60}:T> – <t:{window_end}:T>\n'
+                              'Bitte prüfen; keine automatische Strafe.',
                               discord.Color.orange(), config.COMBAT_ALERT_CHANNEL_ID)
         for message in teamkill_messages(teamkills):
             self.bot.dispatch('bot_log', 'Möglicher Teamkill – prüfen', message,
